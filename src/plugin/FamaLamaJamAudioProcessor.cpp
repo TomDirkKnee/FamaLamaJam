@@ -1,5 +1,7 @@
 #include <JuceHeader.h>
 
+#include "app/session/SessionSettings.h"
+
 namespace famalamajam
 {
 class FamaLamaJamAudioProcessor final : public juce::AudioProcessor
@@ -49,6 +51,9 @@ public:
 
     void getStateInformation(juce::MemoryBlock&) override {}
     void setStateInformation(const void*, int) override {}
+
+private:
+    app::session::SessionSettingsStore settingsStore_;
 };
 } // namespace famalamajam
 

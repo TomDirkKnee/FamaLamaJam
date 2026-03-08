@@ -11,9 +11,13 @@ option(FAMALAMAJAM_ENABLE_TESTS "Build unit and integration tests." ON)
 
 include(cmake/dependencies.cmake)
 
-add_library(famalamajam_core INTERFACE)
+add_library(famalamajam_core STATIC)
+target_sources(famalamajam_core
+    PRIVATE
+        src/app/session/SessionSettings.cpp)
+
 target_include_directories(famalamajam_core
-    INTERFACE
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 juce_add_plugin(famalamajam_plugin
@@ -49,6 +53,7 @@ target_link_libraries(famalamajam_plugin
         juce::juce_recommended_warning_flags)
 
 if(MSVC)
+    target_compile_options(famalamajam_core PRIVATE /W4 /WX)
     target_compile_options(famalamajam_plugin PRIVATE /W4 /WX)
 endif()
 
@@ -58,3 +63,4 @@ if(FAMALAMAJAM_ENABLE_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
