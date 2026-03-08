@@ -1,63 +1,101 @@
-#include <JuceHeader.h>
+#include "FamaLamaJamAudioProcessor.h"
 
-#include "app/session/SessionSettings.h"
+#include "infra/state/SessionSettingsSerializer.h"
+#include "plugin/FamaLamaJamAudioProcessorEditor.h"
 
-namespace famalamajam
+namespace famalamajam::plugin
 {
-class FamaLamaJamAudioProcessor final : public juce::AudioProcessor
+FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor()
+    : juce::AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
+                                            .withOutput("Output", juce::AudioChannelSet::stereo(), true))
+    , settingsController_(settingsStore_)
 {
-public:
-    FamaLamaJamAudioProcessor()
-        : juce::AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
-                                                .withOutput("Output", juce::AudioChannelSet::stereo(), true))
-    {
-    }
+}
 
-    const juce::String getName() const override { return "FamaLamaJam"; }
-    bool acceptsMidi() const override { return false; }
-    bool producesMidi() const override { return false; }
-    bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+const juce::String FamaLamaJamAudioProcessor::getName() const { return "FamaLamaJam"; }
+bool FamaLamaJamAudioProcessor::acceptsMidi() const { return false; }
+bool FamaLamaJamAudioProcessor::producesMidi() const { return false; }
+bool FamaLamaJamAudioProcessor::isMidiEffect() const { return false; }
+double FamaLamaJamAudioProcessor::getTailLengthSeconds() const { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
-    void changeProgramName(int, const juce::String&) override {}
+int FamaLamaJamAudioProcessor::getNumPrograms() { return 1; }
+int FamaLamaJamAudioProcessor::getCurrentProgram() { return 0; }
+void FamaLamaJamAudioProcessor::setCurrentProgram(int) {}
+const juce::String FamaLamaJamAudioProcessor::getProgramName(int) { return {}; }
+void FamaLamaJamAudioProcessor::changeProgramName(int, const juce::String&) {}
 
-    void prepareToPlay(double, int) override {}
-    void releaseResources() override {}
+void FamaLamaJamAudioProcessor::prepareToPlay(double, int) {}
+void FamaLamaJamAudioProcessor::releaseResources() {}
 
-    bool isBusesLayoutSupported(const BusesLayout& layouts) const override
-    {
-        return layouts.getMainInputChannelSet() == juce::AudioChannelSet::stereo()
-            && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
-    }
+bool FamaLamaJamAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+{
+    return layouts.getMainInputChannelSet() == juce::AudioChannelSet::stereo()
+        && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+}
 
-    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override
-    {
-        juce::ScopedNoDenormals noDenormals;
+void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+{
+    juce::ScopedNoDenormals noDenormals;
 
-        for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
-            buffer.clear(channel, 0, buffer.getNumSamples());
-    }
+    for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
+        buffer.clear(channel, 0, buffer.getNumSamples());
+}
 
-    bool hasEditor() const override { return true; }
+bool FamaLamaJamAudioProcessor::hasEditor() const { return true; }
 
-    juce::AudioProcessorEditor* createEditor() override
-    {
-        return new juce::GenericAudioProcessorEditor(*this);
-    }
+juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
+{
+    auto getter = [this]() { return settingsStore_.getActiveSettings(); };
+    auto apply = [this](app::session::SessionSettings draft) { return settingsController_.applyDraft(std::move(draft)); };
+    return new FamaLamaJamAudioProcessorEditor(*this, std::move(getter), std::move(apply));
+}
 
-    void getStateInformation(juce::MemoryBlock&) override {}
-    void setStateInformation(const void*, int) override {}
+void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
+{
+    infra::state::SessionSettingsSerializer::serialize(settingsStore_.getActiveSettings(), destData);
+}
 
-private:
-    app::session::SessionSettingsStore settingsStore_;
-};
-} // namespace famalamajam
+void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
+{
+    bool usedFallback = false;
+    const auto restored = infra::state::SessionSettingsSerializer::deserializeOrDefault(data, sizeInBytes, &usedFallback);
+
+    app::session::SessionSettingsValidationResult validation;
+    settingsStore_.applyCandidate(restored, &validation);
+    isConnected_ = false;
+
+    lastStatusMessage_ = usedFallback ? "State invalid. Defaults restored." : "Settings restored";
+}
+
+bool FamaLamaJamAudioProcessor::applySettingsFromUi(const app::session::SessionSettings& candidate,
+                                                     app::session::SessionSettingsValidationResult* validation)
+{
+    auto result = settingsController_.applyDraft(candidate);
+
+    if (validation != nullptr)
+        *validation = result.validation;
+
+    lastStatusMessage_ = result.statusMessage;
+    return result.applied;
+}
+
+app::session::SessionSettings FamaLamaJamAudioProcessor::getActiveSettings() const
+{
+    return settingsStore_.getActiveSettings();
+}
+
+std::string FamaLamaJamAudioProcessor::getLastStatusMessage() const
+{
+    return lastStatusMessage_;
+}
+
+bool FamaLamaJamAudioProcessor::isSessionConnected() const noexcept
+{
+    return isConnected_.load();
+}
+} // namespace famalamajam::plugin
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new famalamajam::FamaLamaJamAudioProcessor();
+    return new famalamajam::plugin::FamaLamaJamAudioProcessor();
 }

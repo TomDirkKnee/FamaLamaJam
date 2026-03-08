@@ -15,6 +15,7 @@ add_library(famalamajam_core STATIC)
 target_sources(famalamajam_core
     PRIVATE
         src/app/session/SessionSettings.cpp
+        src/app/session/SessionSettingsController.cpp
         src/infra/state/SessionSettingsSerializer.cpp)
 
 target_include_directories(famalamajam_core
@@ -41,7 +42,10 @@ juce_add_plugin(famalamajam_plugin
 
 target_sources(famalamajam_plugin
     PRIVATE
-        src/plugin/FamaLamaJamAudioProcessor.cpp)
+        src/plugin/FamaLamaJamAudioProcessor.h
+        src/plugin/FamaLamaJamAudioProcessor.cpp
+        src/plugin/FamaLamaJamAudioProcessorEditor.h
+        src/plugin/FamaLamaJamAudioProcessorEditor.cpp)
 
 target_compile_definitions(famalamajam_plugin
     PUBLIC
