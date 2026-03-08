@@ -7,7 +7,7 @@
 
 ### Connection & Session
 
-- [ ] **SESS-01**: User can configure Ninjam server endpoint and credentials from the plugin UI.
+- [x] **SESS-01**: User can configure Ninjam server endpoint and credentials from the plugin UI.
 - [ ] **SESS-02**: User can connect and disconnect from a Ninjam server without restarting Ableton.
 - [ ] **SESS-03**: User can recover from transient network loss via automatic reconnect with clear status feedback.
 
@@ -31,7 +31,7 @@
 ### Host Reliability
 
 - [ ] **HOST-01**: Plugin handles Ableton lifecycle events (load/unload/reopen/duplicate) without crashes or zombie sessions.
-- [ ] **HOST-02**: Plugin state can be saved/restored in Ableton projects for core session settings.
+- [x] **HOST-02**: Plugin state can be saved/restored in Ableton projects for core session settings.
 
 ### UI & Usability
 
@@ -69,7 +69,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SESS-01 | Phase 1 - Plugin Foundation & Session Configuration | Pending |
+| SESS-01 | Phase 1 - Plugin Foundation & Session Configuration | Complete |
 | SESS-02 | Phase 2 - Connection Lifecycle & Recovery | Pending |
 | SESS-03 | Phase 2 - Connection Lifecycle & Recovery | Pending |
 | SYNC-01 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
@@ -81,7 +81,7 @@
 | MIX-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
 | MIX-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
 | HOST-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
-| HOST-02 | Phase 1 - Plugin Foundation & Session Configuration | Pending |
+| HOST-02 | Phase 1 - Plugin Foundation & Session Configuration | Complete |
 | UI-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
 | UI-02 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
 
