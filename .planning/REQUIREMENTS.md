@@ -69,27 +69,28 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SESS-01 | Phase TBD | Pending |
-| SESS-02 | Phase TBD | Pending |
-| SESS-03 | Phase TBD | Pending |
-| SYNC-01 | Phase TBD | Pending |
-| SYNC-02 | Phase TBD | Pending |
-| SYNC-03 | Phase TBD | Pending |
-| AUD-01 | Phase TBD | Pending |
-| AUD-02 | Phase TBD | Pending |
-| AUD-03 | Phase TBD | Pending |
-| MIX-01 | Phase TBD | Pending |
-| MIX-02 | Phase TBD | Pending |
-| HOST-01 | Phase TBD | Pending |
-| HOST-02 | Phase TBD | Pending |
-| UI-01 | Phase TBD | Pending |
-| UI-02 | Phase TBD | Pending |
+| SESS-01 | Phase 1 - Plugin Foundation & Session Configuration | Pending |
+| SESS-02 | Phase 2 - Connection Lifecycle & Recovery | Pending |
+| SESS-03 | Phase 2 - Connection Lifecycle & Recovery | Pending |
+| SYNC-01 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
+| SYNC-02 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
+| SYNC-03 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
+| AUD-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
+| AUD-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
+| AUD-03 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
+| MIX-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
+| MIX-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
+| HOST-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
+| HOST-02 | Phase 1 - Plugin Foundation & Session Configuration | Pending |
+| UI-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
+| UI-02 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
 
 **Coverage:**
 - v1 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ??
+- Mapped to phases: 15
+- Unmapped: 0
+- Coverage: 100%
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after initial definition*
+*Last updated: 2026-03-08 after roadmap creation and traceability mapping*
