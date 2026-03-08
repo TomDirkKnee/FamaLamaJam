@@ -10,7 +10,7 @@ Deliver a reliable Windows-first JUCE 8 VST3 Ninjam client for Ableton by buildi
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Plugin Foundation & Session Configuration** - Establish JUCE/VST3 baseline, core session settings model, and persistence scaffolding.
+- [x] **Phase 1: Plugin Foundation & Session Configuration** - Establish JUCE/VST3 baseline, core session settings model, and persistence scaffolding. (completed 2026-03-08)
 - [ ] **Phase 2: Connection Lifecycle & Recovery** - Implement robust connect/disconnect and automatic reconnect behavior.
 - [ ] **Phase 3: Server-Authoritative Timing & Sync** - Deliver accurate Ninjam interval timing and metronome state behavior.
 - [ ] **Phase 4: Audio Streaming, Mix, and Monitoring Core** - Build functional send/receive audio pipeline with essential channel controls.
@@ -129,7 +129,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Plugin Foundation & Session Configuration | 0/TBD | Not started | - |
+| 1. Plugin Foundation & Session Configuration | 0/TBD | Complete    | 2026-03-08 |
 | 2. Connection Lifecycle & Recovery | 0/TBD | Not started | - |
 | 3. Server-Authoritative Timing & Sync | 0/TBD | Not started | - |
 | 4. Audio Streaming, Mix, and Monitoring Core | 0/TBD | Not started | - |
