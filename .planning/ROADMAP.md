@@ -30,8 +30,8 @@ Deliver a reliable Windows-first JUCE 8 VST3 Ninjam client for Ableton by buildi
 **Plans**: TBD
 
 Plans:
-- [ ] 01-01: Establish JUCE/VST3 project scaffold and core session settings model.
-- [ ] 01-02: Implement settings UI and parameter/state serialization.
+- [x] 01-01: Establish JUCE/VST3 project scaffold and core session settings model.
+- [x] 01-02: Implement settings UI and parameter/state serialization.
 
 ### Phase 2: Connection Lifecycle & Recovery
 **Goal**: Provide reliable session connect/disconnect behavior and resilient reconnect handling under transient failures.
@@ -137,3 +137,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-08*
+
