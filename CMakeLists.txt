@@ -14,11 +14,16 @@ include(cmake/dependencies.cmake)
 add_library(famalamajam_core STATIC)
 target_sources(famalamajam_core
     PRIVATE
-        src/app/session/SessionSettings.cpp)
+        src/app/session/SessionSettings.cpp
+        src/infra/state/SessionSettingsSerializer.cpp)
 
 target_include_directories(famalamajam_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+target_link_libraries(famalamajam_core
+    PUBLIC
+        juce::juce_core)
 
 juce_add_plugin(famalamajam_plugin
     COMPANY_NAME "FamaLamaJam"
@@ -63,4 +68,3 @@ if(FAMALAMAJAM_ENABLE_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
-
