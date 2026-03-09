@@ -4,10 +4,16 @@ namespace famalamajam::plugin
 {
 FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                                                  SettingsGetter settingsGetter,
-                                                                 ApplyHandler applyHandler)
+                                                                 ApplyHandler applyHandler,
+                                                                 LifecycleGetter lifecycleGetter,
+                                                                 CommandHandler connectHandler,
+                                                                 CommandHandler disconnectHandler)
     : juce::AudioProcessorEditor(processor)
     , settingsGetter_(std::move(settingsGetter))
     , applyHandler_(std::move(applyHandler))
+    , lifecycleGetter_(std::move(lifecycleGetter))
+    , connectHandler_(std::move(connectHandler))
+    , disconnectHandler_(std::move(disconnectHandler))
 {
     titleLabel_.setText("FamaLamaJam Session Settings", juce::dontSendNotification);
     titleLabel_.setJustificationType(juce::Justification::centredLeft);
@@ -44,19 +50,39 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     applyButton_.setButtonText("Apply");
     applyButton_.onClick = [this]() {
         const auto result = applyHandler_(makeDraftFromUi());
-        statusLabel_.setText(result.statusMessage, juce::dontSendNotification);
 
         if (result.applied)
+        {
             loadFromSettings(settingsGetter_());
+            refreshLifecycleStatus();
+            return;
+        }
+
+        statusLabel_.setText(result.statusMessage, juce::dontSendNotification);
     };
     addAndMakeVisible(applyButton_);
+
+    connectButton_.setButtonText("Connect");
+    connectButton_.onClick = [this]() {
+        connectHandler_();
+        refreshLifecycleStatus();
+    };
+    addAndMakeVisible(connectButton_);
+
+    disconnectButton_.setButtonText("Disconnect");
+    disconnectButton_.onClick = [this]() {
+        disconnectHandler_();
+        refreshLifecycleStatus();
+    };
+    addAndMakeVisible(disconnectButton_);
 
     statusLabel_.setText("Ready", juce::dontSendNotification);
     statusLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(statusLabel_);
 
     loadFromSettings(settingsGetter_());
-    setSize(560, 320);
+    refreshLifecycleStatus();
+    setSize(620, 340);
 }
 
 void FamaLamaJamAudioProcessorEditor::resized()
@@ -82,10 +108,15 @@ void FamaLamaJamAudioProcessorEditor::resized()
     muteToggle_.setBounds(area.removeFromTop(28));
     area.removeFromTop(8);
 
-    auto footer = area.removeFromTop(32);
-    applyButton_.setBounds(footer.removeFromLeft(140));
-    footer.removeFromLeft(10);
-    statusLabel_.setBounds(footer);
+    auto controls = area.removeFromTop(32);
+    connectButton_.setBounds(controls.removeFromLeft(110));
+    controls.removeFromLeft(8);
+    disconnectButton_.setBounds(controls.removeFromLeft(120));
+    controls.removeFromLeft(8);
+    applyButton_.setBounds(controls.removeFromLeft(100));
+
+    area.removeFromTop(8);
+    statusLabel_.setBounds(area.removeFromTop(32));
 }
 
 app::session::SessionSettings FamaLamaJamAudioProcessorEditor::makeDraftFromUi() const
@@ -108,5 +139,17 @@ void FamaLamaJamAudioProcessorEditor::loadFromSettings(const app::session::Sessi
     gainSlider_.setValue(settings.defaultChannelGainDb, juce::dontSendNotification);
     panSlider_.setValue(settings.defaultChannelPan, juce::dontSendNotification);
     muteToggle_.setToggleState(settings.defaultChannelMuted, juce::dontSendNotification);
+}
+
+void FamaLamaJamAudioProcessorEditor::refreshLifecycleStatus()
+{
+    const auto snapshot = lifecycleGetter_();
+
+    const auto status = snapshot.statusMessage.empty() ? app::session::toString(snapshot.state)
+                                                       : snapshot.statusMessage;
+
+    statusLabel_.setText(juce::String(status), juce::dontSendNotification);
+    connectButton_.setEnabled(snapshot.canConnect());
+    disconnectButton_.setEnabled(snapshot.canDisconnect());
 }
 } // namespace famalamajam::plugin

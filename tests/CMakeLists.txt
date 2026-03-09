@@ -1,7 +1,9 @@
 add_executable(famalamajam_tests
     unit/settings_validation_tests.cpp
     unit/state_serialization_tests.cpp
+    unit/connection_lifecycle_tests.cpp
     integration/plugin_apply_flow_tests.cpp
+    integration/plugin_connection_command_flow_tests.cpp
     integration/plugin_state_roundtrip_tests.cpp)
 
 target_link_libraries(famalamajam_tests
@@ -13,5 +15,5 @@ target_link_libraries(famalamajam_tests
 include(CTest)
 include(Catch)
 catch_discover_tests(famalamajam_tests
-    TEST_PREFIX "phase1::"
-    PROPERTIES LABELS "phase1-quick")
+    TEST_PREFIX "phase::"
+    PROPERTIES LABELS "phase-quick")
