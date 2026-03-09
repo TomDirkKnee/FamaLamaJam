@@ -16,6 +16,8 @@ target_sources(famalamajam_core
     PRIVATE
         src/app/session/SessionSettings.cpp
         src/app/session/SessionSettingsController.cpp
+        src/app/session/ConnectionLifecycle.cpp
+        src/app/session/ConnectionLifecycleController.cpp
         src/infra/state/SessionSettingsSerializer.cpp)
 
 target_include_directories(famalamajam_core

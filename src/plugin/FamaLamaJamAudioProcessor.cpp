@@ -45,9 +45,18 @@ bool FamaLamaJamAudioProcessor::hasEditor() const { return true; }
 
 juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
 {
-    auto getter = [this]() { return settingsStore_.getActiveSettings(); };
+    auto settingsGetter = [this]() { return settingsStore_.getActiveSettings(); };
     auto apply = [this](app::session::SessionSettings draft) { return settingsController_.applyDraft(std::move(draft)); };
-    return new FamaLamaJamAudioProcessorEditor(*this, std::move(getter), std::move(apply));
+    auto lifecycleGetter = [this]() { return getLifecycleSnapshot(); };
+    auto connect = [this]() { return requestConnect(); };
+    auto disconnect = [this]() { return requestDisconnect(); };
+
+    return new FamaLamaJamAudioProcessorEditor(*this,
+                                               std::move(settingsGetter),
+                                               std::move(apply),
+                                               std::move(lifecycleGetter),
+                                               std::move(connect),
+                                               std::move(disconnect));
 }
 
 void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -62,8 +71,8 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
 
     app::session::SessionSettingsValidationResult validation;
     settingsStore_.applyCandidate(restored, &validation);
-    isConnected_ = false;
 
+    lifecycleController_.resetToIdle();
     lastStatusMessage_ = usedFallback ? "State invalid. Defaults restored." : "Settings restored";
 }
 
@@ -79,9 +88,42 @@ bool FamaLamaJamAudioProcessor::applySettingsFromUi(const app::session::SessionS
     return result.applied;
 }
 
+bool FamaLamaJamAudioProcessor::requestConnect()
+{
+    const auto transition = lifecycleController_.handleCommand(app::session::ConnectionCommand::Connect);
+
+    if (transition.changed)
+        lastStatusMessage_ = transition.snapshot.statusMessage;
+
+    return transition.changed;
+}
+
+bool FamaLamaJamAudioProcessor::requestDisconnect()
+{
+    const auto transition = lifecycleController_.handleCommand(app::session::ConnectionCommand::Disconnect);
+
+    if (transition.changed)
+        lastStatusMessage_ = transition.snapshot.statusMessage;
+
+    return transition.changed;
+}
+
+void FamaLamaJamAudioProcessor::handleConnectionEvent(const app::session::ConnectionEvent& event)
+{
+    const auto transition = lifecycleController_.handleEvent(event);
+
+    if (transition.changed)
+        lastStatusMessage_ = transition.snapshot.statusMessage;
+}
+
 app::session::SessionSettings FamaLamaJamAudioProcessor::getActiveSettings() const
 {
     return settingsStore_.getActiveSettings();
+}
+
+app::session::ConnectionLifecycleSnapshot FamaLamaJamAudioProcessor::getLifecycleSnapshot() const
+{
+    return lifecycleController_.getSnapshot();
 }
 
 std::string FamaLamaJamAudioProcessor::getLastStatusMessage() const
@@ -91,7 +133,7 @@ std::string FamaLamaJamAudioProcessor::getLastStatusMessage() const
 
 bool FamaLamaJamAudioProcessor::isSessionConnected() const noexcept
 {
-    return isConnected_.load();
+    return lifecycleController_.getSnapshot().isConnected();
 }
 } // namespace famalamajam::plugin
 

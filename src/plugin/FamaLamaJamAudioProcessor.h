@@ -1,10 +1,10 @@
 #pragma once
 
-#include <atomic>
 #include <string>
 
 #include <JuceHeader.h>
 
+#include "app/session/ConnectionLifecycleController.h"
 #include "app/session/SessionSettings.h"
 #include "app/session/SessionSettingsController.h"
 
@@ -40,14 +40,20 @@ public:
 
     bool applySettingsFromUi(const app::session::SessionSettings& candidate,
                              app::session::SessionSettingsValidationResult* validation = nullptr);
+
+    bool requestConnect();
+    bool requestDisconnect();
+    void handleConnectionEvent(const app::session::ConnectionEvent& event);
+
     app::session::SessionSettings getActiveSettings() const;
+    app::session::ConnectionLifecycleSnapshot getLifecycleSnapshot() const;
     std::string getLastStatusMessage() const;
     bool isSessionConnected() const noexcept;
 
 private:
     app::session::SessionSettingsStore settingsStore_;
     app::session::SessionSettingsController settingsController_;
-    std::atomic<bool> isConnected_ { false };
+    app::session::ConnectionLifecycleController lifecycleController_;
     std::string lastStatusMessage_ { "Ready" };
 };
 } // namespace famalamajam::plugin
