@@ -6,6 +6,7 @@ add_executable(famalamajam_tests
     unit/connection_failure_classification_tests.cpp
     integration/plugin_apply_flow_tests.cpp
     integration/plugin_connection_command_flow_tests.cpp
+    integration/plugin_connection_recovery_tests.cpp
     integration/plugin_state_roundtrip_tests.cpp)
 
 target_link_libraries(famalamajam_tests

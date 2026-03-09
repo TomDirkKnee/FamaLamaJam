@@ -1,6 +1,6 @@
 #include "ConnectionLifecycleController.h"
 
-#include <algorithm>
+#include <utility>
 
 namespace famalamajam::app::session
 {
@@ -91,6 +91,7 @@ ConnectionLifecycleTransition ConnectionLifecycleController::handleEvent(const C
         }
 
         transition.snapshot.state = ConnectionState::Error;
+        transition.snapshot.retryAttempt = snapshot_.retryAttempt;
         transition.snapshot.nextRetryDelayMs = 0;
         transition.snapshot.statusMessage = makeRetryExhaustedStatus(retryPolicy_.maxAttempts, event.reason);
         transition.effect = LifecycleEffect::None;
@@ -100,6 +101,7 @@ ConnectionLifecycleTransition ConnectionLifecycleController::handleEvent(const C
     }
 
     transition.snapshot.state = ConnectionState::Error;
+    transition.snapshot.retryAttempt = snapshot_.retryAttempt;
     transition.snapshot.nextRetryDelayMs = 0;
     transition.snapshot.statusMessage = makeTerminalStatus(failureKind, event.reason);
     transition.effect = LifecycleEffect::None;
