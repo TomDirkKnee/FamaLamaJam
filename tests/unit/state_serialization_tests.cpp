@@ -1,4 +1,4 @@
-#include <JuceHeader.h>
+#include <juce_data_structures/juce_data_structures.h>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -70,3 +70,4 @@ TEST_CASE("state serialization ignores unknown fields", "[state_serialization]")
     CHECK(restored.serverPort == 2049);
     CHECK(restored.username == "guest");
 }
+

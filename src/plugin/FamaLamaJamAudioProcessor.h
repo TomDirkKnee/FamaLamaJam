@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include <JuceHeader.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 
 #include "app/session/ConnectionLifecycleController.h"
 #include "app/session/SessionSettings.h"
@@ -57,3 +57,4 @@ private:
     std::string lastStatusMessage_ { "Ready" };
 };
 } // namespace famalamajam::plugin
+

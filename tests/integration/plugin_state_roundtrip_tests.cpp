@@ -1,5 +1,6 @@
-#include <JuceHeader.h>
+#include <juce_core/juce_core.h>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "plugin/FamaLamaJamAudioProcessor.h"
@@ -32,8 +33,8 @@ TEST_CASE("plugin state roundtrip restores saved settings in fresh instance", "[
     CHECK(active.serverHost == "ninjam.example.org");
     CHECK(active.serverPort == 2050);
     CHECK(active.username == "roundtrip_user");
-    CHECK(active.defaultChannelGainDb == Approx(-4.0f));
-    CHECK(active.defaultChannelPan == Approx(0.35f));
+    CHECK(active.defaultChannelGainDb == Catch::Approx(-4.0f));
+    CHECK(active.defaultChannelPan == Catch::Approx(0.35f));
     CHECK(active.defaultChannelMuted == true);
     CHECK_FALSE(restored.isSessionConnected());
 }
@@ -52,3 +53,5 @@ TEST_CASE("plugin state roundtrip falls back safely for invalid state blob", "[p
     CHECK(processor.getLastStatusMessage().find("Defaults restored") != std::string::npos);
     CHECK_FALSE(processor.isSessionConnected());
 }
+
+

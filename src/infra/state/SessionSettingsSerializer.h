@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JuceHeader.h>
+#include <juce_data_structures/juce_data_structures.h>
 
 #include "app/session/SessionSettings.h"
 
@@ -21,3 +21,5 @@ private:
     static juce::ValueTree toValueTree(const app::session::SessionSettings& settings);
 };
 } // namespace famalamajam::infra::state
+
+

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FamaLamaJam VERSION 0.1.0 LANGUAGES CXX)
+project(FamaLamaJam VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,7 +26,8 @@ target_include_directories(famalamajam_core
 
 target_link_libraries(famalamajam_core
     PUBLIC
-        juce::juce_core)
+        juce::juce_core
+        juce::juce_data_structures)
 
 juce_add_plugin(famalamajam_plugin
     COMPANY_NAME "FamaLamaJam"
@@ -74,3 +75,5 @@ if(FAMALAMAJAM_ENABLE_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+

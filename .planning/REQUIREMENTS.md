@@ -8,7 +8,7 @@
 ### Connection & Session
 
 - [x] **SESS-01**: User can configure Ninjam server endpoint and credentials from the plugin UI.
-- [ ] **SESS-02**: User can connect and disconnect from a Ninjam server without restarting Ableton.
+- [x] **SESS-02**: User can connect and disconnect from a Ninjam server without restarting Ableton.
 - [ ] **SESS-03**: User can recover from transient network loss via automatic reconnect with clear status feedback.
 
 ### Timing & Sync
@@ -70,7 +70,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SESS-01 | Phase 1 - Plugin Foundation & Session Configuration | Complete |
-| SESS-02 | Phase 2 - Connection Lifecycle & Recovery | Pending |
+| SESS-02 | Phase 2 - Connection Lifecycle & Recovery | Complete |
 | SESS-03 | Phase 2 - Connection Lifecycle & Recovery | Pending |
 | SYNC-01 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
 | SYNC-02 | Phase 3 - Server-Authoritative Timing & Sync | Pending |

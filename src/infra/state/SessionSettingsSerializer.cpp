@@ -20,9 +20,9 @@ juce::ValueTree SessionSettingsSerializer::toValueTree(const app::session::Sessi
 {
     juce::ValueTree tree(kRootType);
     tree.setProperty(kSchemaVersion, schemaVersion, nullptr);
-    tree.setProperty(kServerHost, settings.serverHost, nullptr);
+    tree.setProperty(kServerHost, juce::String(settings.serverHost), nullptr);
     tree.setProperty(kServerPort, static_cast<int>(settings.serverPort), nullptr);
-    tree.setProperty(kUsername, settings.username, nullptr);
+    tree.setProperty(kUsername, juce::String(settings.username), nullptr);
     tree.setProperty(kDefaultChannelGainDb, settings.defaultChannelGainDb, nullptr);
     tree.setProperty(kDefaultChannelPan, settings.defaultChannelPan, nullptr);
     tree.setProperty(kDefaultChannelMuted, settings.defaultChannelMuted, nullptr);
@@ -80,3 +80,4 @@ app::session::SessionSettings SessionSettingsSerializer::deserializeOrDefault(co
     return loaded;
 }
 } // namespace famalamajam::infra::state
+

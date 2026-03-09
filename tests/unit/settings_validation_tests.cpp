@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "app/session/SessionSettings.h"
@@ -25,8 +26,8 @@ TEST_CASE("settings validation accepts normalized valid values", "[settings_vali
     CHECK(active.serverHost == "ninjam.example.org");
     CHECK(active.serverPort == 2049);
     CHECK(active.username == "tester");
-    CHECK(active.defaultChannelGainDb == Approx(12.0f));
-    CHECK(active.defaultChannelPan == Approx(-1.0f));
+    CHECK(active.defaultChannelGainDb == Catch::Approx(12.0f));
+    CHECK(active.defaultChannelPan == Catch::Approx(-1.0f));
 }
 
 TEST_CASE("settings validation rejects invalid endpoint and username", "[settings_validation]")
@@ -64,3 +65,5 @@ TEST_CASE("settings validation rejects invalid port", "[settings_validation]")
     CHECK(result.errors.size() == 1);
     CHECK(store.getActiveSettings() == original);
 }
+
+
