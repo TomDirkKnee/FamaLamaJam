@@ -18,6 +18,8 @@ target_sources(famalamajam_core
         src/app/session/SessionSettingsController.cpp
         src/app/session/ConnectionLifecycle.cpp
         src/app/session/ConnectionLifecycleController.cpp
+        src/app/session/RetryPolicy.cpp
+        src/app/session/ConnectionFailureClassifier.cpp
         src/infra/state/SessionSettingsSerializer.cpp)
 
 target_include_directories(famalamajam_core
@@ -75,5 +77,3 @@ if(FAMALAMAJAM_ENABLE_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
-
-
