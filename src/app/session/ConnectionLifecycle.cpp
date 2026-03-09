@@ -54,6 +54,11 @@ bool ConnectionLifecycleSnapshot::isConnected() const noexcept
     return state == ConnectionState::Active;
 }
 
+bool ConnectionLifecycleSnapshot::hasPendingRetry() const noexcept
+{
+    return state == ConnectionState::Reconnecting && nextRetryDelayMs > 0;
+}
+
 const char* toString(ConnectionState state) noexcept
 {
     switch (state)

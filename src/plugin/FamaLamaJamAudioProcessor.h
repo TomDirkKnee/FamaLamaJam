@@ -10,10 +10,11 @@
 
 namespace famalamajam::plugin
 {
-class FamaLamaJamAudioProcessor final : public juce::AudioProcessor
+class FamaLamaJamAudioProcessor final : public juce::AudioProcessor, private juce::Timer
 {
 public:
     FamaLamaJamAudioProcessor();
+    ~FamaLamaJamAudioProcessor() override;
 
     const juce::String getName() const override;
     bool acceptsMidi() const override;
@@ -45,16 +46,26 @@ public:
     bool requestDisconnect();
     void handleConnectionEvent(const app::session::ConnectionEvent& event);
 
+    bool triggerScheduledReconnectForTesting();
+    [[nodiscard]] int getScheduledReconnectDelayMs() const noexcept;
+
     app::session::SessionSettings getActiveSettings() const;
     app::session::ConnectionLifecycleSnapshot getLifecycleSnapshot() const;
     std::string getLastStatusMessage() const;
     bool isSessionConnected() const noexcept;
 
 private:
+    void timerCallback() override;
+
+    void applyLifecycleTransition(const app::session::ConnectionLifecycleTransition& transition);
+    void clearReconnectTimer();
+    void scheduleReconnectTimer(int delayMs);
+
     app::session::SessionSettingsStore settingsStore_;
     app::session::SessionSettingsController settingsController_;
     app::session::ConnectionLifecycleController lifecycleController_;
     std::string lastStatusMessage_ { "Ready" };
+    bool reconnectScheduled_ { false };
+    int scheduledReconnectDelayMs_ { 0 };
 };
 } // namespace famalamajam::plugin
-

@@ -12,6 +12,11 @@ FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor()
 {
 }
 
+FamaLamaJamAudioProcessor::~FamaLamaJamAudioProcessor()
+{
+    clearReconnectTimer();
+}
+
 const juce::String FamaLamaJamAudioProcessor::getName() const { return "FamaLamaJam"; }
 bool FamaLamaJamAudioProcessor::acceptsMidi() const { return false; }
 bool FamaLamaJamAudioProcessor::producesMidi() const { return false; }
@@ -72,7 +77,7 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     app::session::SessionSettingsValidationResult validation;
     settingsStore_.applyCandidate(restored, &validation);
 
-    lifecycleController_.resetToIdle();
+    applyLifecycleTransition(lifecycleController_.resetToIdle());
     lastStatusMessage_ = usedFallback ? "State invalid. Defaults restored." : "Settings restored";
 }
 
@@ -91,29 +96,33 @@ bool FamaLamaJamAudioProcessor::applySettingsFromUi(const app::session::SessionS
 bool FamaLamaJamAudioProcessor::requestConnect()
 {
     const auto transition = lifecycleController_.handleCommand(app::session::ConnectionCommand::Connect);
-
-    if (transition.changed)
-        lastStatusMessage_ = transition.snapshot.statusMessage;
-
+    applyLifecycleTransition(transition);
     return transition.changed;
 }
 
 bool FamaLamaJamAudioProcessor::requestDisconnect()
 {
     const auto transition = lifecycleController_.handleCommand(app::session::ConnectionCommand::Disconnect);
-
-    if (transition.changed)
-        lastStatusMessage_ = transition.snapshot.statusMessage;
-
+    applyLifecycleTransition(transition);
     return transition.changed;
 }
 
 void FamaLamaJamAudioProcessor::handleConnectionEvent(const app::session::ConnectionEvent& event)
 {
     const auto transition = lifecycleController_.handleEvent(event);
+    applyLifecycleTransition(transition);
+}
 
-    if (transition.changed)
-        lastStatusMessage_ = transition.snapshot.statusMessage;
+bool FamaLamaJamAudioProcessor::triggerScheduledReconnectForTesting()
+{
+    const auto transition = lifecycleController_.triggerScheduledReconnect();
+    applyLifecycleTransition(transition);
+    return transition.changed;
+}
+
+int FamaLamaJamAudioProcessor::getScheduledReconnectDelayMs() const noexcept
+{
+    return scheduledReconnectDelayMs_;
 }
 
 app::session::SessionSettings FamaLamaJamAudioProcessor::getActiveSettings() const
@@ -134,6 +143,42 @@ std::string FamaLamaJamAudioProcessor::getLastStatusMessage() const
 bool FamaLamaJamAudioProcessor::isSessionConnected() const noexcept
 {
     return lifecycleController_.getSnapshot().isConnected();
+}
+
+void FamaLamaJamAudioProcessor::timerCallback()
+{
+    triggerScheduledReconnectForTesting();
+}
+
+void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::ConnectionLifecycleTransition& transition)
+{
+    if (! transition.changed)
+        return;
+
+    lastStatusMessage_ = transition.snapshot.statusMessage;
+
+    if (transition.effect == app::session::LifecycleEffect::ScheduleReconnect)
+    {
+        scheduleReconnectTimer(transition.snapshot.nextRetryDelayMs);
+        return;
+    }
+
+    clearReconnectTimer();
+}
+
+void FamaLamaJamAudioProcessor::clearReconnectTimer()
+{
+    reconnectScheduled_ = false;
+    scheduledReconnectDelayMs_ = 0;
+    stopTimer();
+}
+
+void FamaLamaJamAudioProcessor::scheduleReconnectTimer(int delayMs)
+{
+    const auto boundedDelay = juce::jmax(1, delayMs);
+    reconnectScheduled_ = true;
+    scheduledReconnectDelayMs_ = boundedDelay;
+    startTimer(boundedDelay);
 }
 } // namespace famalamajam::plugin
 
