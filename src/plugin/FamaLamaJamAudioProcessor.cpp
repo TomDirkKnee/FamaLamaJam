@@ -5,6 +5,42 @@
 
 namespace famalamajam::plugin
 {
+namespace
+{
+const juce::Identifier kPluginStateType("famalamajam.plugin.state");
+const juce::Identifier kPluginStateSchemaVersion("schemaVersion");
+const juce::Identifier kPluginStateLastErrorContext("lastErrorContext");
+constexpr int kPluginStateSchema = 1;
+constexpr std::size_t kMaxLastErrorContextLength = 64;
+
+[[nodiscard]] std::string shortenLastErrorContext(const std::string& context)
+{
+    if (context.size() <= kMaxLastErrorContextLength)
+        return context;
+
+    return context.substr(0, kMaxLastErrorContextLength - 3) + "...";
+}
+
+[[nodiscard]] std::string makeRestoreStatusMessage(bool usedFallback, const std::string& lastErrorContext)
+{
+    if (usedFallback)
+        return "State invalid. Defaults restored.";
+
+    if (lastErrorContext.empty())
+        return "Settings restored";
+
+    return "Settings restored. Last error: " + lastErrorContext;
+}
+
+[[nodiscard]] juce::ValueTree parseValueTree(const void* data, int sizeInBytes)
+{
+    if (data == nullptr || sizeInBytes <= 0)
+        return {};
+
+    return juce::ValueTree::readFromData(data, static_cast<size_t>(sizeInBytes));
+}
+} // namespace
+
 FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor()
     : juce::AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
                                             .withOutput("Output", juce::AudioChannelSet::stereo(), true))
@@ -66,19 +102,64 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
 
 void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    infra::state::SessionSettingsSerializer::serialize(settingsStore_.getActiveSettings(), destData);
+    juce::MemoryBlock settingsPayload;
+    infra::state::SessionSettingsSerializer::serialize(settingsStore_.getActiveSettings(), settingsPayload);
+
+    juce::ValueTree stateTree(kPluginStateType);
+    stateTree.setProperty(kPluginStateSchemaVersion, kPluginStateSchema, nullptr);
+
+    const auto settingsTree = parseValueTree(settingsPayload.getData(), static_cast<int>(settingsPayload.getSize()));
+    if (settingsTree.isValid())
+        stateTree.addChild(settingsTree.createCopy(), -1, nullptr);
+
+    const auto lastErrorContext = shortenLastErrorContext(lifecycleController_.getSnapshot().lastError);
+    if (! lastErrorContext.empty())
+        stateTree.setProperty(kPluginStateLastErrorContext, juce::String(lastErrorContext), nullptr);
+
+    juce::MemoryOutputStream stream(destData, false);
+    stateTree.writeToStream(stream);
 }
 
 void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
+    juce::MemoryBlock settingsPayload;
+    std::string restoredLastErrorContext;
+
+    const auto stateTree = parseValueTree(data, sizeInBytes);
+    const bool hasWrappedState = stateTree.isValid() && stateTree.hasType(kPluginStateType)
+        && static_cast<int>(stateTree.getProperty(kPluginStateSchemaVersion, -1)) == kPluginStateSchema;
+
+    if (hasWrappedState)
+    {
+        if (stateTree.getNumChildren() > 0)
+        {
+            juce::MemoryOutputStream settingsStream(settingsPayload, false);
+            stateTree.getChild(0).writeToStream(settingsStream);
+        }
+
+        restoredLastErrorContext = shortenLastErrorContext(
+            stateTree.getProperty(kPluginStateLastErrorContext, juce::String()).toString().toStdString());
+    }
+
+    const void* settingsData = data;
+    int settingsSize = sizeInBytes;
+
+    if (settingsPayload.getSize() > 0)
+    {
+        settingsData = settingsPayload.getData();
+        settingsSize = static_cast<int>(settingsPayload.getSize());
+    }
+
     bool usedFallback = false;
-    const auto restored = infra::state::SessionSettingsSerializer::deserializeOrDefault(data, sizeInBytes, &usedFallback);
+    const auto restored = infra::state::SessionSettingsSerializer::deserializeOrDefault(settingsData,
+                                                                                         settingsSize,
+                                                                                         &usedFallback);
 
     app::session::SessionSettingsValidationResult validation;
     settingsStore_.applyCandidate(restored, &validation);
 
     applyLifecycleTransition(lifecycleController_.resetToIdle());
-    lastStatusMessage_ = usedFallback ? "State invalid. Defaults restored." : "Settings restored";
+    lastStatusMessage_ = makeRestoreStatusMessage(usedFallback, restoredLastErrorContext);
 }
 
 app::session::SessionSettingsController::ApplyResult FamaLamaJamAudioProcessor::applySettingsDraft(
