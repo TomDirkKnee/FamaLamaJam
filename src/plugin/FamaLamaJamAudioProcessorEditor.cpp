@@ -2,6 +2,64 @@
 
 namespace famalamajam::plugin
 {
+namespace
+{
+[[nodiscard]] int secondsFromDelayMs(int delayMs)
+{
+    if (delayMs <= 0)
+        return 0;
+
+    return (delayMs + 999) / 1000;
+}
+
+[[nodiscard]] std::string formatLifecycleStatus(const app::session::ConnectionLifecycleSnapshot& snapshot)
+{
+    switch (snapshot.state)
+    {
+        case app::session::ConnectionState::Idle:
+            if (snapshot.statusMessage.empty() || snapshot.statusMessage == "Idle")
+                return "Ready";
+            return snapshot.statusMessage;
+
+        case app::session::ConnectionState::Connecting:
+            return "Connecting";
+
+        case app::session::ConnectionState::Active:
+            return "Connected";
+
+        case app::session::ConnectionState::Reconnecting:
+        {
+            std::string status = "Reconnecting";
+
+            if (snapshot.nextRetryDelayMs > 0)
+                status += " in " + std::to_string(secondsFromDelayMs(snapshot.nextRetryDelayMs)) + "s";
+
+            if (snapshot.retryAttemptLimit > 0 && snapshot.retryAttempt > 0)
+            {
+                status += " (attempt " + std::to_string(snapshot.retryAttempt) + "/"
+                        + std::to_string(snapshot.retryAttemptLimit) + ")";
+            }
+
+            if (! snapshot.lastError.empty())
+                status += ": " + snapshot.lastError;
+
+            return status;
+        }
+
+        case app::session::ConnectionState::Error:
+            if (! snapshot.lastError.empty())
+                return "Error: " + snapshot.lastError + ". Press Connect to retry.";
+
+            if (snapshot.statusMessage.empty() || snapshot.statusMessage == "Error")
+                return "Error. Press Connect to retry.";
+
+            return snapshot.statusMessage;
+    }
+
+    return "Ready";
+}
+} // namespace
+
 FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                                                  SettingsGetter settingsGetter,
                                                                  ApplyHandler applyHandler,
@@ -144,9 +202,7 @@ void FamaLamaJamAudioProcessorEditor::loadFromSettings(const app::session::Sessi
 void FamaLamaJamAudioProcessorEditor::refreshLifecycleStatus()
 {
     const auto snapshot = lifecycleGetter_();
-
-    const auto status = snapshot.statusMessage.empty() ? app::session::toString(snapshot.state)
-                                                       : snapshot.statusMessage;
+    const auto status = formatLifecycleStatus(snapshot);
 
     statusLabel_.setText(juce::String(status), juce::dontSendNotification);
     connectButton_.setEnabled(snapshot.canConnect());
