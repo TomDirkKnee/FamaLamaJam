@@ -51,7 +51,7 @@ bool FamaLamaJamAudioProcessor::hasEditor() const { return true; }
 juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
 {
     auto settingsGetter = [this]() { return settingsStore_.getActiveSettings(); };
-    auto apply = [this](app::session::SessionSettings draft) { return settingsController_.applyDraft(std::move(draft)); };
+    auto apply = [this](app::session::SessionSettings draft) { return applySettingsDraft(std::move(draft)); };
     auto lifecycleGetter = [this]() { return getLifecycleSnapshot(); };
     auto connect = [this]() { return requestConnect(); };
     auto disconnect = [this]() { return requestDisconnect(); };
@@ -81,15 +81,43 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     lastStatusMessage_ = usedFallback ? "State invalid. Defaults restored." : "Settings restored";
 }
 
+app::session::SessionSettingsController::ApplyResult FamaLamaJamAudioProcessor::applySettingsDraft(
+    app::session::SessionSettings candidate)
+{
+    const bool wasErrorState = lifecycleController_.getSnapshot().state == app::session::ConnectionState::Error;
+    auto result = settingsController_.applyDraft(std::move(candidate));
+
+    if (! result.applied)
+    {
+        lastStatusMessage_ = result.statusMessage;
+        return result;
+    }
+
+    if (wasErrorState)
+    {
+        auto transition = lifecycleController_.handleCommand(app::session::ConnectionCommand::ApplySettings);
+        applyLifecycleTransition(transition);
+
+        if (transition.changed)
+            result.statusMessage = transition.snapshot.statusMessage;
+        else
+            lastStatusMessage_ = result.statusMessage;
+
+        return result;
+    }
+
+    lastStatusMessage_ = result.statusMessage;
+    return result;
+}
+
 bool FamaLamaJamAudioProcessor::applySettingsFromUi(const app::session::SessionSettings& candidate,
                                                      app::session::SessionSettingsValidationResult* validation)
 {
-    auto result = settingsController_.applyDraft(candidate);
+    auto result = applySettingsDraft(candidate);
 
     if (validation != nullptr)
         *validation = result.validation;
 
-    lastStatusMessage_ = result.statusMessage;
     return result.applied;
 }
 

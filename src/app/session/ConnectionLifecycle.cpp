@@ -94,6 +94,19 @@ ConnectionLifecycleTransition reduceLifecycleCommand(const ConnectionLifecycleSn
         };
     }
 
+    if (command == ConnectionCommand::ApplySettings)
+    {
+        if (current.state != ConnectionState::Error)
+            return makeSuppressed(current);
+
+        return ConnectionLifecycleTransition {
+            .snapshot = makeSnapshot(ConnectionState::Idle, "Ready. Press Connect to retry.", ""),
+            .effect = LifecycleEffect::None,
+            .changed = true,
+            .suppressed = false,
+        };
+    }
+
     if (! current.canDisconnect())
         return makeSuppressed(current);
 

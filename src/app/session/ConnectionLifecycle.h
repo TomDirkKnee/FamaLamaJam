@@ -18,6 +18,7 @@ enum class ConnectionCommand
 {
     Connect,
     Disconnect,
+    ApplySettings,
 };
 
 enum class ConnectionEventType

@@ -34,7 +34,7 @@ ConnectionLifecycleTransition ConnectionLifecycleController::handleCommand(Conne
 
     if (transition.changed)
     {
-        if (command == ConnectionCommand::Connect)
+        if (command == ConnectionCommand::Connect || command == ConnectionCommand::ApplySettings)
         {
             transition.snapshot.retryAttempt = 0;
             transition.snapshot.retryAttemptLimit = retryPolicy_.maxAttempts;

@@ -57,6 +57,7 @@ public:
 private:
     void timerCallback() override;
 
+    app::session::SessionSettingsController::ApplyResult applySettingsDraft(app::session::SessionSettings candidate);
     void applyLifecycleTransition(const app::session::ConnectionLifecycleTransition& transition);
     void clearReconnectTimer();
     void scheduleReconnectTimer(int delayMs);
