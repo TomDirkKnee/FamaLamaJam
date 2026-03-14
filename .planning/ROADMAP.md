@@ -57,11 +57,13 @@ Plans:
 2. Current interval/metronome state is visible in the UI and updates consistently at boundary transitions.
 3. Timing remains stable over a full rehearsal-length validation run with no cumulative interval drift.
 4. Sync recovery after reconnect re-aligns interval state to server timing without manual user intervention.
-**Plans**: TBD
+5. Remote participant interval audio switches at shared server boundary points (no arrival-time staggering between users).
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: Implement timing engine and protocol-driven interval state updates.
-- [ ] 03-02: Add sync-state UI indicators and long-run drift validation tests.
+- [ ] 03-01-PLAN.md - Implement the authoritative timing engine, timing reset semantics, and shared Phase 3 mini-server harness.
+- [ ] 03-02-PLAN.md - Add explicit sync-health UI state, beat-divided transport progress, and metronome alignment coverage.
+- [ ] 03-03-PLAN.md - Enforce boundary-quantized remote playback switching and verify late-interval skip behavior.
 
 ### Phase 4: Audio Streaming, Mix, and Monitoring Core
 **Goal**: Deliver working Ninjam-compatible audio send/receive pipeline with essential monitor and mix controls.
@@ -137,4 +139,5 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-08*
+
 
