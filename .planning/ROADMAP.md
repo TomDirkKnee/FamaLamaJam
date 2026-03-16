@@ -2,7 +2,7 @@
 
 ## Overview
 
-Deliver a reliable Windows-first JUCE 8 VST3 Ninjam client for Ableton by building the realtime/plugin foundation first, then connection and timing correctness, then audio/mix capabilities, and finally host-hardening plus end-to-end rehearsal usability validation.
+The first milestone delivered a validated Windows-first rehearsal baseline. The next milestone extends that stable core into a more complete collaboration client by tackling Ableton sync assist research, room interaction features, server discovery/history, a stronger JamTaba-inspired layout, and targeted NINJAM parity investigation.
 
 ## Phases
 
@@ -15,6 +15,11 @@ Deliver a reliable Windows-first JUCE 8 VST3 Ninjam client for Ableton by buildi
 - [x] **Phase 3: Server-Authoritative Timing & Sync** - Deliver accurate Ninjam interval timing and metronome state behavior. (completed 2026-03-14)
 - [x] **Phase 4: Audio Streaming, Mix, and Monitoring Core** - Build functional send/receive audio pipeline with essential channel controls. (completed 2026-03-15)
 - [x] **Phase 5: Ableton Reliability & v1 Rehearsal UX Validation** - Harden host lifecycle behavior and validate complete user jam workflow. (completed 2026-03-16)
+- [ ] **Phase 6: Ableton Sync Assist Research & Prototype** - Research JamTaba/ReaNINJAM host-sync behavior and prototype safe Ableton tempo/loop assistance.
+- [ ] **Phase 7: Chat & Room Control Commands** - Add room chat plus BPM/BPI voting controls and feedback.
+- [ ] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history.
+- [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
+- [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
 ## Phase Details
 
@@ -99,6 +104,65 @@ Plans:
 - [x] 05-02-PLAN.md - Finalize simple end-to-end UI flow and error/status message quality.
 - [x] 05-03-PLAN.md - Execute v1 rehearsal validation matrix and document outcomes.
 
+### Phase 6: Ableton Sync Assist Research & Prototype
+**Goal**: Determine what host-sync behavior is actually feasible in Ableton and prototype a safe helper workflow that respects server-authoritative Ninjam timing.
+**Depends on**: Phase 5
+**Requirements**: HSYNC-01, HSYNC-02
+**Success Criteria** (what must be TRUE):
+1. Project documents how JamTaba/ReaNINJAM-style host-sync behavior works and what parts are transferable to Ableton.
+2. Plugin can prototype at least one optional host-sync assist action, such as setting host tempo or loop length from room BPM/BPI.
+3. The feature is framed as an assistive workflow, not as a replacement for server-authoritative interval timing.
+4. UX and technical constraints are clear enough to decide whether fuller host-sync work should continue.
+**Plans**: 3 plans
+
+Plans:
+- [x] 06-01-PLAN.md - Add processor-side host playhead observation, armed sync state, and injected playhead regression coverage.
+- [ ] 06-02-PLAN.md - Add transport-adjacent arm or cancel UI, blocked explanations, and explicit sync-assist status messaging.
+- [ ] 06-03-PLAN.md - Run automated plus Ableton validation and capture the Phase 6 feasibility decision.
+
+### Phase 7: Chat & Room Control Commands
+**Goal**: Let users participate in room communication and room-level BPM/BPI voting directly from the plugin.
+**Depends on**: Phase 6
+**Requirements**: ROOM-01, ROOM-02
+**Success Criteria** (what must be TRUE):
+1. User can send and receive room chat from inside the plugin.
+2. User can issue BPM and BPI vote commands from the UI without manual slash-command typing.
+3. Chat and vote feedback remain understandable and visible during normal rehearsal use.
+4. The implementation preserves realtime safety and does not destabilize the audio/session core.
+**Plans**: TBD
+
+### Phase 8: Server Discovery & History
+**Goal**: Improve room entry workflow with public server discovery and remembered private server history.
+**Depends on**: Phase 7
+**Requirements**: DISC-01, DISC-02
+**Success Criteria** (what must be TRUE):
+1. User can choose from a public Ninjam server list without typing raw host/port every time.
+2. Previously used private servers are remembered and available in the same workflow.
+3. Discovery/history UI does not make the existing direct host/port workflow worse for power users.
+4. Failure states for fetching/parsing the public server list are explicit and recoverable.
+**Plans**: TBD
+
+### Phase 9: JamTaba-Inspired Layout & Mixer Parity
+**Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
+**Depends on**: Phase 8
+**Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03
+**Success Criteria** (what must be TRUE):
+1. Mixer strips are presented horizontally with the local monitor clearly distinguished and visually anchored.
+2. A right-side chat/room panel coexists cleanly with transport and mixer workflows.
+3. Mixer parity improves with solo support and clearer strip grouping/identity.
+4. The refreshed layout remains usable on typical Ableton plugin window sizes.
+**Plans**: TBD
+
+### Phase 10: Advanced NINJAM Parity Research
+**Goal**: Research and scope higher-risk NINJAM features before implementation commitments are made.
+**Depends on**: Phase 9
+**Requirements**: PAR-01, PAR-02
+**Success Criteria** (what must be TRUE):
+1. Project documents whether room-listen/live-feed behavior exists in upstream NINJAM and how it could map to this plugin.
+2. Project documents how voice chat mode works upstream and whether it should share transport, mixer, or UI concepts with the current plugin.
+3. Risks, protocol implications, and likely UX shape are clear enough to decide on a future implementation phase.
+**Plans**: TBD
+
 ## Requirement Coverage Validation
 
 | Requirement | Mapped Phase |
@@ -118,6 +182,17 @@ Plans:
 | HOST-02 | Phase 1 |
 | UI-01 | Phase 5 |
 | UI-02 | Phase 5 |
+| HSYNC-01 | Phase 6 |
+| HSYNC-02 | Phase 6 |
+| ROOM-01 | Phase 7 |
+| ROOM-02 | Phase 7 |
+| DISC-01 | Phase 8 |
+| DISC-02 | Phase 8 |
+| LAYOUT-01 | Phase 9 |
+| LAYOUT-02 | Phase 9 |
+| LAYOUT-03 | Phase 9 |
+| PAR-01 | Phase 10 |
+| PAR-02 | Phase 10 |
 
 **Coverage Check:**
 - v1 requirements total: 15
@@ -128,7 +203,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-1 -> 2 -> 3 -> 4 -> 5
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -137,6 +212,11 @@ Plans:
 | 3. Server-Authoritative Timing & Sync | 3/3 | Complete    | 2026-03-14 |
 | 4. Audio Streaming, Mix, and Monitoring Core | 3/3 | Complete    | 2026-03-15 |
 | 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
+| 6. Ableton Sync Assist Research & Prototype | 1/3 | In Progress | - |
+| 7. Chat & Room Control Commands | 0/TBD | Planned     | - |
+| 8. Server Discovery & History | 0/TBD | Planned     | - |
+| 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
+| 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
 ---
 *Roadmap created: 2026-03-08*

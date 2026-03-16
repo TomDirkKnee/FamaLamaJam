@@ -30,15 +30,43 @@
 
 ### Host Reliability
 
-- [ ] **HOST-01**: Plugin handles Ableton lifecycle events (load/unload/reopen/duplicate) without crashes or zombie sessions.
+- [x] **HOST-01**: Plugin handles Ableton lifecycle events (load/unload/reopen/duplicate) without crashes or zombie sessions.
 - [x] **HOST-02**: Plugin state can be saved/restored in Ableton projects for core session settings.
 
 ### UI & Usability
 
-- [ ] **UI-01**: User can perform end-to-end jam setup and start playing from a simple built-in JUCE UI.
-- [ ] **UI-02**: User receives actionable status/error messages for connection, sync, and stream failures.
+- [x] **UI-01**: User can perform end-to-end jam setup and start playing from a simple built-in JUCE UI.
+- [x] **UI-02**: User receives actionable status/error messages for connection, sync, and stream failures.
 
-## v2 Requirements
+## Next Milestone Requirements
+
+### Host Sync Assist
+
+- [x] **HSYNC-01**: User can align Ableton tempo/loop helpers to room BPM/BPI without violating server-authoritative Ninjam timing.
+- **HSYNC-02**: Any host-sync assist behavior is explicit, optional, and understandable from the plugin UI.
+
+### Room Interaction
+
+- **ROOM-01**: User can send and receive Ninjam room chat messages from inside the plugin.
+- **ROOM-02**: User can issue BPM/BPI vote commands from the plugin UI and see room feedback/results.
+
+### Server Discovery
+
+- **DISC-01**: User can choose from a public Ninjam server list inside the plugin.
+- **DISC-02**: Previously used private servers are remembered and shown alongside public entries.
+
+### Mixer & Layout
+
+- **LAYOUT-01**: Mixer layout supports horizontal track presentation with local monitor clearly distinguished from delayed remote strips.
+- **LAYOUT-02**: User can solo an individual mixer strip in addition to gain/pan/mute.
+- **LAYOUT-03**: Chat and room controls are integrated into the main plugin layout without obscuring transport or mixer workflows.
+
+### NINJAM Parity Research
+
+- **PAR-01**: Project documents the practical feasibility and protocol implications of room-listen/live-feed features.
+- **PAR-02**: Project documents the feasibility and desired UX model for NINJAM voice chat mode before implementation.
+
+## Later Requirements
 
 ### Platform Expansion
 
@@ -80,10 +108,21 @@
 | AUD-03 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
 | MIX-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
 | MIX-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
-| HOST-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
+| HOST-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Complete |
 | HOST-02 | Phase 1 - Plugin Foundation & Session Configuration | Complete |
-| UI-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
-| UI-02 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
+| UI-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Complete |
+| UI-02 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Complete |
+| HSYNC-01 | Phase 6 - Ableton Sync Assist Research & Prototype | Complete |
+| HSYNC-02 | Phase 6 - Ableton Sync Assist Research & Prototype | Planned |
+| ROOM-01 | Phase 7 - Chat & Room Control Commands | Planned |
+| ROOM-02 | Phase 7 - Chat & Room Control Commands | Planned |
+| DISC-01 | Phase 8 - Server Discovery & History | Planned |
+| DISC-02 | Phase 8 - Server Discovery & History | Planned |
+| LAYOUT-01 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
+| LAYOUT-02 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
+| LAYOUT-03 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
+| PAR-01 | Phase 10 - Advanced NINJAM Parity Research | Planned |
+| PAR-02 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 
 **Coverage:**
 - v1 requirements: 15 total
@@ -93,4 +132,4 @@
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-15 after Phase 4 execution*
+*Last updated: 2026-03-16 after Phase 5 close-out and next-milestone roadmap setup*
