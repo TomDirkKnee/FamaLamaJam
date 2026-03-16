@@ -47,6 +47,50 @@ public:
         std::uint64_t intervalIndex { 0 };
     };
 
+    enum class HostSyncAssistBlockReason
+    {
+        None,
+        MissingServerTiming,
+        MissingHostTempo,
+        HostTempoMismatch,
+    };
+
+    enum class HostSyncAssistFailureReason
+    {
+        None,
+        TimingLost,
+        MissingHostMusicalPosition,
+    };
+
+    struct HostTransportSnapshot
+    {
+        bool available { false };
+        bool playing { false };
+        bool hasTempo { false };
+        double tempoBpm { 0.0 };
+        bool hasPpqPosition { false };
+        double ppqPosition { 0.0 };
+        bool hasBarStartPpqPosition { false };
+        double ppqPositionOfLastBarStart { 0.0 };
+        bool hasTimeSignature { false };
+        int timeSigNumerator { 0 };
+        int timeSigDenominator { 0 };
+    };
+
+    struct HostSyncAssistUiState
+    {
+        bool armable { false };
+        bool armed { false };
+        bool waitingForHost { false };
+        bool blocked { false };
+        bool failed { false };
+        HostSyncAssistBlockReason blockReason { HostSyncAssistBlockReason::None };
+        HostSyncAssistFailureReason failureReason { HostSyncAssistFailureReason::None };
+        int targetBeatsPerMinute { 0 };
+        int targetBeatsPerInterval { 0 };
+        HostTransportSnapshot hostTransport;
+    };
+
     enum class MixerStripKind
     {
         LocalMonitor,
@@ -139,6 +183,8 @@ public:
     [[nodiscard]] std::size_t getQueuedRemoteSourceCountForTesting() const noexcept;
     [[nodiscard]] std::size_t getPendingRemoteSourceCountForTesting() const noexcept;
     [[nodiscard]] TransportUiState getTransportUiState() const noexcept;
+    [[nodiscard]] HostSyncAssistUiState getHostSyncAssistUiState() const noexcept;
+    bool toggleHostSyncAssistArm();
     [[nodiscard]] bool isMetronomeEnabled() const noexcept;
     void setMetronomeEnabled(bool enabled) noexcept;
     [[nodiscard]] std::vector<MixerStripSnapshot> getMixerStripSnapshots() const;
@@ -196,6 +242,8 @@ private:
     void hideAllRemoteMixerStrips() noexcept;
     void updateRemoteMixerStripActivity();
     void resetMixerStripMeters() noexcept;
+    void clearHostTransportSnapshot() noexcept;
+    void clearHostSyncAssistState() noexcept;
 
     app::session::SessionSettingsStore settingsStore_;
     app::session::SessionSettingsController settingsController_;
@@ -226,10 +274,29 @@ private:
     std::atomic<float> intervalProgressForUi_ { 0.0f };
     std::atomic<std::uint64_t> intervalIndexForUi_ { 0 };
     std::atomic<bool> metronomeEnabled_ { false };
+    std::atomic<bool> hostTransportAvailableForUi_ { false };
+    std::atomic<bool> hostTransportPlayingForUi_ { false };
+    std::atomic<bool> hostTransportHasTempoForUi_ { false };
+    std::atomic<double> hostTransportTempoBpmForUi_ { 0.0 };
+    std::atomic<bool> hostTransportHasPpqPositionForUi_ { false };
+    std::atomic<double> hostTransportPpqPositionForUi_ { 0.0 };
+    std::atomic<bool> hostTransportHasBarStartPpqPositionForUi_ { false };
+    std::atomic<double> hostTransportBarStartPpqPositionForUi_ { 0.0 };
+    std::atomic<bool> hostTransportHasTimeSignatureForUi_ { false };
+    std::atomic<int> hostTransportTimeSigNumeratorForUi_ { 0 };
+    std::atomic<int> hostTransportTimeSigDenominatorForUi_ { 0 };
+    std::atomic<bool> hostSyncAssistArmed_ { false };
+    std::atomic<bool> hostSyncAssistWaitingForHost_ { false };
+    std::atomic<bool> hostSyncAssistFailed_ { false };
+    std::atomic<HostSyncAssistBlockReason> hostSyncAssistBlockReason_ { HostSyncAssistBlockReason::None };
+    std::atomic<HostSyncAssistFailureReason> hostSyncAssistFailureReason_ { HostSyncAssistFailureReason::None };
+    std::atomic<int> hostSyncAssistTargetBpmForUi_ { 0 };
+    std::atomic<int> hostSyncAssistTargetBpiForUi_ { 0 };
     AuthoritativeTimingState authoritativeTiming_;
     int metronomeClickRemainingSamples_ { 0 };
     float metronomeClickPhase_ { 0.0f };
     float metronomeClickPhaseIncrement_ { 0.0f };
     float metronomeClickGain_ { 0.0f };
+    bool previousHostTransportPlaying_ { false };
 };
 } // namespace famalamajam::plugin
