@@ -9,24 +9,24 @@
 
 - [x] **SESS-01**: User can configure Ninjam server endpoint and credentials from the plugin UI.
 - [x] **SESS-02**: User can connect and disconnect from a Ninjam server without restarting Ableton.
-- [ ] **SESS-03**: User can recover from transient network loss via automatic reconnect with clear status feedback.
+- [x] **SESS-03**: User can recover from transient network loss via automatic reconnect with clear status feedback.
 
 ### Timing & Sync
 
-- [ ] **SYNC-01**: Plugin follows server-authoritative Ninjam interval timing (BPM/BPI/interval boundaries).
-- [ ] **SYNC-02**: User can see current interval/metronome state in the UI.
-- [ ] **SYNC-03**: Interval timing remains stable across at least a full rehearsal session without cumulative drift.
+- [x] **SYNC-01**: Plugin follows server-authoritative Ninjam interval timing (BPM/BPI/interval boundaries).
+- [x] **SYNC-02**: User can see current interval/metronome state in the UI.
+- [x] **SYNC-03**: Interval timing remains stable across at least a full rehearsal session without cumulative drift.
 
 ### Audio Streaming
 
-- [ ] **AUD-01**: User can send local input audio to the session using a working Ninjam-compatible encode path.
-- [ ] **AUD-02**: User can receive and decode remote participant audio in-session.
-- [ ] **AUD-03**: Audio pipeline handles supported host sample rates and buffer sizes without pitch/tempo artifacts.
+- [x] **AUD-01**: User can send local input audio to the session using a working Ninjam-compatible encode path.
+- [x] **AUD-02**: User can receive and decode remote participant audio in-session.
+- [x] **AUD-03**: Audio pipeline handles supported host sample rates and buffer sizes without pitch/tempo artifacts.
 
 ### Mixing & Monitoring
 
-- [ ] **MIX-01**: User can control essential per-channel monitor/mix parameters (gain, mute, basic pan).
-- [ ] **MIX-02**: UI clearly distinguishes local monitor audio from interval-delayed remote return.
+- [x] **MIX-01**: User can control essential per-channel monitor/mix parameters (gain, mute, basic pan).
+- [x] **MIX-02**: UI clearly distinguishes local monitor audio from interval-delayed remote return.
 
 ### Host Reliability
 
@@ -71,15 +71,15 @@
 |-------------|-------|--------|
 | SESS-01 | Phase 1 - Plugin Foundation & Session Configuration | Complete |
 | SESS-02 | Phase 2 - Connection Lifecycle & Recovery | Complete |
-| SESS-03 | Phase 2 - Connection Lifecycle & Recovery | Pending |
-| SYNC-01 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
-| SYNC-02 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
-| SYNC-03 | Phase 3 - Server-Authoritative Timing & Sync | Pending |
-| AUD-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
-| AUD-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
-| AUD-03 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
-| MIX-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
-| MIX-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Pending |
+| SESS-03 | Phase 2 - Connection Lifecycle & Recovery | Complete |
+| SYNC-01 | Phase 3 - Server-Authoritative Timing & Sync | Complete |
+| SYNC-02 | Phase 3 - Server-Authoritative Timing & Sync | Complete |
+| SYNC-03 | Phase 3 - Server-Authoritative Timing & Sync | Complete |
+| AUD-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
+| AUD-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
+| AUD-03 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
+| MIX-01 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
+| MIX-02 | Phase 4 - Audio Streaming, Mix, and Monitoring Core | Complete |
 | HOST-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
 | HOST-02 | Phase 1 - Plugin Foundation & Session Configuration | Complete |
 | UI-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Pending |
@@ -93,4 +93,4 @@
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after roadmap creation and traceability mapping*
+*Last updated: 2026-03-15 after Phase 4 execution*

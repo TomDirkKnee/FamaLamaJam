@@ -20,16 +20,25 @@ target_sources(famalamajam_core
         src/app/session/ConnectionLifecycleController.cpp
         src/app/session/RetryPolicy.cpp
         src/app/session/ConnectionFailureClassifier.cpp
+        src/audio/AudioBufferResampler.cpp
+        src/audio/CodecStreamBridge.cpp
+        src/audio/OggVorbisCodec.cpp
+        src/net/FramedSocketTransport.cpp
         src/infra/state/SessionSettingsSerializer.cpp)
 
 target_include_directories(famalamajam_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+target_compile_definitions(famalamajam_core
+    PUBLIC
+        JUCE_USE_OGGVORBIS=1)
+
 target_link_libraries(famalamajam_core
     PUBLIC
         juce::juce_core
-        juce::juce_data_structures)
+        juce::juce_data_structures
+        juce::juce_audio_formats)
 
 juce_add_plugin(famalamajam_plugin
     COMPANY_NAME "FamaLamaJam"
@@ -55,7 +64,9 @@ target_sources(famalamajam_plugin
 target_compile_definitions(famalamajam_plugin
     PUBLIC
         JUCE_WEB_BROWSER=0
-        JUCE_USE_CURL=0)
+        JUCE_USE_CURL=0
+        JUCE_USE_OGGVORBIS=1
+        JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1)
 
 target_link_libraries(famalamajam_plugin
     PRIVATE

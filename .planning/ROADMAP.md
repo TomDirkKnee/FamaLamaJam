@@ -11,10 +11,10 @@ Deliver a reliable Windows-first JUCE 8 VST3 Ninjam client for Ableton by buildi
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Plugin Foundation & Session Configuration** - Establish JUCE/VST3 baseline, core session settings model, and persistence scaffolding. (completed 2026-03-08)
-- [ ] **Phase 2: Connection Lifecycle & Recovery** - Implement robust connect/disconnect and automatic reconnect behavior.
-- [ ] **Phase 3: Server-Authoritative Timing & Sync** - Deliver accurate Ninjam interval timing and metronome state behavior.
-- [ ] **Phase 4: Audio Streaming, Mix, and Monitoring Core** - Build functional send/receive audio pipeline with essential channel controls.
-- [ ] **Phase 5: Ableton Reliability & v1 Rehearsal UX Validation** - Harden host lifecycle behavior and validate complete user jam workflow.
+- [x] **Phase 2: Connection Lifecycle & Recovery** - Implement robust connect/disconnect and automatic reconnect behavior. (completed 2026-03-09)
+- [x] **Phase 3: Server-Authoritative Timing & Sync** - Deliver accurate Ninjam interval timing and metronome state behavior. (completed 2026-03-14)
+- [x] **Phase 4: Audio Streaming, Mix, and Monitoring Core** - Build functional send/receive audio pipeline with essential channel controls. (completed 2026-03-15)
+- [x] **Phase 5: Ableton Reliability & v1 Rehearsal UX Validation** - Harden host lifecycle behavior and validate complete user jam workflow. (completed 2026-03-16)
 
 ## Phase Details
 
@@ -45,8 +45,9 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 02-01: Implement session state machine and command handling for connect/disconnect.
-- [ ] 02-02: Add reconnect policy, retry/backoff behavior, and failure-state signaling.
+- [x] 02-01: Implement session state machine and command handling for connect/disconnect.
+- [x] 02-02: Add reconnect policy, retry/backoff behavior, and failure-state signaling.
+- [x] 02-03: Finalize error-correction and restore semantics.
 
 ### Phase 3: Server-Authoritative Timing & Sync
 **Goal**: Implement correct Ninjam interval timing semantics and visible sync state for stable rehearsal timing.
@@ -61,9 +62,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md - Implement the authoritative timing engine, timing reset semantics, and shared Phase 3 mini-server harness.
-- [ ] 03-02-PLAN.md - Add explicit sync-health UI state, beat-divided transport progress, and metronome alignment coverage.
-- [ ] 03-03-PLAN.md - Enforce boundary-quantized remote playback switching and verify late-interval skip behavior.
+- [x] 03-01-PLAN.md - Implement the authoritative timing engine, timing reset semantics, and shared Phase 3 mini-server harness.
+- [x] 03-02-PLAN.md - Add explicit sync-health UI state, beat-divided transport progress, and metronome alignment coverage.
+- [x] 03-03-PLAN.md - Enforce boundary-quantized remote playback switching and verify late-interval skip behavior.
 
 ### Phase 4: Audio Streaming, Mix, and Monitoring Core
 **Goal**: Deliver working Ninjam-compatible audio send/receive pipeline with essential monitor and mix controls.
@@ -75,12 +76,12 @@ Plans:
 3. Supported host sample rates and buffer sizes (including runtime changes) play without pitch or tempo artifacts.
 4. User can control per-channel gain, mute, and basic pan for essential monitoring/mix tasks.
 5. UI clearly distinguishes local monitor path from interval-delayed remote return so users can make correct mix decisions.
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: Implement RT-safe send/receive audio buffering and codec integration.
-- [ ] 04-02: Build essential per-channel monitor/mix controls and routing distinctions.
-- [ ] 04-03: Validate sample-rate/buffer compatibility and artifact-free playback.
+- [x] 04-01: Implement RT-safe send/receive audio buffering and codec integration.
+- [x] 04-02: Build essential per-channel monitor/mix controls and routing distinctions.
+- [x] 04-03: Validate sample-rate/buffer compatibility and artifact-free playback.
 
 ### Phase 5: Ableton Reliability & v1 Rehearsal UX Validation
 **Goal**: Ensure host-lifecycle robustness and confirm end-to-end rehearsal usability in Ableton with actionable status/error feedback.
@@ -91,12 +92,12 @@ Plans:
 2. User can complete end-to-end jam setup and begin playing from the built-in JUCE UI without external tooling.
 3. Status and error messages for connection, sync, and streaming failures are actionable and specific enough for user recovery.
 4. v1 rehearsal validation passes on Windows in Ableton across representative rehearsal scenarios.
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: Add Ableton lifecycle hardening and cleanup guarantees.
-- [ ] 05-02: Finalize simple end-to-end UI flow and error/status message quality.
-- [ ] 05-03: Execute v1 rehearsal validation matrix and document outcomes.
+- [x] 05-01-PLAN.md - Add Ableton lifecycle hardening and cleanup guarantees.
+- [x] 05-02-PLAN.md - Finalize simple end-to-end UI flow and error/status message quality.
+- [x] 05-03-PLAN.md - Execute v1 rehearsal validation matrix and document outcomes.
 
 ## Requirement Coverage Validation
 
@@ -132,10 +133,10 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Plugin Foundation & Session Configuration | 0/TBD | Complete    | 2026-03-08 |
-| 2. Connection Lifecycle & Recovery | 0/TBD | Not started | - |
-| 3. Server-Authoritative Timing & Sync | 0/TBD | Not started | - |
-| 4. Audio Streaming, Mix, and Monitoring Core | 0/TBD | Not started | - |
-| 5. Ableton Reliability & v1 Rehearsal UX Validation | 0/TBD | Not started | - |
+| 2. Connection Lifecycle & Recovery | 3/3 | Complete    | 2026-03-09 |
+| 3. Server-Authoritative Timing & Sync | 3/3 | Complete    | 2026-03-14 |
+| 4. Audio Streaming, Mix, and Monitoring Core | 3/3 | Complete    | 2026-03-15 |
+| 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
 
 ---
 *Roadmap created: 2026-03-08*

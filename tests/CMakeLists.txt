@@ -1,15 +1,28 @@
 add_executable(famalamajam_tests
+    unit/audio_buffer_resampler_tests.cpp
     unit/settings_validation_tests.cpp
     unit/state_serialization_tests.cpp
     unit/connection_lifecycle_tests.cpp
     unit/retry_policy_tests.cpp
     unit/connection_failure_classification_tests.cpp
+    unit/codec_stream_bridge_tests.cpp
+    unit/ogg_vorbis_codec_tests.cpp
     # Phase 2 lifecycle recovery integration coverage
     integration/plugin_apply_flow_tests.cpp
     integration/plugin_connection_command_flow_tests.cpp
     integration/plugin_connection_recovery_tests.cpp
     integration/plugin_connection_error_recovery_tests.cpp
-    integration/plugin_state_roundtrip_tests.cpp)
+    integration/plugin_host_lifecycle_tests.cpp
+    integration/plugin_state_roundtrip_tests.cpp
+    integration/plugin_codec_runtime_tests.cpp
+    integration/plugin_experimental_transport_tests.cpp
+    integration/plugin_server_timing_sync_tests.cpp
+    integration/plugin_transport_ui_sync_tests.cpp
+    integration/plugin_rehearsal_ui_flow_tests.cpp
+    integration/plugin_mixer_controls_tests.cpp
+    integration/plugin_mixer_ui_tests.cpp
+    integration/plugin_streaming_runtime_compat_tests.cpp
+    integration/plugin_remote_interval_alignment_tests.cpp)
 
 target_link_libraries(famalamajam_tests
     PRIVATE

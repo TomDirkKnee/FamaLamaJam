@@ -124,15 +124,18 @@ ConnectionLifecycleTransition reduceLifecycleEvent(const ConnectionLifecycleSnap
     switch (event.type)
     {
         case ConnectionEventType::Connected:
+        {
             if (current.state != ConnectionState::Connecting && current.state != ConnectionState::Reconnecting)
                 return makeSuppressed(current);
 
+            const auto connectedStatus = event.reason.empty() ? std::string("Connected") : event.reason;
             return ConnectionLifecycleTransition {
-                .snapshot = makeSnapshot(ConnectionState::Active, "Connected", ""),
+                .snapshot = makeSnapshot(ConnectionState::Active, connectedStatus, ""),
                 .effect = LifecycleEffect::None,
                 .changed = true,
                 .suppressed = false,
             };
+        }
 
         case ConnectionEventType::Disconnected:
             if (current.state == ConnectionState::Idle)
@@ -174,3 +177,4 @@ ConnectionLifecycleTransition reduceLifecycleEvent(const ConnectionLifecycleSnap
     return makeSuppressed(current);
 }
 } // namespace famalamajam::app::session
+

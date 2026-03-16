@@ -1,0 +1,9 @@
+build/
+build-*/
+build-vs/
+build-vs-ninja/
+build-ninja/
+build-local-ninja/
+build-phase3-ninja/
+build-scratch/
+ninjam-upstream/
