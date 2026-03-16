@@ -26,15 +26,20 @@ struct EditorHarness
     SessionSettings settings;
     ConnectionLifecycleSnapshot lifecycle;
     FamaLamaJamAudioProcessorEditor::TransportUiState transport;
+    FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssist;
     bool metronomeEnabled { false };
+    int hostSyncAssistToggleCallCount { 0 };
+    bool hostSyncAssistToggleResult { true };
     std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor;
 
     EditorHarness(ConnectionLifecycleSnapshot lifecycleSnapshot,
                   FamaLamaJamAudioProcessorEditor::TransportUiState transportState,
+                  FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssistState = {},
                   bool initialMetronomeEnabled = false)
         : settings(famalamajam::app::session::makeDefaultSessionSettings())
         , lifecycle(std::move(lifecycleSnapshot))
         , transport(std::move(transportState))
+        , hostSyncAssist(std::move(hostSyncAssistState))
         , metronomeEnabled(initialMetronomeEnabled)
     {
         editor = std::make_unique<FamaLamaJamAudioProcessorEditor>(
@@ -48,6 +53,33 @@ struct EditorHarness
             []() { return true; },
             []() { return true; },
             [this]() { return transport; },
+            [this]() { return hostSyncAssist; },
+            [this]() {
+                ++hostSyncAssistToggleCallCount;
+
+                if (! hostSyncAssistToggleResult)
+                    return false;
+
+                hostSyncAssist.blocked = false;
+                hostSyncAssist.failed = false;
+                hostSyncAssist.blockReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::None;
+                hostSyncAssist.failureReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistFailureReason::None;
+
+                if (hostSyncAssist.armed || hostSyncAssist.waitingForHost)
+                {
+                    hostSyncAssist.armed = false;
+                    hostSyncAssist.waitingForHost = false;
+                    hostSyncAssist.armable = true;
+                    return true;
+                }
+
+                if (! hostSyncAssist.armable)
+                    return false;
+
+                hostSyncAssist.armed = true;
+                hostSyncAssist.waitingForHost = true;
+                return true;
+            },
             []() { return std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> {}; },
             [](const std::string&, float, float, bool) { return true; },
             [this]() { return metronomeEnabled; },
@@ -177,4 +209,140 @@ TEST_CASE("plugin transport ui sync renders healthy beat-divided progress and ti
     CHECK(lostHarness.editor->getIntervalProgressForTesting() == Catch::Approx(0.0));
     CHECK(lostHarness.editor->getIntervalBeatDivisionsForTesting() == 0);
     CHECK_FALSE(lostHarness.editor->isMetronomeToggleEnabledForTesting());
+}
+
+TEST_CASE("plugin transport ui sync shows a ready arm control with room timing context", "[plugin_transport_ui_sync]")
+{
+    EditorHarness readyHarness(ConnectionLifecycleSnapshot {
+                                   .state = ConnectionState::Active,
+                                   .statusMessage = "Connected",
+                               },
+                               FamaLamaJamAudioProcessorEditor::TransportUiState {
+                                   .connected = true,
+                                   .hasServerTiming = true,
+                                   .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                                   .metronomeAvailable = true,
+                                   .beatsPerMinute = 120,
+                                   .beatsPerInterval = 16,
+                                   .currentBeat = 5,
+                                   .intervalProgress = 0.25f,
+                                   .intervalIndex = 9,
+                               },
+                               FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                                   .armable = true,
+                                   .targetBeatsPerMinute = 120,
+                                   .targetBeatsPerInterval = 16,
+                               },
+                               true);
+
+    CHECK(readyHarness.editor->getHostSyncAssistButtonTextForTesting() == "Arm Sync to Ableton Play");
+    CHECK(readyHarness.editor->getHostSyncAssistStatusTextForTesting()
+          == "Ready for 120 BPM / 16 BPI room timing. Arm sync when Ableton is stopped.");
+    CHECK(readyHarness.editor->isHostSyncAssistEnabledForTesting());
+}
+
+TEST_CASE("plugin transport ui sync disables the arm control with explicit blocked guidance",
+          "[plugin_transport_ui_sync]")
+{
+    EditorHarness missingTimingHarness(ConnectionLifecycleSnapshot {
+                                           .state = ConnectionState::Active,
+                                           .statusMessage = "Connected",
+                                       },
+                                       FamaLamaJamAudioProcessorEditor::TransportUiState {
+                                           .connected = true,
+                                           .hasServerTiming = false,
+                                           .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::WaitingForTiming,
+                                           .metronomeAvailable = false,
+                                       },
+                                       FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                                           .blocked = true,
+                                           .blockReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::MissingServerTiming,
+                                           .targetBeatsPerMinute = 120,
+                                           .targetBeatsPerInterval = 16,
+                                       });
+
+    CHECK(missingTimingHarness.editor->getHostSyncAssistButtonTextForTesting() == "Arm Sync to Ableton Play");
+    CHECK(missingTimingHarness.editor->getHostSyncAssistStatusTextForTesting()
+          == "Sync assist needs room timing before it can arm.");
+    CHECK_FALSE(missingTimingHarness.editor->isHostSyncAssistEnabledForTesting());
+
+    EditorHarness mismatchHarness(ConnectionLifecycleSnapshot {
+                                      .state = ConnectionState::Active,
+                                      .statusMessage = "Connected",
+                                  },
+                                  FamaLamaJamAudioProcessorEditor::TransportUiState {
+                                      .connected = true,
+                                      .hasServerTiming = true,
+                                      .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                                      .metronomeAvailable = true,
+                                      .beatsPerMinute = 121,
+                                      .beatsPerInterval = 16,
+                                      .currentBeat = 2,
+                                      .intervalProgress = 0.15f,
+                                      .intervalIndex = 7,
+                                  },
+                                  FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                                      .blocked = true,
+                                      .blockReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::HostTempoMismatch,
+                                      .targetBeatsPerMinute = 121,
+                                      .targetBeatsPerInterval = 16,
+                                  },
+                                  true);
+
+    CHECK(mismatchHarness.editor->getHostSyncAssistStatusTextForTesting()
+          == "Set Ableton to 121 BPM to arm this room sync.");
+    CHECK_FALSE(mismatchHarness.editor->isHostSyncAssistEnabledForTesting());
+}
+
+TEST_CASE("plugin transport ui sync renders armed canceled and failed-start guidance in plain language",
+          "[plugin_transport_ui_sync]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 1,
+                              .intervalProgress = 0.0f,
+                              .intervalIndex = 12,
+                          },
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .armable = true,
+                              .targetBeatsPerMinute = 120,
+                              .targetBeatsPerInterval = 16,
+                          },
+                          true);
+
+    harness.editor->clickHostSyncAssistForTesting();
+    CHECK(harness.hostSyncAssistToggleCallCount == 1);
+    CHECK(harness.editor->getHostSyncAssistButtonTextForTesting() == "Cancel Sync to Ableton Play");
+    CHECK(harness.editor->getHostSyncAssistStatusTextForTesting() == "Armed. Press Play in Ableton to start aligned.");
+    CHECK(harness.editor->isHostSyncAssistEnabledForTesting());
+
+    harness.editor->clickHostSyncAssistForTesting();
+    CHECK(harness.hostSyncAssistToggleCallCount == 2);
+    CHECK(harness.editor->getHostSyncAssistButtonTextForTesting() == "Arm Sync to Ableton Play");
+    CHECK(harness.editor->getHostSyncAssistStatusTextForTesting()
+          == "Sync assist canceled. Arm again when you want Ableton Play to start aligned.");
+    CHECK(harness.editor->isHostSyncAssistEnabledForTesting());
+
+    harness.hostSyncAssist = FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+        .armable = true,
+        .failed = true,
+        .failureReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistFailureReason::MissingHostMusicalPosition,
+        .targetBeatsPerMinute = 120,
+        .targetBeatsPerInterval = 16,
+    };
+    harness.editor->refreshForTesting();
+
+    CHECK(harness.editor->getHostSyncAssistButtonTextForTesting() == "Arm Sync to Ableton Play");
+    CHECK(harness.editor->getHostSyncAssistStatusTextForTesting()
+          == "Couldn't align from Ableton's playhead. Re-arm and try again.");
+    CHECK(harness.editor->isHostSyncAssistEnabledForTesting());
 }

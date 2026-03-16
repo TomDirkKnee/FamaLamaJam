@@ -26,19 +26,24 @@ struct EditorHarness
     SessionSettings settings;
     ConnectionLifecycleSnapshot lifecycle;
     FamaLamaJamAudioProcessorEditor::TransportUiState transport;
+    FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssist;
     std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> mixerStrips;
     bool metronomeEnabled { false };
     int applyCallCount { 0 };
     int connectCallCount { 0 };
+    int hostSyncAssistToggleCallCount { 0 };
+    bool hostSyncAssistToggleResult { true };
     SessionSettingsController::ApplyResult applyResult { true, {}, "Applied" };
     std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor;
 
     EditorHarness(ConnectionLifecycleSnapshot lifecycleSnapshot,
                   FamaLamaJamAudioProcessorEditor::TransportUiState transportState,
+                  FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssistState = {},
                   std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> strips = {})
         : settings(famalamajam::app::session::makeDefaultSessionSettings())
         , lifecycle(std::move(lifecycleSnapshot))
         , transport(std::move(transportState))
+        , hostSyncAssist(std::move(hostSyncAssistState))
         , mixerStrips(std::move(strips))
     {
         editor = std::make_unique<FamaLamaJamAudioProcessorEditor>(
@@ -56,6 +61,33 @@ struct EditorHarness
             },
             []() { return true; },
             [this]() { return transport; },
+            [this]() { return hostSyncAssist; },
+            [this]() {
+                ++hostSyncAssistToggleCallCount;
+
+                if (! hostSyncAssistToggleResult)
+                    return false;
+
+                hostSyncAssist.blocked = false;
+                hostSyncAssist.failed = false;
+                hostSyncAssist.blockReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::None;
+                hostSyncAssist.failureReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistFailureReason::None;
+
+                if (hostSyncAssist.armed || hostSyncAssist.waitingForHost)
+                {
+                    hostSyncAssist.armed = false;
+                    hostSyncAssist.waitingForHost = false;
+                    hostSyncAssist.armable = true;
+                    return true;
+                }
+
+                if (! hostSyncAssist.armable)
+                    return false;
+
+                hostSyncAssist.armed = true;
+                hostSyncAssist.waitingForHost = true;
+                return true;
+            },
             [this]() { return mixerStrips; },
             [this](const std::string& sourceId, float gain, float pan, bool muted) {
                 for (auto& strip : mixerStrips)
@@ -241,6 +273,63 @@ TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing
     CHECK(stripLabels[1] == "alice - guitar");
     CHECK(statusLabel->getBottom() < mixerSectionLabel->getY());
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Interval timing paused while reconnecting.");
+}
+
+TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport workflow", "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 3,
+                              .intervalProgress = 0.25f,
+                              .intervalIndex = 6,
+                          },
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .armable = true,
+                              .targetBeatsPerMinute = 120,
+                              .targetBeatsPerInterval = 16,
+                          },
+                          {
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+                                .sourceId = "local-monitor",
+                                .groupId = "local",
+                                .groupLabel = "Local Monitor",
+                                .displayName = "Local Monitor",
+                                .subtitle = "Live monitor",
+                                .active = true,
+                                .visible = true },
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+                                .sourceId = "alice#0",
+                                .groupId = "alice",
+                                .groupLabel = "alice",
+                                .displayName = "alice - guitar",
+                                .subtitle = "guitar",
+                                .active = true,
+                                .visible = true },
+                          });
+
+    auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+    auto* syncTargetLabel = findDirectLabelWithText(*harness.editor, "Room sync target: 120 BPM / 16 BPI");
+    auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
+
+    REQUIRE(syncButton != nullptr);
+    REQUIRE(syncTargetLabel != nullptr);
+    REQUIRE(mixerSectionLabel != nullptr);
+
+    CHECK(syncButton->isVisible());
+    CHECK(syncTargetLabel->isVisible());
+    CHECK(syncTargetLabel->getBottom() < mixerSectionLabel->getY());
+    CHECK(syncButton->getBottom() < mixerSectionLabel->getY());
+    CHECK(harness.editor->getHostSyncAssistStatusTextForTesting()
+          == "Ready for 120 BPM / 16 BPI room timing. Arm sync when Ableton is stopped.");
 }
 
 TEST_CASE("plugin rehearsal ui flow applies the current draft when Connect is pressed and hides the separate Apply button",
