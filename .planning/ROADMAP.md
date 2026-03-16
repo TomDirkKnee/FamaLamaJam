@@ -15,7 +15,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 3: Server-Authoritative Timing & Sync** - Deliver accurate Ninjam interval timing and metronome state behavior. (completed 2026-03-14)
 - [x] **Phase 4: Audio Streaming, Mix, and Monitoring Core** - Build functional send/receive audio pipeline with essential channel controls. (completed 2026-03-15)
 - [x] **Phase 5: Ableton Reliability & v1 Rehearsal UX Validation** - Harden host lifecycle behavior and validate complete user jam workflow. (completed 2026-03-16)
-- [ ] **Phase 6: Ableton Sync Assist Research & Prototype** - Research JamTaba/ReaNINJAM host-sync behavior and prototype safe Ableton tempo/loop assistance.
+- [x] **Phase 6: Ableton Sync Assist Research & Prototype** - Research JamTaba/ReaNINJAM host-sync behavior and prototype a safe one-shot Ableton host-start assist. (completed 2026-03-16)
 - [ ] **Phase 7: Chat & Room Control Commands** - Add room chat plus BPM/BPI voting controls and feedback.
 - [ ] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
@@ -105,12 +105,12 @@ Plans:
 - [x] 05-03-PLAN.md - Execute v1 rehearsal validation matrix and document outcomes.
 
 ### Phase 6: Ableton Sync Assist Research & Prototype
-**Goal**: Determine what host-sync behavior is actually feasible in Ableton and prototype a safe helper workflow that respects server-authoritative Ninjam timing.
+**Goal**: Determine what host-sync behavior is actually feasible in Ableton and prototype a safe one-shot host-start helper workflow that respects server-authoritative Ninjam timing.
 **Depends on**: Phase 5
 **Requirements**: HSYNC-01, HSYNC-02
 **Success Criteria** (what must be TRUE):
 1. Project documents how JamTaba/ReaNINJAM-style host-sync behavior works and what parts are transferable to Ableton.
-2. Plugin can prototype at least one optional host-sync assist action, such as setting host tempo or loop length from room BPM/BPI.
+2. Plugin can prototype at least one optional host-start sync assist action that aligns from Ableton musical position when explicitly armed.
 3. The feature is framed as an assistive workflow, not as a replacement for server-authoritative interval timing.
 4. UX and technical constraints are clear enough to decide whether fuller host-sync work should continue.
 **Plans**: 3 plans
@@ -118,7 +118,7 @@ Plans:
 Plans:
 - [x] 06-01-PLAN.md - Add processor-side host playhead observation, armed sync state, and injected playhead regression coverage.
 - [x] 06-02-PLAN.md - Add transport-adjacent arm or cancel UI, blocked explanations, and explicit sync-assist status messaging.
-- [ ] 06-03-PLAN.md - Run automated plus Ableton validation and capture the Phase 6 feasibility decision.
+- [x] 06-03-PLAN.md - Run automated plus Ableton validation and capture the Phase 6 feasibility decision.
 
 ### Phase 7: Chat & Room Control Commands
 **Goal**: Let users participate in room communication and room-level BPM/BPI voting directly from the plugin.
@@ -212,7 +212,7 @@ Plans:
 | 3. Server-Authoritative Timing & Sync | 3/3 | Complete    | 2026-03-14 |
 | 4. Audio Streaming, Mix, and Monitoring Core | 3/3 | Complete    | 2026-03-15 |
 | 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
-| 6. Ableton Sync Assist Research & Prototype | 2/3 | In Progress | - |
+| 6. Ableton Sync Assist Research & Prototype | 3/3 | Complete    | 2026-03-16 |
 | 7. Chat & Room Control Commands | 0/TBD | Planned     | - |
 | 8. Server Discovery & History | 0/TBD | Planned     | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
