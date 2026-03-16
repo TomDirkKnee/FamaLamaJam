@@ -209,6 +209,74 @@ namespace
          + " | " + std::to_string(progressPercent) + "%";
 }
 
+[[nodiscard]] std::string formatHostSyncAssistTarget(
+    const FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState& state)
+{
+    if (state.targetBeatsPerMinute > 0 && state.targetBeatsPerInterval > 0)
+    {
+        return "Room sync target: " + std::to_string(state.targetBeatsPerMinute)
+             + " BPM / " + std::to_string(state.targetBeatsPerInterval) + " BPI";
+    }
+
+    return "Room sync target: waiting for interval timing";
+}
+
+[[nodiscard]] std::string formatHostSyncAssistStatus(
+    const FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState& state,
+    bool lastActionWasCancel)
+{
+    if (state.failed)
+    {
+        switch (state.failureReason)
+        {
+            case FamaLamaJamAudioProcessorEditor::HostSyncAssistFailureReason::TimingLost:
+                return "Room timing dropped before Ableton could start aligned.";
+
+            case FamaLamaJamAudioProcessorEditor::HostSyncAssistFailureReason::MissingHostMusicalPosition:
+                return "Couldn't align from Ableton's playhead. Re-arm and try again.";
+
+            case FamaLamaJamAudioProcessorEditor::HostSyncAssistFailureReason::None:
+                break;
+        }
+    }
+
+    if (state.armed || state.waitingForHost)
+        return "Armed. Press Play in Ableton to start aligned.";
+
+    if (state.blocked)
+    {
+        switch (state.blockReason)
+        {
+            case FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::MissingServerTiming:
+                return "Sync assist needs room timing before it can arm.";
+
+            case FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::MissingHostTempo:
+                return "Open Ableton transport so sync assist can read the host tempo.";
+
+            case FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::HostTempoMismatch:
+                if (state.targetBeatsPerMinute > 0)
+                    return "Set Ableton to " + std::to_string(state.targetBeatsPerMinute)
+                         + " BPM to arm this room sync.";
+                return "Set Ableton tempo to match the room before arming sync assist.";
+
+            case FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::None:
+                break;
+        }
+    }
+
+    if (lastActionWasCancel)
+        return "Sync assist canceled. Arm again when you want Ableton Play to start aligned.";
+
+    if (state.targetBeatsPerMinute > 0 && state.targetBeatsPerInterval > 0)
+    {
+        return "Ready for " + std::to_string(state.targetBeatsPerMinute) + " BPM / "
+             + std::to_string(state.targetBeatsPerInterval)
+             + " BPI room timing. Arm sync when Ableton is stopped.";
+    }
+
+    return "Sync assist will be ready when room timing appears.";
+}
+
 [[nodiscard]] juce::Colour stripAccentColour(FamaLamaJamAudioProcessorEditor::MixerStripKind kind, bool active)
 {
     if (kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
@@ -225,6 +293,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  CommandHandler connectHandler,
                                                                  CommandHandler disconnectHandler,
                                                                  TransportUiGetter transportUiGetter,
+                                                                 HostSyncAssistUiGetter hostSyncAssistUiGetter,
+                                                                 CommandHandler hostSyncAssistToggleHandler,
                                                                  MixerStripsGetter mixerStripsGetter,
                                                                  MixerStripSetter mixerStripSetter,
                                                                  BoolGetter metronomeGetter,
@@ -236,6 +306,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , connectHandler_(std::move(connectHandler))
     , disconnectHandler_(std::move(disconnectHandler))
     , transportUiGetter_(std::move(transportUiGetter))
+    , hostSyncAssistUiGetter_(std::move(hostSyncAssistUiGetter))
+    , hostSyncAssistToggleHandler_(std::move(hostSyncAssistToggleHandler))
     , mixerStripsGetter_(std::move(mixerStripsGetter))
     , mixerStripSetter_(std::move(mixerStripSetter))
     , metronomeGetter_(std::move(metronomeGetter))
@@ -309,6 +381,29 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     addAndMakeVisible(transportLabel_);
     addAndMakeVisible(intervalProgressBar_);
 
+    hostSyncAssistTargetLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(hostSyncAssistTargetLabel_);
+
+    hostSyncAssistButton_.setButtonText("Arm Sync to Ableton Play");
+    hostSyncAssistButton_.onClick = [this]() {
+        const auto before = hostSyncAssistUiGetter_();
+        (void) hostSyncAssistToggleHandler_();
+        const auto after = hostSyncAssistUiGetter_();
+
+        hostSyncAssistLastActionWasCancel_ = (before.armed || before.waitingForHost)
+            && ! (after.armed || after.waitingForHost)
+            && ! after.blocked && ! after.failed;
+
+        if (after.armed || after.waitingForHost || after.blocked || after.failed)
+            hostSyncAssistLastActionWasCancel_ = false;
+
+        refreshHostSyncAssistStatus();
+    };
+    addAndMakeVisible(hostSyncAssistButton_);
+
+    hostSyncAssistStatusLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(hostSyncAssistStatusLabel_);
+
     mixerSectionLabel_.setText("Mixer", juce::dontSendNotification);
     mixerSectionLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(mixerSectionLabel_);
@@ -327,7 +422,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     refreshTransportStatus();
     refreshMixerStrips();
     startTimerHz(20);
-    setSize(760, 720);
+    setSize(760, 760);
 }
 
 void FamaLamaJamAudioProcessorEditor::resized()
@@ -361,6 +456,14 @@ void FamaLamaJamAudioProcessorEditor::resized()
     transportLabel_.setBounds(area.removeFromTop(22));
     area.removeFromTop(4);
     intervalProgressBar_.setBounds(area.removeFromTop(20));
+    area.removeFromTop(8);
+
+    auto syncAssistRow = area.removeFromTop(28);
+    hostSyncAssistTargetLabel_.setBounds(syncAssistRow.removeFromLeft(310));
+    syncAssistRow.removeFromLeft(12);
+    hostSyncAssistButton_.setBounds(syncAssistRow.removeFromLeft(220));
+    area.removeFromTop(4);
+    hostSyncAssistStatusLabel_.setBounds(area.removeFromTop(32));
     area.removeFromTop(8);
 
     auto controls = area.removeFromTop(32);
@@ -450,6 +553,25 @@ void FamaLamaJamAudioProcessorEditor::refreshTransportStatus()
     metronomeToggle_.setToggleState(metronomeGetter_(), juce::dontSendNotification);
     metronomeToggle_.setEnabled(transport.metronomeAvailable);
     metronomeToggle_.setAlpha(transport.metronomeAvailable ? 1.0f : 0.65f);
+    refreshHostSyncAssistStatus();
+}
+
+void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
+{
+    const auto hostSyncAssist = hostSyncAssistUiGetter_();
+    if (hostSyncAssist.armed || hostSyncAssist.waitingForHost || hostSyncAssist.blocked || hostSyncAssist.failed)
+        hostSyncAssistLastActionWasCancel_ = false;
+
+    hostSyncAssistTargetLabel_.setText(formatHostSyncAssistTarget(hostSyncAssist), juce::dontSendNotification);
+    hostSyncAssistStatusLabel_.setText(formatHostSyncAssistStatus(hostSyncAssist, hostSyncAssistLastActionWasCancel_),
+                                       juce::dontSendNotification);
+    hostSyncAssistButton_.setButtonText(hostSyncAssist.armed || hostSyncAssist.waitingForHost
+                                            ? "Cancel Sync to Ableton Play"
+                                            : "Arm Sync to Ableton Play");
+
+    const auto enabled = hostSyncAssist.armed || hostSyncAssist.waitingForHost || hostSyncAssist.armable;
+    hostSyncAssistButton_.setEnabled(enabled);
+    hostSyncAssistButton_.setAlpha(enabled ? 1.0f : 0.65f);
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
@@ -563,6 +685,21 @@ juce::String FamaLamaJamAudioProcessorEditor::getTransportStatusTextForTesting()
     return transportLabel_.getText();
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getHostSyncAssistStatusTextForTesting() const
+{
+    return hostSyncAssistStatusLabel_.getText();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getHostSyncAssistButtonTextForTesting() const
+{
+    return hostSyncAssistButton_.getButtonText();
+}
+
+bool FamaLamaJamAudioProcessorEditor::isHostSyncAssistEnabledForTesting() const noexcept
+{
+    return hostSyncAssistButton_.isEnabled();
+}
+
 double FamaLamaJamAudioProcessorEditor::getIntervalProgressForTesting() const noexcept
 {
     return intervalProgressBar_.getProgressForTesting();
@@ -637,6 +774,12 @@ void FamaLamaJamAudioProcessorEditor::clickConnectForTesting()
 {
     if (connectButton_.onClick != nullptr)
         connectButton_.onClick();
+}
+
+void FamaLamaJamAudioProcessorEditor::clickHostSyncAssistForTesting()
+{
+    if (hostSyncAssistButton_.onClick != nullptr)
+        hostSyncAssistButton_.onClick();
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshForTesting()

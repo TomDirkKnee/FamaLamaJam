@@ -38,8 +38,8 @@ struct EditorHarness
 
     EditorHarness(ConnectionLifecycleSnapshot lifecycleSnapshot,
                   FamaLamaJamAudioProcessorEditor::TransportUiState transportState,
-                  FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssistState = {},
-                  std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> strips = {})
+                  std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> strips = {},
+                  FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssistState = {})
         : settings(famalamajam::app::session::makeDefaultSessionSettings())
         , lifecycle(std::move(lifecycleSnapshot))
         , transport(std::move(transportState))
@@ -292,11 +292,6 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
                               .intervalProgress = 0.25f,
                               .intervalIndex = 6,
                           },
-                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
-                              .armable = true,
-                              .targetBeatsPerMinute = 120,
-                              .targetBeatsPerInterval = 16,
-                          },
                           {
                               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
                                 .sourceId = "local-monitor",
@@ -314,6 +309,11 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
                                 .subtitle = "guitar",
                                 .active = true,
                                 .visible = true },
+                          },
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .armable = true,
+                              .targetBeatsPerMinute = 120,
+                              .targetBeatsPerInterval = 16,
                           });
 
     auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");

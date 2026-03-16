@@ -25,6 +25,7 @@ struct EditorHarness
     SessionSettings settings;
     ConnectionLifecycleSnapshot lifecycle;
     FamaLamaJamAudioProcessorEditor::TransportUiState transport;
+    FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssist;
     std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> mixerStrips;
     bool metronomeEnabled { false };
     std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor;
@@ -56,6 +57,8 @@ struct EditorHarness
             []() { return true; },
             []() { return true; },
             [this]() { return transport; },
+            [this]() { return hostSyncAssist; },
+            []() { return false; },
             [this]() { return mixerStrips; },
             [this](const std::string& sourceId, float gain, float pan, bool muted) {
                 for (auto& strip : mixerStrips)
