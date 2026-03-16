@@ -43,7 +43,7 @@
 ### Host Sync Assist
 
 - [x] **HSYNC-01**: User can align Ableton tempo/loop helpers to room BPM/BPI without violating server-authoritative Ninjam timing.
-- **HSYNC-02**: Any host-sync assist behavior is explicit, optional, and understandable from the plugin UI.
+- [x] **HSYNC-02**: Any host-sync assist behavior is explicit, optional, and understandable from the plugin UI.
 
 ### Room Interaction
 
@@ -113,7 +113,7 @@
 | UI-01 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Complete |
 | UI-02 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Complete |
 | HSYNC-01 | Phase 6 - Ableton Sync Assist Research & Prototype | Complete |
-| HSYNC-02 | Phase 6 - Ableton Sync Assist Research & Prototype | Planned |
+| HSYNC-02 | Phase 6 - Ableton Sync Assist Research & Prototype | Complete |
 | ROOM-01 | Phase 7 - Chat & Room Control Commands | Planned |
 | ROOM-02 | Phase 7 - Chat & Room Control Commands | Planned |
 | DISC-01 | Phase 8 - Server Discovery & History | Planned |
@@ -132,4 +132,4 @@
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-16 after Phase 5 close-out and next-milestone roadmap setup*
+*Last updated: 2026-03-16 after Phase 6 plan 02 close-out*

@@ -117,7 +117,7 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md - Add processor-side host playhead observation, armed sync state, and injected playhead regression coverage.
-- [ ] 06-02-PLAN.md - Add transport-adjacent arm or cancel UI, blocked explanations, and explicit sync-assist status messaging.
+- [x] 06-02-PLAN.md - Add transport-adjacent arm or cancel UI, blocked explanations, and explicit sync-assist status messaging.
 - [ ] 06-03-PLAN.md - Run automated plus Ableton validation and capture the Phase 6 feasibility decision.
 
 ### Phase 7: Chat & Room Control Commands
@@ -212,7 +212,7 @@ Plans:
 | 3. Server-Authoritative Timing & Sync | 3/3 | Complete    | 2026-03-14 |
 | 4. Audio Streaming, Mix, and Monitoring Core | 3/3 | Complete    | 2026-03-15 |
 | 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
-| 6. Ableton Sync Assist Research & Prototype | 1/3 | In Progress | - |
+| 6. Ableton Sync Assist Research & Prototype | 2/3 | In Progress | - |
 | 7. Chat & Room Control Commands | 0/TBD | Planned     | - |
 | 8. Server Discovery & History | 0/TBD | Planned     | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
