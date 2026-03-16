@@ -1012,6 +1012,23 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
             .intervalIndex = state.intervalIndex,
         };
     };
+    auto hostSyncAssistUiGetter = [this]() {
+        const auto state = getHostSyncAssistUiState();
+        return FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+            .armable = state.armable,
+            .armed = state.armed,
+            .waitingForHost = state.waitingForHost,
+            .blocked = state.blocked,
+            .failed = state.failed,
+            .blockReason = static_cast<FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason>(state.blockReason),
+            .failureReason
+            = static_cast<FamaLamaJamAudioProcessorEditor::HostSyncAssistFailureReason>(state.failureReason),
+            .targetBeatsPerMinute = state.targetBeatsPerMinute,
+            .targetBeatsPerInterval = state.targetBeatsPerInterval,
+            .hostPlaying = state.hostTransport.playing,
+        };
+    };
+    auto hostSyncAssistToggle = [this]() { return toggleHostSyncAssistArm(); };
     auto mixerStripsGetter = [this]() {
         std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> strips;
         for (const auto& snapshot : getMixerStripSnapshots())
@@ -1054,6 +1071,8 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(connect),
                                                std::move(disconnect),
                                                std::move(transportUiGetter),
+                                               std::move(hostSyncAssistUiGetter),
+                                               std::move(hostSyncAssistToggle),
                                                std::move(mixerStripsGetter),
                                                std::move(mixerStripSetter),
                                                std::move(metronomeGetter),
