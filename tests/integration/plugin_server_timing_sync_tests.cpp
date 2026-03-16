@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "app/session/ConnectionLifecycle.h"
@@ -11,6 +12,70 @@ namespace
 {
 using famalamajam::tests::integration::MiniNinjamServer;
 using famalamajam::tests::integration::fillRampBuffer;
+
+class TestPlayHead final : public juce::AudioPlayHead
+{
+public:
+    void setState(bool playing,
+                  bool hasTempo,
+                  double tempoBpm,
+                  bool hasPpqPosition,
+                  double ppqPosition,
+                  bool hasBarStartPpq,
+                  double barStartPpq,
+                  bool hasTimeSignature = true,
+                  int numerator = 4,
+                  int denominator = 4)
+    {
+        available_ = true;
+        playing_ = playing;
+        hasTempo_ = hasTempo;
+        tempoBpm_ = tempoBpm;
+        hasPpqPosition_ = hasPpqPosition;
+        ppqPosition_ = ppqPosition;
+        hasBarStartPpq_ = hasBarStartPpq;
+        barStartPpq_ = barStartPpq;
+        hasTimeSignature_ = hasTimeSignature;
+        numerator_ = numerator;
+        denominator_ = denominator;
+    }
+
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        if (! available_)
+            return {};
+
+        PositionInfo position;
+        position.setIsPlaying(playing_);
+
+        if (hasTempo_)
+            position.setBpm(tempoBpm_);
+
+        if (hasPpqPosition_)
+            position.setPpqPosition(ppqPosition_);
+
+        if (hasBarStartPpq_)
+            position.setPpqPositionOfLastBarStart(barStartPpq_);
+
+        if (hasTimeSignature_)
+            position.setTimeSignature(TimeSignature { numerator_, denominator_ });
+
+        return position;
+    }
+
+private:
+    bool available_ { false };
+    bool playing_ { false };
+    bool hasTempo_ { false };
+    double tempoBpm_ { 0.0 };
+    bool hasPpqPosition_ { false };
+    double ppqPosition_ { 0.0 };
+    bool hasBarStartPpq_ { false };
+    double barStartPpq_ { 0.0 };
+    bool hasTimeSignature_ { false };
+    int numerator_ { 0 };
+    int denominator_ { 0 };
+};
 
 void connectProcessor(famalamajam::plugin::FamaLamaJamAudioProcessor& processor, MiniNinjamServer& server)
 {
@@ -232,6 +297,100 @@ TEST_CASE("plugin server timing sync stays sample-accurate over long runs", "[pl
     CHECK(state.intervalIndex == expectedIndex);
     CHECK(std::abs(state.intervalProgress - expectedProgress) < 0.005f);
     CHECK(state.currentBeat == expectedBeat);
+
+    processor.releaseResources();
+    server.stopServer();
+}
+
+TEST_CASE("plugin server timing sync holds progress for armed assist and resumes as a one-shot start",
+          "[plugin_server_timing_sync][plugin_host_sync_assist]")
+{
+    MiniNinjamServer server;
+    REQUIRE(server.startServer());
+
+    famalamajam::plugin::FamaLamaJamAudioProcessor processor(true, true);
+    TestPlayHead playHead;
+    processor.setPlayHead(&playHead);
+    processor.setMetronomeEnabled(true);
+
+    juce::AudioBuffer<float> buffer(2, 512);
+    juce::MidiBuffer midi;
+
+    connectProcessor(processor, server);
+    REQUIRE(waitForAuthoritativeTiming(processor, buffer, midi));
+
+    playHead.setState(false, true, 120.0, true, 4.0, true, 0.0);
+    processSamples(processor, 512);
+
+    REQUIRE(processor.toggleHostSyncAssistArm());
+
+    const auto beforeHold = processor.getTransportUiState();
+    const auto held = processSamples(processor, 512);
+
+    CHECK(held.hasServerTiming);
+    CHECK_FALSE(held.metronomeAvailable);
+    CHECK(held.intervalIndex == beforeHold.intervalIndex);
+    CHECK(held.intervalProgress == Catch::Approx(beforeHold.intervalProgress).margin(1.0e-6));
+
+    playHead.setState(true, true, 120.0, true, 4.0, true, 0.0);
+    const auto afterStart = processSamples(processor, 512);
+    const auto assistState = processor.getHostSyncAssistUiState();
+
+    REQUIRE_FALSE(assistState.armed);
+    REQUIRE_FALSE(assistState.waitingForHost);
+    REQUIRE_FALSE(assistState.failed);
+    REQUIRE(afterStart.intervalProgress > held.intervalProgress);
+
+    playHead.setState(true, true, 120.0, true, 60.0, true, 56.0);
+    const auto afterHostJump = processSamples(processor, 512);
+
+    CHECK(afterHostJump.intervalProgress > afterStart.intervalProgress);
+    CHECK(std::abs(afterHostJump.intervalProgress - afterStart.intervalProgress) < 0.02f);
+
+    processor.releaseResources();
+    server.stopServer();
+}
+
+TEST_CASE("plugin server timing sync clears armed assist state when authoritative timing drops",
+          "[plugin_server_timing_sync][plugin_host_sync_assist]")
+{
+    MiniNinjamServer server;
+    REQUIRE(server.startServer());
+
+    famalamajam::plugin::FamaLamaJamAudioProcessor processor(true, true);
+    TestPlayHead playHead;
+    processor.setPlayHead(&playHead);
+
+    juce::AudioBuffer<float> buffer(2, 512);
+    juce::MidiBuffer midi;
+
+    connectProcessor(processor, server);
+    REQUIRE(waitForAuthoritativeTiming(processor, buffer, midi));
+
+    playHead.setState(false, true, 120.0, true, 8.0, true, 4.0);
+    processSamples(processor, 512);
+
+    REQUIRE(processor.toggleHostSyncAssistArm());
+    REQUIRE(processor.getHostSyncAssistUiState().armed);
+
+    processor.handleConnectionEvent(famalamajam::app::session::ConnectionEvent {
+        .type = famalamajam::app::session::ConnectionEventType::ConnectionLostRetryable,
+        .reason = "timing dropped",
+    });
+
+    const auto assistState = processor.getHostSyncAssistUiState();
+    const auto transport = processor.getTransportUiState();
+
+    CHECK_FALSE(assistState.armed);
+    CHECK_FALSE(assistState.waitingForHost);
+    CHECK(assistState.failed);
+    CHECK(assistState.failureReason
+          == famalamajam::plugin::FamaLamaJamAudioProcessor::HostSyncAssistFailureReason::TimingLost);
+    CHECK(assistState.blockReason
+          == famalamajam::plugin::FamaLamaJamAudioProcessor::HostSyncAssistBlockReason::MissingServerTiming);
+    CHECK(assistState.targetBeatsPerMinute == 0);
+    CHECK(assistState.targetBeatsPerInterval == 0);
+    CHECK_FALSE(transport.hasServerTiming);
 
     processor.releaseResources();
     server.stopServer();
