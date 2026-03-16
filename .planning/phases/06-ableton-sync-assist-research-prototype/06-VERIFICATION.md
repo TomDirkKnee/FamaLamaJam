@@ -12,7 +12,7 @@ Phase 6 validation combines targeted host-sync regression coverage, a full phase
 
 ## Automated Results
 
-- `famalamajam_tests.exe "[plugin_host_sync_assist],[plugin_transport_ui_sync]"` - pending
+- `famalamajam_tests.exe "[plugin_host_sync_assist],[plugin_transport_ui_sync]"` - pass (2026-03-16, 13 test cases / 182 assertions)
 - `ctest --test-dir build-vs --output-on-failure` - pending
 - `cmake --build build-vs --target famalamajam_plugin_VST3 --config Debug` - pending
 
