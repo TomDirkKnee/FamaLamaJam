@@ -97,6 +97,7 @@ constexpr float kMetronomeDownbeatFrequencyHz = 1760.0f;
 constexpr float kMetronomeBeatFrequencyHz = 1320.0f;
 constexpr float kMetronomeDownbeatGain = 0.18f;
 constexpr float kMetronomeBeatGain = 0.12f;
+constexpr double kHostTempoMatchToleranceBpm = 0.05;
 constexpr std::uint64_t kInactiveStripRetentionIntervals = 2;
 constexpr float kMinMixerGainDb = -60.0f;
 constexpr float kMaxMixerGainDb = 12.0f;
@@ -147,6 +148,99 @@ constexpr float kMaxMixerGainDb = 12.0f;
     }
 
     return FamaLamaJamAudioProcessor::SyncHealth::Disconnected;
+}
+
+[[nodiscard]] FamaLamaJamAudioProcessor::HostTransportSnapshot captureHostTransportSnapshot(const juce::AudioPlayHead* playHead)
+{
+    FamaLamaJamAudioProcessor::HostTransportSnapshot snapshot;
+
+    if (playHead == nullptr)
+        return snapshot;
+
+    const auto position = playHead->getPosition();
+    if (! position.hasValue())
+        return snapshot;
+
+    snapshot.available = true;
+    snapshot.playing = position->getIsPlaying();
+
+    if (const auto bpm = position->getBpm())
+    {
+        snapshot.hasTempo = true;
+        snapshot.tempoBpm = *bpm;
+    }
+
+    if (const auto ppqPosition = position->getPpqPosition())
+    {
+        snapshot.hasPpqPosition = true;
+        snapshot.ppqPosition = *ppqPosition;
+    }
+
+    if (const auto barStart = position->getPpqPositionOfLastBarStart())
+    {
+        snapshot.hasBarStartPpqPosition = true;
+        snapshot.ppqPositionOfLastBarStart = *barStart;
+    }
+
+    if (const auto timeSignature = position->getTimeSignature())
+    {
+        snapshot.hasTimeSignature = true;
+        snapshot.timeSigNumerator = timeSignature->numerator;
+        snapshot.timeSigDenominator = timeSignature->denominator;
+    }
+
+    return snapshot;
+}
+
+[[nodiscard]] bool hostTempoMatchesRoom(const FamaLamaJamAudioProcessor::HostTransportSnapshot& hostTransport, int roomBpm)
+{
+    return hostTransport.hasTempo
+        && roomBpm > 0
+        && std::abs(hostTransport.tempoBpm - static_cast<double>(roomBpm)) <= kHostTempoMatchToleranceBpm;
+}
+
+[[nodiscard]] FamaLamaJamAudioProcessor::HostSyncAssistBlockReason computeHostSyncAssistBlockReason(
+    bool hasServerTiming,
+    int roomBpm,
+    const FamaLamaJamAudioProcessor::HostTransportSnapshot& hostTransport)
+{
+    if (! hasServerTiming || roomBpm <= 0)
+        return FamaLamaJamAudioProcessor::HostSyncAssistBlockReason::MissingServerTiming;
+
+    if (! hostTransport.hasTempo)
+        return FamaLamaJamAudioProcessor::HostSyncAssistBlockReason::MissingHostTempo;
+
+    if (! hostTempoMatchesRoom(hostTransport, roomBpm))
+        return FamaLamaJamAudioProcessor::HostSyncAssistBlockReason::HostTempoMismatch;
+
+    return FamaLamaJamAudioProcessor::HostSyncAssistBlockReason::None;
+}
+
+[[nodiscard]] int computeHostSyncAssistStartOffsetSamples(
+    const FamaLamaJamAudioProcessor::AuthoritativeTimingState& timing,
+    const FamaLamaJamAudioProcessor::HostTransportSnapshot& hostTransport)
+{
+    if (! timing.hasTiming || timing.activeIntervalSamples <= 0 || timing.activeBeatSamples <= 0)
+        return -1;
+
+    if (! hostTransport.hasPpqPosition || ! hostTransport.hasBarStartPpqPosition)
+        return -1;
+
+    const auto beatsIntoBar = hostTransport.ppqPosition - hostTransport.ppqPositionOfLastBarStart;
+    if (! std::isfinite(beatsIntoBar) || beatsIntoBar < -1.0e-6)
+        return -1;
+
+    const auto intervalBeats = static_cast<double>(juce::jmax(1, timing.activeBpi));
+    auto beatsIntoInterval = std::fmod(hostTransport.ppqPositionOfLastBarStart + beatsIntoBar, intervalBeats);
+    if (beatsIntoInterval < 0.0)
+        beatsIntoInterval += intervalBeats;
+
+    const auto rawOffsetSamples = static_cast<int>(std::llround(beatsIntoInterval
+                                                                * static_cast<double>(timing.activeBeatSamples)));
+    if (rawOffsetSamples <= 0)
+        return 0;
+
+    return rawOffsetSamples % timing.activeIntervalSamples;
 }
 
 void activateTimingConfig(FamaLamaJamAudioProcessor::AuthoritativeTimingState& timing,
@@ -494,11 +588,47 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         localStrip.lastSeenIntervalIndex = authoritativeTiming_.intervalIndex;
     };
 
+    const auto hostTransport = captureHostTransportSnapshot(getPlayHead());
+
+    auto storeHostTransportSnapshot = [this](const HostTransportSnapshot& snapshot) {
+        hostTransportAvailableForUi_.store(snapshot.available, std::memory_order_relaxed);
+        hostTransportPlayingForUi_.store(snapshot.playing, std::memory_order_relaxed);
+        hostTransportHasTempoForUi_.store(snapshot.hasTempo, std::memory_order_relaxed);
+        hostTransportTempoBpmForUi_.store(snapshot.tempoBpm, std::memory_order_relaxed);
+        hostTransportHasPpqPositionForUi_.store(snapshot.hasPpqPosition, std::memory_order_relaxed);
+        hostTransportPpqPositionForUi_.store(snapshot.ppqPosition, std::memory_order_relaxed);
+        hostTransportHasBarStartPpqPositionForUi_.store(snapshot.hasBarStartPpqPosition, std::memory_order_relaxed);
+        hostTransportBarStartPpqPositionForUi_.store(snapshot.ppqPositionOfLastBarStart, std::memory_order_relaxed);
+        hostTransportHasTimeSignatureForUi_.store(snapshot.hasTimeSignature, std::memory_order_relaxed);
+        hostTransportTimeSigNumeratorForUi_.store(snapshot.timeSigNumerator, std::memory_order_relaxed);
+        hostTransportTimeSigDenominatorForUi_.store(snapshot.timeSigDenominator, std::memory_order_relaxed);
+    };
+
+    auto updateHostSyncAssistEligibility = [this, &hostTransport]() {
+        const bool hasTiming = authoritativeTiming_.hasTiming && authoritativeTiming_.activeBpm > 0
+            && authoritativeTiming_.activeBpi > 0;
+        const auto targetBpm = hasTiming ? authoritativeTiming_.activeBpm : 0;
+        const auto targetBpi = hasTiming ? authoritativeTiming_.activeBpi : 0;
+
+        hostSyncAssistTargetBpmForUi_.store(targetBpm, std::memory_order_relaxed);
+        hostSyncAssistTargetBpiForUi_.store(targetBpi, std::memory_order_relaxed);
+        hostSyncAssistBlockReason_.store(computeHostSyncAssistBlockReason(hasTiming, targetBpm, hostTransport),
+                                         std::memory_order_relaxed);
+    };
+
+    auto finishProcessBlock = [this, &hostTransport]() {
+        updateRemoteMixerStripActivity();
+        previousHostTransportPlaying_ = hostTransport.playing;
+    };
+
+    storeHostTransportSnapshot(hostTransport);
+
     if (! isSessionConnected() || currentSampleRate_ <= 0.0)
     {
         applyLocalMonitorToOutput();
         clearTransportUi();
-        updateRemoteMixerStripActivity();
+        updateHostSyncAssistEligibility();
+        finishProcessBlock();
         return;
     }
 
@@ -510,7 +640,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         });
         applyLocalMonitorToOutput();
         clearTransportUi();
-        updateRemoteMixerStripActivity();
+        updateHostSyncAssistEligibility();
+        finishProcessBlock();
         return;
     }
 
@@ -668,6 +799,48 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         ++decodedFrames;
     }
 
+    updateHostSyncAssistEligibility();
+
+    const auto hostPlayTransition = ! previousHostTransportPlaying_ && hostTransport.playing;
+    const bool assistArmed = hostSyncAssistArmed_.load(std::memory_order_relaxed);
+    const bool assistFailed = hostSyncAssistFailed_.load(std::memory_order_relaxed);
+
+    if (assistArmed && hostPlayTransition)
+    {
+        const auto startOffsetSamples = computeHostSyncAssistStartOffsetSamples(authoritativeTiming_, hostTransport);
+        if (startOffsetSamples < 0)
+        {
+            hostSyncAssistArmed_.store(false, std::memory_order_relaxed);
+            hostSyncAssistWaitingForHost_.store(false, std::memory_order_relaxed);
+            hostSyncAssistFailed_.store(true, std::memory_order_relaxed);
+            hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::MissingHostMusicalPosition,
+                                               std::memory_order_relaxed);
+            finishProcessBlock();
+            return;
+        }
+
+        authoritativeTiming_.samplesIntoInterval = startOffsetSamples;
+        hostSyncAssistArmed_.store(false, std::memory_order_relaxed);
+        hostSyncAssistWaitingForHost_.store(false, std::memory_order_relaxed);
+        hostSyncAssistFailed_.store(false, std::memory_order_relaxed);
+        hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::None, std::memory_order_relaxed);
+    }
+    else if (assistArmed || assistFailed)
+    {
+        hostSyncAssistWaitingForHost_.store(assistArmed, std::memory_order_relaxed);
+
+        if (authoritativeTiming_.hasTiming)
+        {
+            hasServerTimingForUi_.store(true, std::memory_order_relaxed);
+            serverBpmForUi_.store(authoritativeTiming_.activeBpm, std::memory_order_relaxed);
+            beatsPerIntervalForUi_.store(authoritativeTiming_.activeBpi, std::memory_order_relaxed);
+            intervalIndexForUi_.store(authoritativeTiming_.intervalIndex, std::memory_order_relaxed);
+        }
+
+        finishProcessBlock();
+        return;
+    }
+
     if (authoritativeTiming_.hasTiming && authoritativeTiming_.activeIntervalSamples > 0)
     {
         const auto outputChannels = buffer.getNumChannels();
@@ -812,7 +985,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         clearTransportUi();
     }
 
-    updateRemoteMixerStripActivity();
+    finishProcessBlock();
 }
 
 bool FamaLamaJamAudioProcessor::hasEditor() const { return true; }
@@ -1185,18 +1358,88 @@ FamaLamaJamAudioProcessor::TransportUiState FamaLamaJamAudioProcessor::getTransp
     const auto snapshot = lifecycleController_.getSnapshot();
     const auto hasServerTiming = hasServerTimingForUi_.load(std::memory_order_relaxed);
     const auto syncHealth = computeSyncHealth(snapshot, hasServerTiming);
+    const bool assistHoldingTransport = hostSyncAssistArmed_.load(std::memory_order_relaxed)
+        || hostSyncAssistFailed_.load(std::memory_order_relaxed);
 
     return TransportUiState {
         .connected = snapshot.isConnected(),
         .hasServerTiming = hasServerTiming,
         .syncHealth = syncHealth,
-        .metronomeAvailable = syncHealth == SyncHealth::Healthy,
+        .metronomeAvailable = syncHealth == SyncHealth::Healthy && ! assistHoldingTransport,
         .beatsPerMinute = serverBpmForUi_.load(std::memory_order_relaxed),
         .beatsPerInterval = beatsPerIntervalForUi_.load(std::memory_order_relaxed),
         .currentBeat = currentBeatForUi_.load(std::memory_order_relaxed),
         .intervalProgress = intervalProgressForUi_.load(std::memory_order_relaxed),
         .intervalIndex = intervalIndexForUi_.load(std::memory_order_relaxed),
     };
+}
+
+FamaLamaJamAudioProcessor::HostSyncAssistUiState FamaLamaJamAudioProcessor::getHostSyncAssistUiState() const noexcept
+{
+    const auto blockReason = hostSyncAssistBlockReason_.load(std::memory_order_relaxed);
+    const auto failureReason = hostSyncAssistFailureReason_.load(std::memory_order_relaxed);
+
+    return HostSyncAssistUiState {
+        .armable = blockReason == HostSyncAssistBlockReason::None,
+        .armed = hostSyncAssistArmed_.load(std::memory_order_relaxed),
+        .waitingForHost = hostSyncAssistWaitingForHost_.load(std::memory_order_relaxed),
+        .blocked = blockReason != HostSyncAssistBlockReason::None,
+        .failed = hostSyncAssistFailed_.load(std::memory_order_relaxed),
+        .blockReason = blockReason,
+        .failureReason = failureReason,
+        .targetBeatsPerMinute = hostSyncAssistTargetBpmForUi_.load(std::memory_order_relaxed),
+        .targetBeatsPerInterval = hostSyncAssistTargetBpiForUi_.load(std::memory_order_relaxed),
+        .hostTransport = HostTransportSnapshot {
+            .available = hostTransportAvailableForUi_.load(std::memory_order_relaxed),
+            .playing = hostTransportPlayingForUi_.load(std::memory_order_relaxed),
+            .hasTempo = hostTransportHasTempoForUi_.load(std::memory_order_relaxed),
+            .tempoBpm = hostTransportTempoBpmForUi_.load(std::memory_order_relaxed),
+            .hasPpqPosition = hostTransportHasPpqPositionForUi_.load(std::memory_order_relaxed),
+            .ppqPosition = hostTransportPpqPositionForUi_.load(std::memory_order_relaxed),
+            .hasBarStartPpqPosition = hostTransportHasBarStartPpqPositionForUi_.load(std::memory_order_relaxed),
+            .ppqPositionOfLastBarStart = hostTransportBarStartPpqPositionForUi_.load(std::memory_order_relaxed),
+            .hasTimeSignature = hostTransportHasTimeSignatureForUi_.load(std::memory_order_relaxed),
+            .timeSigNumerator = hostTransportTimeSigNumeratorForUi_.load(std::memory_order_relaxed),
+            .timeSigDenominator = hostTransportTimeSigDenominatorForUi_.load(std::memory_order_relaxed),
+        },
+    };
+}
+
+bool FamaLamaJamAudioProcessor::toggleHostSyncAssistArm()
+{
+    if (hostSyncAssistArmed_.load(std::memory_order_relaxed))
+    {
+        clearHostSyncAssistState();
+        return false;
+    }
+
+    const auto hostTransport = HostTransportSnapshot {
+        .available = hostTransportAvailableForUi_.load(std::memory_order_relaxed),
+        .playing = hostTransportPlayingForUi_.load(std::memory_order_relaxed),
+        .hasTempo = hostTransportHasTempoForUi_.load(std::memory_order_relaxed),
+        .tempoBpm = hostTransportTempoBpmForUi_.load(std::memory_order_relaxed),
+        .hasPpqPosition = hostTransportHasPpqPositionForUi_.load(std::memory_order_relaxed),
+        .ppqPosition = hostTransportPpqPositionForUi_.load(std::memory_order_relaxed),
+        .hasBarStartPpqPosition = hostTransportHasBarStartPpqPositionForUi_.load(std::memory_order_relaxed),
+        .ppqPositionOfLastBarStart = hostTransportBarStartPpqPositionForUi_.load(std::memory_order_relaxed),
+        .hasTimeSignature = hostTransportHasTimeSignatureForUi_.load(std::memory_order_relaxed),
+        .timeSigNumerator = hostTransportTimeSigNumeratorForUi_.load(std::memory_order_relaxed),
+        .timeSigDenominator = hostTransportTimeSigDenominatorForUi_.load(std::memory_order_relaxed),
+    };
+    const auto targetBpm = hostSyncAssistTargetBpmForUi_.load(std::memory_order_relaxed);
+    const auto blockReason = computeHostSyncAssistBlockReason(hasServerTimingForUi_.load(std::memory_order_relaxed),
+                                                              targetBpm,
+                                                              hostTransport);
+
+    hostSyncAssistBlockReason_.store(blockReason, std::memory_order_relaxed);
+    if (blockReason != HostSyncAssistBlockReason::None)
+        return false;
+
+    hostSyncAssistArmed_.store(true, std::memory_order_relaxed);
+    hostSyncAssistWaitingForHost_.store(true, std::memory_order_relaxed);
+    hostSyncAssistFailed_.store(false, std::memory_order_relaxed);
+    hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::None, std::memory_order_relaxed);
+    return true;
 }
 
 bool FamaLamaJamAudioProcessor::isMetronomeEnabled() const noexcept
@@ -1341,6 +1584,9 @@ void FamaLamaJamAudioProcessor::scheduleReconnectTimer(int delayMs)
 
 void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
 {
+    const bool wasArmed = hostSyncAssistArmed_.load(std::memory_order_relaxed);
+    const bool wasWaitingForHost = hostSyncAssistWaitingForHost_.load(std::memory_order_relaxed);
+
     authoritativeTiming_ = {};
     localUploadIntervalBuffer_.setSize(0, 0);
     localUploadIntervalWritePosition_ = 0;
@@ -1351,6 +1597,42 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     intervalProgressForUi_.store(0.0f, std::memory_order_relaxed);
     intervalIndexForUi_.store(0, std::memory_order_relaxed);
     metronomeClickRemainingSamples_ = 0;
+    hostSyncAssistTargetBpmForUi_.store(0, std::memory_order_relaxed);
+    hostSyncAssistTargetBpiForUi_.store(0, std::memory_order_relaxed);
+    hostSyncAssistBlockReason_.store(HostSyncAssistBlockReason::MissingServerTiming, std::memory_order_relaxed);
+    hostSyncAssistArmed_.store(false, std::memory_order_relaxed);
+    hostSyncAssistWaitingForHost_.store(false, std::memory_order_relaxed);
+
+    if (wasArmed || wasWaitingForHost)
+    {
+        hostSyncAssistFailed_.store(true, std::memory_order_relaxed);
+        hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::TimingLost, std::memory_order_relaxed);
+    }
+
+    previousHostTransportPlaying_ = false;
+}
+
+void FamaLamaJamAudioProcessor::clearHostTransportSnapshot() noexcept
+{
+    hostTransportAvailableForUi_.store(false, std::memory_order_relaxed);
+    hostTransportPlayingForUi_.store(false, std::memory_order_relaxed);
+    hostTransportHasTempoForUi_.store(false, std::memory_order_relaxed);
+    hostTransportTempoBpmForUi_.store(0.0, std::memory_order_relaxed);
+    hostTransportHasPpqPositionForUi_.store(false, std::memory_order_relaxed);
+    hostTransportPpqPositionForUi_.store(0.0, std::memory_order_relaxed);
+    hostTransportHasBarStartPpqPositionForUi_.store(false, std::memory_order_relaxed);
+    hostTransportBarStartPpqPositionForUi_.store(0.0, std::memory_order_relaxed);
+    hostTransportHasTimeSignatureForUi_.store(false, std::memory_order_relaxed);
+    hostTransportTimeSigNumeratorForUi_.store(0, std::memory_order_relaxed);
+    hostTransportTimeSigDenominatorForUi_.store(0, std::memory_order_relaxed);
+}
+
+void FamaLamaJamAudioProcessor::clearHostSyncAssistState() noexcept
+{
+    hostSyncAssistArmed_.store(false, std::memory_order_relaxed);
+    hostSyncAssistWaitingForHost_.store(false, std::memory_order_relaxed);
+    hostSyncAssistFailed_.store(false, std::memory_order_relaxed);
+    hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::None, std::memory_order_relaxed);
 }
 
 void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
