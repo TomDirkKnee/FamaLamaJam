@@ -12,7 +12,7 @@ Phase 7 validation combines the narrow room-focused automation gate, the full `c
 
 ## Automated Results
 
-- `famalamajam_tests.exe "[plugin_room_chat],[plugin_room_controls_ui]"` - pending
+- `famalamajam_tests.exe "[plugin_room_chat],[plugin_room_controls_ui]"` - pass (2026-03-17, 9 test cases / 149 assertions)
 - `ctest --test-dir build-vs --output-on-failure` - pending
 - `cmake --build build-vs --target famalamajam_plugin_VST3 --config Debug` - pending
 
