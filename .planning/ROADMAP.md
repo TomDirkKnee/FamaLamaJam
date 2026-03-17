@@ -166,7 +166,7 @@ Plans:
 
 Plans:
 - [x] 08.1-01-PLAN.md - Upgrade public-room count semantics and busiest-room ordering with JamTaba-informed discovery modeling.
-- [ ] 08.1-02-PLAN.md - Fix endpoint-stable picker selection and surface clearer public-room labels without harming manual connect.
+- [x] 08.1-02-PLAN.md - Fix endpoint-stable picker selection and surface clearer public-room labels without harming manual connect.
 - [ ] 08.1-03-PLAN.md - Run the discovery-polish gate, manual Ableton matrix, and close the inserted follow-up phase.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity

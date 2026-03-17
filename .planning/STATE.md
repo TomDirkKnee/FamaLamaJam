@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: collaboration-host-sync
 status: in_progress
-stopped_at: Phase 08.1 wave 1 complete
-last_updated: "2026-03-17T18:02:00+00:00"
-last_activity: 2026-03-17 - Completed Phase 08.1 plan 01 with richer public discovery parsing, structured room counts, and busiest-room ordering.
+stopped_at: Phase 08.1 wave 2 complete
+last_updated: "2026-03-17T18:35:00+00:00"
+last_activity: 2026-03-17 - Completed Phase 08.1 plan 02 with endpoint-stable picker restore logic and discovery UI regression coverage.
 progress:
   total_phases: 11
   completed_phases: 7
   total_plans: 26
-  completed_plans: 23
-  percent: 88
+  completed_plans: 24
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 8.1 inserted before Phase 9 (Server Discovery Polish & JamTaba Parity Check)  
-Plan: 08.1-02 endpoint-stable picker selection and label polish.  
+Plan: 08.1-03 automated gate and manual discovery validation checkpoint.  
 Status: In progress  
-Last activity: 2026-03-17 - Completed 08.1-01 and moved Phase 08.1 to the picker-stability wave.
+Last activity: 2026-03-17 - Completed 08.1-02 and moved Phase 08.1 to the final verification wave.
 
-Progress: 88%
+Progress: 92%
 
 ## Accumulated Context
 
@@ -61,6 +61,7 @@ Progress: 88%
 - [Phase 07]: Treat room-section mixer crowding as layout-refresh debt, not as a Phase 7 blocker, because the current workflow remained readable and functional in Ableton.
 - [Phase 08.1]: Prefer JamTaba-style structured discovery data from `ninbot.com/app/servers.php` when available, with the old `serverlist.php` text feed kept only as fallback.
 - [Phase 08.1]: Sort only the public-room section by active non-bot users descending while keeping remembered entries grouped first.
+- [Phase 08.1]: Restore discovery selection by endpoint key, not row index, so remembered insertion and reordering cannot scramble the picker label.
 
 ### Roadmap Evolution
 
@@ -69,7 +70,7 @@ Progress: 88%
 ### Pending Todos
 
 - Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
-- Finish Phase 08.1 Wave 2 and Wave 3, then close the remaining Phase 8 discovery caveats cleanly before Phase 9.
+- Finish Phase 08.1 Wave 3, then close the remaining Phase 8 discovery caveats cleanly before Phase 9.
 - Follow up on JamTaba-style public-room counts and busiest-room ordering during the 08.1 manual validation pass.
 
 ### Blockers/Concerns
