@@ -332,6 +332,61 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
           == "Ready for 120 BPM / 16 BPI room timing. Arm sync when Ableton is stopped.");
 }
 
+TEST_CASE("plugin rehearsal ui flow keeps the room workflow above the mixer in the single-page editor",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 3,
+                              .intervalProgress = 0.25f,
+                              .intervalIndex = 6,
+                          },
+                          {
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+                                .sourceId = "local-monitor",
+                                .groupId = "local",
+                                .groupLabel = "Local Monitor",
+                                .displayName = "Local Monitor",
+                                .subtitle = "Live monitor",
+                                .active = true,
+                                .visible = true },
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+                                .sourceId = "alice#0",
+                                .groupId = "alice",
+                                .groupLabel = "alice",
+                                .displayName = "alice - guitar",
+                                .subtitle = "guitar",
+                                .active = true,
+                                .visible = true },
+                          },
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .armable = true,
+                              .targetBeatsPerMinute = 120,
+                              .targetBeatsPerInterval = 16,
+                          });
+
+    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room");
+    auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
+    auto* roomTabButton = findDirectButtonWithText(*harness.editor, "Room Tab");
+    auto* popoutButton = findDirectButtonWithText(*harness.editor, "Open Chat");
+
+    REQUIRE(roomLabel != nullptr);
+    REQUIRE(mixerSectionLabel != nullptr);
+
+    CHECK(roomLabel->getBottom() < mixerSectionLabel->getY());
+    CHECK(roomTabButton == nullptr);
+    CHECK(popoutButton == nullptr);
+}
+
 TEST_CASE("plugin rehearsal ui flow applies the current draft when Connect is pressed and hides the separate Apply button",
           "[plugin_rehearsal_ui_flow]")
 {

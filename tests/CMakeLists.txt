@@ -20,6 +20,7 @@ add_executable(famalamajam_tests
     integration/plugin_host_sync_assist_tests.cpp
     integration/plugin_transport_ui_sync_tests.cpp
     integration/plugin_rehearsal_ui_flow_tests.cpp
+    integration/plugin_room_controls_ui_tests.cpp
     integration/plugin_mixer_controls_tests.cpp
     integration/plugin_mixer_ui_tests.cpp
     integration/plugin_streaming_runtime_compat_tests.cpp
