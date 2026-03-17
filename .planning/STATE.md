@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: collaboration-host-sync
 status: in_progress
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-03-17T13:05:20.5542003+00:00"
-last_activity: 2026-03-17 - Completed 07-03 with Phase 7 automation/manual validation, verification records, and close-out state updates.
+stopped_at: Phase 08.1 wave 1 complete
+last_updated: "2026-03-17T18:02:00+00:00"
+last_activity: 2026-03-17 - Completed Phase 08.1 plan 01 with richer public discovery parsing, structured room counts, and busiest-room ordering.
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 7
-  total_plans: 20
-  completed_plans: 20
-  percent: 100
+  total_plans: 26
+  completed_plans: 23
+  percent: 88
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 8 - Server Discovery & History
+**Current focus:** Phase 8.1 - Server Discovery Polish & JamTaba Parity Check
 
 ## Current Position
 
-Phase: 8 of 10 planned (Server Discovery & History)  
-Plan: Phase 7 complete; next up is Phase 8 planning.  
+Phase: 8.1 inserted before Phase 9 (Server Discovery Polish & JamTaba Parity Check)  
+Plan: 08.1-02 endpoint-stable picker selection and label polish.  
 Status: In progress  
-Last activity: 2026-03-17 - Completed 07-03 with Phase 7 automation/manual validation, verification records, and close-out state updates.
+Last activity: 2026-03-17 - Completed 08.1-01 and moved Phase 08.1 to the picker-stability wave.
 
-Progress: 100%
+Progress: 88%
 
 ## Accumulated Context
 
@@ -59,11 +59,18 @@ Progress: 100%
 - [Phase 07]: Return vote-success copy to neutral immediately and let failure copy decay after a short refresh window so inline room status stays readable.
 - [Phase 07]: Close the phase with explicit residual-risk notes rather than blocking on unverified non-initiator vote-opposition semantics.
 - [Phase 07]: Treat room-section mixer crowding as layout-refresh debt, not as a Phase 7 blocker, because the current workflow remained readable and functional in Ableton.
+- [Phase 08.1]: Prefer JamTaba-style structured discovery data from `ninbot.com/app/servers.php` when available, with the old `serverlist.php` text feed kept only as fallback.
+- [Phase 08.1]: Sort only the public-room section by active non-bot users descending while keeping remembered entries grouped first.
+
+### Roadmap Evolution
+
+- Phase 08.1 inserted after Phase 8: Server Discovery Polish & JamTaba Parity Check (URGENT)
 
 ### Pending Todos
 
 - Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
-- Plan Phase 8 server discovery/history work without reopening the now-verified Phase 7 room workflow.
+- Finish Phase 08.1 Wave 2 and Wave 3, then close the remaining Phase 8 discovery caveats cleanly before Phase 9.
+- Follow up on JamTaba-style public-room counts and busiest-room ordering during the 08.1 manual validation pass.
 
 ### Blockers/Concerns
 
@@ -71,6 +78,9 @@ Progress: 100%
 - Phase 6 validated the healthy-path Ableton host-start workflow, but the timing-loss cancellation and failed-start re-arm paths were not manually exercised in Ableton.
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
 - Phase 7 room controls are readable, but the current single-page layout squeezes the mixer more than desired and should be addressed in a later layout phase.
+- Phase 8 automation is green, but the combined discovery picker still needs human validation for readability, stale/failure wording, and manual-entry non-regression inside the real plugin window.
+- Phase 8 manual testing found that the discovery area works functionally but is too cramped, the visible user-count display may be misleading, and the picker can jump to another server after Connect.
+- Phase 08.1 is now planned specifically to fix discovery correctness issues, but the broader cramped-layout complaint remains intentionally deferred to Phase 9.
 
 ### Performance Metrics
 
@@ -82,6 +92,6 @@ Progress: 100%
 
 ## Session Continuity
 
-Last session: 2026-03-17T13:05:20.5542003+00:00
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-03-17T14:10:00+00:00
+Stopped at: Planned Phase 8
 Resume file: None

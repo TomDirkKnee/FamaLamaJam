@@ -145,11 +145,33 @@ Plans:
 2. Previously used private servers are remembered and available in the same workflow.
 3. Discovery/history UI does not make the existing direct host/port workflow worse for power users.
 4. Failure states for fetching/parsing the public server list are explicit and recoverable.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [x] 08-01-PLAN.md - Add remembered-server persistence, parser/history helpers, and processor-owned discovery state.
+- [x] 08-02-PLAN.md - Implement public discovery refresh, combined picker UI, and stale/failure behavior.
+- [ ] 08-03-PLAN.md - Run automated plus Ableton validation and record the Phase 8 verification outcome.
+
+### Phase 08.1: Server Discovery Polish & JamTaba Parity Check (INSERTED)
+
+**Goal**: Correct the public-room discovery details that still undermine trust after Phase 8: user-count fidelity, busiest-room ordering, and picker selection stability.
+**Depends on**: Phase 8
+**Requirements**: DISC-01, DISC-02
+**Success Criteria** (what must be TRUE):
+1. Public room rows display current-user information from a richer discovery model than the previous raw `1/8` text scrape whenever better source data is available.
+2. Remembered servers still appear first, but public rooms are ordered by active users descending rather than raw feed order.
+3. The discovery picker preserves selection by endpoint across refresh and connect flows instead of jumping to another server row.
+4. The phase fixes discovery correctness issues without pretending to solve the broader cramped-layout problem that remains Phase 9 work.
+**Plans**: 3 plans
+
+Plans:
+- [x] 08.1-01-PLAN.md - Upgrade public-room count semantics and busiest-room ordering with JamTaba-informed discovery modeling.
+- [ ] 08.1-02-PLAN.md - Fix endpoint-stable picker selection and surface clearer public-room labels without harming manual connect.
+- [ ] 08.1-03-PLAN.md - Run the discovery-polish gate, manual Ableton matrix, and close the inserted follow-up phase.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
-**Depends on**: Phase 8
+**Depends on**: Phase 08.1
 **Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03
 **Success Criteria** (what must be TRUE):
 1. Mixer strips are presented horizontally with the local monitor clearly distinguished and visually anchored.
@@ -208,7 +230,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -219,7 +241,8 @@ Plans:
 | 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
 | 6. Ableton Sync Assist Research & Prototype | 3/3 | Complete    | 2026-03-16 |
 | 7. Chat & Room Control Commands | 3/3 | Complete    | 2026-03-17 |
-| 8. Server Discovery & History | 0/TBD | Planned     | - |
+| 8. Server Discovery & History | 2/3 | In Progress | - |
+| 8.1. Server Discovery Polish & JamTaba Parity Check | 0/TBD | Planned     | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
