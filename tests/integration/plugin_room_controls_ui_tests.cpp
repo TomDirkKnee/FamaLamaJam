@@ -31,6 +31,11 @@ struct EditorHarness
     bool metronomeEnabled { false };
     int sentMessageCount { 0 };
     int submittedVoteCount { 0 };
+    std::string lastSentMessage;
+    FamaLamaJamAudioProcessorEditor::RoomVoteKind lastSubmittedVoteKind {
+        FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm
+    };
+    int lastSubmittedVoteValue { 0 };
     std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor;
 
     EditorHarness(ConnectionLifecycleSnapshot lifecycleSnapshot,
@@ -57,6 +62,11 @@ struct EditorHarness
                       .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Chat,
                       .author = "bob",
                       .text = "Let's keep the verse lighter.",
+                  },
+                  {
+                      .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::VoteSystem,
+                      .author = "",
+                      .text = "[voting system] BPM vote passed: 124",
                   },
               },
               .bpmVote = {
@@ -120,12 +130,15 @@ struct EditorHarness
             [this]() { return metronomeEnabled; },
             [this](bool enabled) { metronomeEnabled = enabled; },
             [this]() { return roomUi; },
-            [this](std::string) {
+            [this](std::string text) {
                 ++sentMessageCount;
+                lastSentMessage = std::move(text);
                 return true;
             },
-            [this](FamaLamaJamAudioProcessorEditor::RoomVoteKind, int) {
+            [this](FamaLamaJamAudioProcessorEditor::RoomVoteKind kind, int value) {
                 ++submittedVoteCount;
+                lastSubmittedVoteKind = kind;
+                lastSubmittedVoteValue = value;
                 return true;
             });
     }
@@ -202,8 +215,14 @@ TEST_CASE("plugin room controls ui exposes one mixed room section in the current
     CHECK(sendButton->isVisible());
     CHECK(bpmButton->isVisible());
     CHECK(bpiButton->isVisible());
+    CHECK(harness.editor->hasRoomFeedViewportForTesting());
     CHECK(harness.editor->getRoomTopicTextForTesting() == "Tonight: lock the groove before the chorus.");
-    CHECK(harness.editor->getVisibleRoomFeedForTesting().size() == 3);
+    REQUIRE(harness.editor->getVisibleRoomFeedForTesting().size() == 4);
+    CHECK(harness.editor->getVisibleRoomFeedForTesting()[0].kind
+          == FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Topic);
+    CHECK(harness.editor->getVisibleRoomFeedForTesting()[1].subdued);
+    CHECK(harness.editor->getVisibleRoomFeedForTesting()[3].kind
+          == FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::VoteSystem);
 }
 
 TEST_CASE("plugin room controls ui keeps the composer visible and makes disconnected state explicit",
@@ -251,6 +270,17 @@ TEST_CASE("plugin room controls ui keeps the composer visible and makes disconne
     CHECK(connectedHarness.editor->isRoomComposerEnabledForTesting());
     CHECK_FALSE(disconnectedHarness.editor->isRoomComposerEnabledForTesting());
     CHECK(disconnectedHarness.editor->getRoomStatusTextForTesting() == "Connect to a room to chat and vote.");
+
+    connectedHarness.editor->setRoomComposerTextForTesting("Keep the bridge tight.");
+    REQUIRE(connectedHarness.editor->submitRoomComposerForTesting(false));
+    CHECK(connectedHarness.sentMessageCount == 1);
+    CHECK(connectedHarness.lastSentMessage == "Keep the bridge tight.");
+    CHECK(connectedHarness.editor->getRoomComposerTextForTesting().isEmpty());
+
+    connectedHarness.editor->setRoomComposerTextForTesting("Bring the drums in on beat five.");
+    REQUIRE(connectedHarness.editor->submitRoomComposerForTesting(true));
+    CHECK(connectedHarness.sentMessageCount == 2);
+    CHECK(connectedHarness.lastSentMessage == "Bring the drums in on beat five.");
 }
 
 TEST_CASE("plugin room controls ui keeps direct numeric vote controls near the transport area",
@@ -294,6 +324,80 @@ TEST_CASE("plugin room controls ui keeps direct numeric vote controls near the t
           == "BPI vote failed");
     CHECK(harness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm));
     CHECK(harness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
+}
+
+TEST_CASE("plugin room controls ui submits validated direct votes and clears inline feedback after room updates",
+          "[plugin_room_controls_ui]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 4,
+                              .intervalProgress = 0.5f,
+                              .intervalIndex = 2,
+                          });
+
+    harness.roomUi.bpmVote = {};
+    harness.roomUi.bpiVote = {};
+    harness.editor->refreshForTesting();
+
+    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm, 124);
+    REQUIRE(harness.editor->submitRoomVoteForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm));
+    CHECK(harness.submittedVoteCount == 1);
+    CHECK(harness.lastSubmittedVoteKind == FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm);
+    CHECK(harness.lastSubmittedVoteValue == 124);
+
+    harness.roomUi.bpmVote = {
+        .pending = true,
+        .requestedValue = 124,
+        .statusText = "BPM vote pending",
+    };
+    harness.editor->refreshForTesting();
+    CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm)
+          == "BPM vote pending");
+
+    harness.roomUi.bpmVote = {
+        .requestedValue = 124,
+        .statusText = "Room BPM updated",
+    };
+    harness.editor->refreshForTesting();
+    CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm)
+          == "Vote BPM 40-400");
+
+    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi, 99);
+    CHECK_FALSE(harness.editor->submitRoomVoteForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
+    CHECK(harness.submittedVoteCount == 1);
+    CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
+          == "Enter a BPI between 2 and 64.");
+
+    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi, 12);
+    REQUIRE(harness.editor->submitRoomVoteForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
+    CHECK(harness.submittedVoteCount == 2);
+    CHECK(harness.lastSubmittedVoteKind == FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi);
+    CHECK(harness.lastSubmittedVoteValue == 12);
+
+    harness.roomUi.bpiVote = {
+        .failed = true,
+        .requestedValue = 12,
+        .statusText = "BPI vote failed",
+    };
+    harness.editor->refreshForTesting();
+    CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
+          == "BPI vote failed");
+
+    for (int index = 0; index < 24; ++index)
+        harness.editor->refreshForTesting();
+
+    CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
+          == "Vote BPI 2-64");
 }
 
 TEST_CASE("plugin room controls ui keeps the room section above the mixer without tabs or popouts",

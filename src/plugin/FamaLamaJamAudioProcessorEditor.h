@@ -207,6 +207,12 @@ public:
     [[nodiscard]] bool isRoomComposerEnabledForTesting() const noexcept;
     [[nodiscard]] bool isRoomVoteEnabledForTesting(RoomVoteKind kind) const noexcept;
     [[nodiscard]] bool isRoomSectionAboveMixerForTesting() const noexcept;
+    [[nodiscard]] bool hasRoomFeedViewportForTesting() const noexcept;
+    [[nodiscard]] juce::String getRoomComposerTextForTesting() const;
+    void setRoomComposerTextForTesting(const juce::String& text);
+    bool submitRoomComposerForTesting(bool useReturnKey);
+    void setRoomVoteValueForTesting(RoomVoteKind kind, int value);
+    bool submitRoomVoteForTesting(RoomVoteKind kind);
     [[nodiscard]] std::vector<juce::String> getVisibleMixerGroupLabelsForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerStripLabelsForTesting() const;
     [[nodiscard]] bool getMixerStripControlStateForTesting(const juce::String& sourceId,
@@ -220,6 +226,21 @@ public:
     void refreshForTesting();
 
 private:
+    struct RoomFeedEntryWidgets
+    {
+        juce::Label label;
+    };
+
+    struct RoomVoteFeedbackState
+    {
+        bool lastPending { false };
+        bool lastFailed { false };
+        int lastRequestedValue { 0 };
+        std::string lastStatusText;
+        juce::String transientFailureText;
+        int transientFailureTicks { 0 };
+    };
+
     struct MixerStripWidgets
     {
         std::string sourceId;
@@ -241,6 +262,9 @@ private:
     void refreshTransportStatus();
     void refreshHostSyncAssistStatus();
     void refreshRoomUi();
+    void rebuildRoomFeedWidgets(const std::vector<RoomFeedEntry>& entries);
+    bool submitRoomComposerMessage();
+    bool submitRoomVote(RoomVoteKind kind);
     void refreshMixerStrips();
     void rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips);
 
@@ -295,7 +319,11 @@ private:
     juce::TextEditor roomBpiEditor_;
     juce::TextButton roomBpiVoteButton_;
     juce::Label roomBpiStatusLabel_;
-    juce::Label roomFeedPreviewLabel_;
+    juce::Viewport roomFeedViewport_;
+    juce::Component roomFeedContent_;
+    std::vector<std::unique_ptr<RoomFeedEntryWidgets>> roomFeedWidgets_;
+    RoomVoteFeedbackState roomBpmFeedbackState_;
+    RoomVoteFeedbackState roomBpiFeedbackState_;
     double intervalProgressValue_ { 0.0 };
     BeatDividedProgressBar intervalProgressBar_;
     juce::Label mixerSectionLabel_;
