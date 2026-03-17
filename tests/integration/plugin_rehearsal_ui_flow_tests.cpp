@@ -383,6 +383,7 @@ TEST_CASE("plugin rehearsal ui flow keeps the room workflow above the mixer in t
     REQUIRE(mixerSectionLabel != nullptr);
 
     CHECK(roomLabel->getBottom() < mixerSectionLabel->getY());
+    CHECK(harness.editor->isRoomSectionAboveMixerForTesting());
     CHECK(roomTabButton == nullptr);
     CHECK(popoutButton == nullptr);
 }

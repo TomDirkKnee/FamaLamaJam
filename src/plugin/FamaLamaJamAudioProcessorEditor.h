@@ -97,6 +97,46 @@ public:
         bool hostPlaying { false };
     };
 
+    enum class RoomVoteKind
+    {
+        Bpm,
+        Bpi,
+    };
+
+    enum class RoomFeedEntryKind
+    {
+        Chat,
+        Topic,
+        Presence,
+        VoteSystem,
+        GenericSystem,
+    };
+
+    struct RoomVoteUiState
+    {
+        bool pending { false };
+        bool failed { false };
+        int requestedValue { 0 };
+        std::string statusText;
+    };
+
+    struct RoomFeedEntry
+    {
+        RoomFeedEntryKind kind { RoomFeedEntryKind::Chat };
+        std::string author;
+        std::string text;
+        bool subdued { false };
+    };
+
+    struct RoomUiState
+    {
+        bool connected { false };
+        std::string topic;
+        std::vector<RoomFeedEntry> visibleFeed;
+        RoomVoteUiState bpmVote;
+        RoomVoteUiState bpiVote;
+    };
+
     enum class MixerStripKind
     {
         LocalMonitor,
@@ -126,6 +166,9 @@ public:
     using CommandHandler = std::function<bool()>;
     using TransportUiGetter = std::function<TransportUiState()>;
     using HostSyncAssistUiGetter = std::function<HostSyncAssistUiState()>;
+    using RoomUiGetter = std::function<RoomUiState()>;
+    using RoomMessageHandler = std::function<bool(std::string)>;
+    using RoomVoteHandler = std::function<bool(RoomVoteKind, int)>;
     using MixerStripsGetter = std::function<std::vector<MixerStripState>()>;
     using MixerStripSetter = std::function<bool(const std::string&, float, float, bool)>;
     using BoolGetter = std::function<bool()>;
@@ -143,7 +186,10 @@ public:
                                     MixerStripsGetter mixerStripsGetter,
                                     MixerStripSetter mixerStripSetter,
                                     BoolGetter metronomeGetter,
-                                    BoolSetter metronomeSetter);
+                                    BoolSetter metronomeSetter,
+                                    RoomUiGetter roomUiGetter = {},
+                                    RoomMessageHandler roomMessageHandler = {},
+                                    RoomVoteHandler roomVoteHandler = {});
 
     void resized() override;
 
@@ -154,6 +200,13 @@ public:
     [[nodiscard]] double getIntervalProgressForTesting() const noexcept;
     [[nodiscard]] int getIntervalBeatDivisionsForTesting() const noexcept;
     [[nodiscard]] bool isMetronomeToggleEnabledForTesting() const noexcept;
+    [[nodiscard]] juce::String getRoomTopicTextForTesting() const;
+    [[nodiscard]] juce::String getRoomStatusTextForTesting() const;
+    [[nodiscard]] std::vector<RoomFeedEntry> getVisibleRoomFeedForTesting() const;
+    [[nodiscard]] juce::String getRoomVoteStatusTextForTesting(RoomVoteKind kind) const;
+    [[nodiscard]] bool isRoomComposerEnabledForTesting() const noexcept;
+    [[nodiscard]] bool isRoomVoteEnabledForTesting(RoomVoteKind kind) const noexcept;
+    [[nodiscard]] bool isRoomSectionAboveMixerForTesting() const noexcept;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerGroupLabelsForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerStripLabelsForTesting() const;
     [[nodiscard]] bool getMixerStripControlStateForTesting(const juce::String& sourceId,
@@ -187,6 +240,7 @@ private:
     void refreshLifecycleStatus();
     void refreshTransportStatus();
     void refreshHostSyncAssistStatus();
+    void refreshRoomUi();
     void refreshMixerStrips();
     void rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips);
 
@@ -202,6 +256,9 @@ private:
     MixerStripSetter mixerStripSetter_;
     BoolGetter metronomeGetter_;
     BoolSetter metronomeSetter_;
+    RoomUiGetter roomUiGetter_;
+    RoomMessageHandler roomMessageHandler_;
+    RoomVoteHandler roomVoteHandler_;
 
     juce::Label titleLabel_;
     juce::Label hostLabel_;
@@ -223,6 +280,22 @@ private:
     juce::Label hostSyncAssistTargetLabel_;
     juce::TextButton hostSyncAssistButton_;
     juce::Label hostSyncAssistStatusLabel_;
+    juce::Label roomSectionLabel_;
+    juce::Label roomTopicLabel_;
+    juce::Label roomTopicValueLabel_;
+    juce::Label roomStatusLabel_;
+    juce::Label roomComposerLabel_;
+    juce::TextEditor roomComposerEditor_;
+    juce::TextButton roomSendButton_;
+    juce::Label roomBpmLabel_;
+    juce::TextEditor roomBpmEditor_;
+    juce::TextButton roomBpmVoteButton_;
+    juce::Label roomBpmStatusLabel_;
+    juce::Label roomBpiLabel_;
+    juce::TextEditor roomBpiEditor_;
+    juce::TextButton roomBpiVoteButton_;
+    juce::Label roomBpiStatusLabel_;
+    juce::Label roomFeedPreviewLabel_;
     double intervalProgressValue_ { 0.0 };
     BeatDividedProgressBar intervalProgressBar_;
     juce::Label mixerSectionLabel_;
@@ -230,6 +303,7 @@ private:
     juce::Component mixerContent_;
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;
     std::vector<std::string> visibleMixerStripOrder_;
+    RoomUiState currentRoomUiState_;
     juce::Label statusLabel_;
     bool hostSyncAssistLastActionWasCancel_ { false };
 };

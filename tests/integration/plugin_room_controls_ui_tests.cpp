@@ -26,8 +26,11 @@ struct EditorHarness
     ConnectionLifecycleSnapshot lifecycle;
     FamaLamaJamAudioProcessorEditor::TransportUiState transport;
     FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssist;
+    FamaLamaJamAudioProcessorEditor::RoomUiState roomUi;
     std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> mixerStrips;
     bool metronomeEnabled { false };
+    int sentMessageCount { 0 };
+    int submittedVoteCount { 0 };
     std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor;
 
     EditorHarness(ConnectionLifecycleSnapshot lifecycleSnapshot,
@@ -35,6 +38,38 @@ struct EditorHarness
         : settings(famalamajam::app::session::makeDefaultSessionSettings())
         , lifecycle(std::move(lifecycleSnapshot))
         , transport(std::move(transportState))
+        , roomUi({
+              .connected = transport.connected,
+              .topic = "Tonight: lock the groove before the chorus.",
+              .visibleFeed = {
+                  {
+                      .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Topic,
+                      .author = "",
+                      .text = "Tonight: lock the groove before the chorus.",
+                  },
+                  {
+                      .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Presence,
+                      .author = "alice",
+                      .text = "joined the room",
+                      .subdued = true,
+                  },
+                  {
+                      .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Chat,
+                      .author = "bob",
+                      .text = "Let's keep the verse lighter.",
+                  },
+              },
+              .bpmVote = {
+                  .pending = true,
+                  .requestedValue = 124,
+                  .statusText = "BPM vote pending",
+              },
+              .bpiVote = {
+                  .failed = true,
+                  .requestedValue = 12,
+                  .statusText = "BPI vote failed",
+              },
+          })
         , mixerStrips({
               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
                 .sourceId = "local-monitor",
@@ -83,7 +118,16 @@ struct EditorHarness
                 return false;
             },
             [this]() { return metronomeEnabled; },
-            [this](bool enabled) { metronomeEnabled = enabled; });
+            [this](bool enabled) { metronomeEnabled = enabled; },
+            [this]() { return roomUi; },
+            [this](std::string) {
+                ++sentMessageCount;
+                return true;
+            },
+            [this](FamaLamaJamAudioProcessorEditor::RoomVoteKind, int) {
+                ++submittedVoteCount;
+                return true;
+            });
     }
 };
 
@@ -158,6 +202,8 @@ TEST_CASE("plugin room controls ui exposes one mixed room section in the current
     CHECK(sendButton->isVisible());
     CHECK(bpmButton->isVisible());
     CHECK(bpiButton->isVisible());
+    CHECK(harness.editor->getRoomTopicTextForTesting() == "Tonight: lock the groove before the chorus.");
+    CHECK(harness.editor->getVisibleRoomFeedForTesting().size() == 3);
 }
 
 TEST_CASE("plugin room controls ui keeps the composer visible and makes disconnected state explicit",
@@ -202,6 +248,9 @@ TEST_CASE("plugin room controls ui keeps the composer visible and makes disconne
     CHECK(connectedComposerLabel->isVisible());
     CHECK(connectedSendButton->isVisible());
     CHECK(disconnectedRoomStatus->isVisible());
+    CHECK(connectedHarness.editor->isRoomComposerEnabledForTesting());
+    CHECK_FALSE(disconnectedHarness.editor->isRoomComposerEnabledForTesting());
+    CHECK(disconnectedHarness.editor->getRoomStatusTextForTesting() == "Connect to a room to chat and vote.");
 }
 
 TEST_CASE("plugin room controls ui keeps direct numeric vote controls near the transport area",
@@ -239,6 +288,12 @@ TEST_CASE("plugin room controls ui keeps direct numeric vote controls near the t
     CHECK(bpmButton->getBottom() < pendingLabel->getY());
     CHECK(bpiButton->getY() >= transportLabel->getY());
     CHECK(bpiButton->getBottom() < failureLabel->getY());
+    CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm)
+          == "BPM vote pending");
+    CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
+          == "BPI vote failed");
+    CHECK(harness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm));
+    CHECK(harness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
 }
 
 TEST_CASE("plugin room controls ui keeps the room section above the mixer without tabs or popouts",
@@ -267,6 +322,7 @@ TEST_CASE("plugin room controls ui keeps the room section above the mixer withou
     REQUIRE(mixerLabel != nullptr);
 
     CHECK(roomLabel->getBottom() < mixerLabel->getY());
+    CHECK(harness.editor->isRoomSectionAboveMixerForTesting());
     CHECK(findButtonWithText(*harness.editor, "Room Tab") == nullptr);
     CHECK(findButtonWithText(*harness.editor, "Open Chat") == nullptr);
 }

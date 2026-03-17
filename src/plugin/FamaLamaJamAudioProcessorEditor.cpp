@@ -284,6 +284,45 @@ namespace
 
     return active ? juce::Colour::fromRGB(80, 150, 204) : juce::Colour::fromRGB(78, 90, 110);
 }
+
+[[nodiscard]] juce::String formatRoomFeedPreview(
+    const std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry>& entries)
+{
+    if (entries.empty())
+        return "No room activity yet.";
+
+    juce::StringArray lines;
+    const auto firstIndex = entries.size() > 3 ? entries.size() - 3 : 0;
+
+    for (std::size_t index = firstIndex; index < entries.size(); ++index)
+    {
+        const auto& entry = entries[index];
+        juce::String line;
+
+        if (! entry.author.empty())
+            line << entry.author << ": ";
+
+        line << entry.text;
+        lines.add(line);
+    }
+
+    return lines.joinIntoString("\n");
+}
+
+[[nodiscard]] juce::String formatRoomVoteStatus(const FamaLamaJamAudioProcessorEditor::RoomVoteUiState& state,
+                                                const juce::String& neutralText)
+{
+    if (! state.statusText.empty())
+        return state.statusText;
+
+    if (state.pending)
+        return neutralText + " pending";
+
+    if (state.failed)
+        return neutralText + " failed";
+
+    return neutralText + " ready";
+}
 } // namespace
 
 FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
@@ -298,7 +337,10 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  MixerStripsGetter mixerStripsGetter,
                                                                  MixerStripSetter mixerStripSetter,
                                                                  BoolGetter metronomeGetter,
-                                                                 BoolSetter metronomeSetter)
+                                                                 BoolSetter metronomeSetter,
+                                                                 RoomUiGetter roomUiGetter,
+                                                                 RoomMessageHandler roomMessageHandler,
+                                                                 RoomVoteHandler roomVoteHandler)
     : juce::AudioProcessorEditor(processor)
     , settingsGetter_(std::move(settingsGetter))
     , applyHandler_(std::move(applyHandler))
@@ -312,6 +354,9 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , mixerStripSetter_(std::move(mixerStripSetter))
     , metronomeGetter_(std::move(metronomeGetter))
     , metronomeSetter_(std::move(metronomeSetter))
+    , roomUiGetter_(roomUiGetter ? std::move(roomUiGetter) : []() { return RoomUiState {}; })
+    , roomMessageHandler_(roomMessageHandler ? std::move(roomMessageHandler) : [](std::string) { return false; })
+    , roomVoteHandler_(roomVoteHandler ? std::move(roomVoteHandler) : [](RoomVoteKind, int) { return false; })
 {
     titleLabel_.setText("FamaLamaJam Session Settings", juce::dontSendNotification);
     titleLabel_.setJustificationType(juce::Justification::centredLeft);
@@ -404,6 +449,68 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     hostSyncAssistStatusLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(hostSyncAssistStatusLabel_);
 
+    roomSectionLabel_.setText("Room", juce::dontSendNotification);
+    roomSectionLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(roomSectionLabel_);
+
+    roomTopicLabel_.setText("Current Topic", juce::dontSendNotification);
+    addAndMakeVisible(roomTopicLabel_);
+
+    roomTopicValueLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(roomTopicValueLabel_);
+
+    roomStatusLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(roomStatusLabel_);
+
+    roomComposerLabel_.setText("Message", juce::dontSendNotification);
+    addAndMakeVisible(roomComposerLabel_);
+
+    roomComposerEditor_.setMultiLine(false);
+    addAndMakeVisible(roomComposerEditor_);
+
+    roomSendButton_.setButtonText("Send");
+    roomSendButton_.onClick = [this]() {
+        const auto message = roomComposerEditor_.getText().trim().toStdString();
+        if (message.empty())
+            return;
+
+        if (roomMessageHandler_(message))
+            roomComposerEditor_.clear();
+
+        refreshRoomUi();
+    };
+    addAndMakeVisible(roomSendButton_);
+
+    roomBpmLabel_.setText("BPM", juce::dontSendNotification);
+    addAndMakeVisible(roomBpmLabel_);
+    roomBpmEditor_.setInputRestrictions(3, "0123456789");
+    addAndMakeVisible(roomBpmEditor_);
+    roomBpmVoteButton_.setButtonText("Vote BPM");
+    roomBpmVoteButton_.onClick = [this]() {
+        (void) roomVoteHandler_(RoomVoteKind::Bpm, roomBpmEditor_.getText().getIntValue());
+        refreshRoomUi();
+    };
+    addAndMakeVisible(roomBpmVoteButton_);
+    roomBpmStatusLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(roomBpmStatusLabel_);
+
+    roomBpiLabel_.setText("BPI", juce::dontSendNotification);
+    addAndMakeVisible(roomBpiLabel_);
+    roomBpiEditor_.setInputRestrictions(2, "0123456789");
+    addAndMakeVisible(roomBpiEditor_);
+    roomBpiVoteButton_.setButtonText("Vote BPI");
+    roomBpiVoteButton_.onClick = [this]() {
+        (void) roomVoteHandler_(RoomVoteKind::Bpi, roomBpiEditor_.getText().getIntValue());
+        refreshRoomUi();
+    };
+    addAndMakeVisible(roomBpiVoteButton_);
+    roomBpiStatusLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(roomBpiStatusLabel_);
+
+    roomFeedPreviewLabel_.setJustificationType(juce::Justification::topLeft);
+    roomFeedPreviewLabel_.setMinimumHorizontalScale(1.0f);
+    addAndMakeVisible(roomFeedPreviewLabel_);
+
     mixerSectionLabel_.setText("Mixer", juce::dontSendNotification);
     mixerSectionLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(mixerSectionLabel_);
@@ -420,9 +527,10 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     metronomeToggle_.setToggleState(metronomeGetter_(), juce::dontSendNotification);
     refreshLifecycleStatus();
     refreshTransportStatus();
+    refreshRoomUi();
     refreshMixerStrips();
     startTimerHz(20);
-    setSize(760, 760);
+    setSize(760, 900);
 }
 
 void FamaLamaJamAudioProcessorEditor::resized()
@@ -466,6 +574,45 @@ void FamaLamaJamAudioProcessorEditor::resized()
     hostSyncAssistStatusLabel_.setBounds(area.removeFromTop(32));
     area.removeFromTop(8);
 
+    roomSectionLabel_.setBounds(area.removeFromTop(24));
+    area.removeFromTop(4);
+
+    auto roomTopicRow = area.removeFromTop(24);
+    roomTopicLabel_.setBounds(roomTopicRow.removeFromLeft(120));
+    roomTopicValueLabel_.setBounds(roomTopicRow);
+    area.removeFromTop(4);
+
+    roomStatusLabel_.setBounds(area.removeFromTop(22));
+    area.removeFromTop(4);
+
+    auto bpmRow = area.removeFromTop(24);
+    roomBpmLabel_.setBounds(bpmRow.removeFromLeft(40));
+    roomBpmEditor_.setBounds(bpmRow.removeFromLeft(70));
+    bpmRow.removeFromLeft(8);
+    roomBpmVoteButton_.setBounds(bpmRow.removeFromLeft(110));
+    area.removeFromTop(4);
+    roomBpmStatusLabel_.setBounds(area.removeFromTop(20));
+    area.removeFromTop(4);
+
+    auto bpiRow = area.removeFromTop(24);
+    roomBpiLabel_.setBounds(bpiRow.removeFromLeft(40));
+    roomBpiEditor_.setBounds(bpiRow.removeFromLeft(70));
+    bpiRow.removeFromLeft(8);
+    roomBpiVoteButton_.setBounds(bpiRow.removeFromLeft(110));
+    area.removeFromTop(4);
+    roomBpiStatusLabel_.setBounds(area.removeFromTop(20));
+    area.removeFromTop(4);
+
+    roomFeedPreviewLabel_.setBounds(area.removeFromTop(52));
+    area.removeFromTop(4);
+
+    auto composerRow = area.removeFromTop(28);
+    roomComposerLabel_.setBounds(composerRow.removeFromLeft(70));
+    roomSendButton_.setBounds(composerRow.removeFromRight(90));
+    composerRow.removeFromRight(8);
+    roomComposerEditor_.setBounds(composerRow);
+    area.removeFromTop(8);
+
     auto controls = area.removeFromTop(32);
     connectButton_.setBounds(controls.removeFromLeft(110));
     controls.removeFromLeft(8);
@@ -504,6 +651,7 @@ void FamaLamaJamAudioProcessorEditor::timerCallback()
 {
     refreshLifecycleStatus();
     refreshTransportStatus();
+    refreshRoomUi();
     refreshMixerStrips();
 }
 
@@ -572,6 +720,29 @@ void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
     const auto enabled = hostSyncAssist.armed || hostSyncAssist.waitingForHost || hostSyncAssist.armable;
     hostSyncAssistButton_.setEnabled(enabled);
     hostSyncAssistButton_.setAlpha(enabled ? 1.0f : 0.65f);
+}
+
+void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
+{
+    currentRoomUiState_ = roomUiGetter_();
+
+    roomTopicValueLabel_.setText(currentRoomUiState_.topic.empty() ? "No topic set" : currentRoomUiState_.topic,
+                                 juce::dontSendNotification);
+    roomStatusLabel_.setText(currentRoomUiState_.connected ? "Connected room activity" : "Connect to a room to chat and vote.",
+                             juce::dontSendNotification);
+    roomFeedPreviewLabel_.setText(formatRoomFeedPreview(currentRoomUiState_.visibleFeed), juce::dontSendNotification);
+    roomBpmStatusLabel_.setText(formatRoomVoteStatus(currentRoomUiState_.bpmVote, "BPM vote"),
+                                juce::dontSendNotification);
+    roomBpiStatusLabel_.setText(formatRoomVoteStatus(currentRoomUiState_.bpiVote, "BPI vote"),
+                                juce::dontSendNotification);
+
+    const auto canInteract = currentRoomUiState_.connected;
+    roomComposerEditor_.setEnabled(canInteract);
+    roomSendButton_.setEnabled(canInteract);
+    roomBpmEditor_.setEnabled(canInteract);
+    roomBpmVoteButton_.setEnabled(canInteract);
+    roomBpiEditor_.setEnabled(canInteract);
+    roomBpiVoteButton_.setEnabled(canInteract);
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
@@ -715,6 +886,41 @@ bool FamaLamaJamAudioProcessorEditor::isMetronomeToggleEnabledForTesting() const
     return metronomeToggle_.isEnabled();
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getRoomTopicTextForTesting() const
+{
+    return roomTopicValueLabel_.getText();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getRoomStatusTextForTesting() const
+{
+    return roomStatusLabel_.getText();
+}
+
+std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry> FamaLamaJamAudioProcessorEditor::getVisibleRoomFeedForTesting() const
+{
+    return currentRoomUiState_.visibleFeed;
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getRoomVoteStatusTextForTesting(RoomVoteKind kind) const
+{
+    return kind == RoomVoteKind::Bpm ? roomBpmStatusLabel_.getText() : roomBpiStatusLabel_.getText();
+}
+
+bool FamaLamaJamAudioProcessorEditor::isRoomComposerEnabledForTesting() const noexcept
+{
+    return roomComposerEditor_.isEnabled() && roomSendButton_.isEnabled();
+}
+
+bool FamaLamaJamAudioProcessorEditor::isRoomVoteEnabledForTesting(RoomVoteKind kind) const noexcept
+{
+    return kind == RoomVoteKind::Bpm ? roomBpmVoteButton_.isEnabled() : roomBpiVoteButton_.isEnabled();
+}
+
+bool FamaLamaJamAudioProcessorEditor::isRoomSectionAboveMixerForTesting() const noexcept
+{
+    return roomSectionLabel_.getBottom() < mixerSectionLabel_.getY();
+}
+
 std::vector<juce::String> FamaLamaJamAudioProcessorEditor::getVisibleMixerGroupLabelsForTesting() const
 {
     std::vector<juce::String> labels;
@@ -786,6 +992,7 @@ void FamaLamaJamAudioProcessorEditor::refreshForTesting()
 {
     refreshLifecycleStatus();
     refreshTransportStatus();
+    refreshRoomUi();
     refreshMixerStrips();
 }
 } // namespace famalamajam::plugin

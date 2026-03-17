@@ -1077,6 +1077,66 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
         };
     };
     auto hostSyncAssistToggle = [this]() { return toggleHostSyncAssistArm(); };
+    auto roomUiGetter = [this]() {
+        const auto state = getRoomUiState();
+
+        FamaLamaJamAudioProcessorEditor::RoomUiState roomState {
+            .connected = state.connected,
+            .topic = state.topic,
+            .bpmVote = FamaLamaJamAudioProcessorEditor::RoomVoteUiState {
+                .pending = state.bpmVote.pending,
+                .failed = state.bpmVote.failed,
+                .requestedValue = state.bpmVote.requestedValue,
+                .statusText = state.bpmVote.statusText,
+            },
+            .bpiVote = FamaLamaJamAudioProcessorEditor::RoomVoteUiState {
+                .pending = state.bpiVote.pending,
+                .failed = state.bpiVote.failed,
+                .requestedValue = state.bpiVote.requestedValue,
+                .statusText = state.bpiVote.statusText,
+            },
+        };
+
+        roomState.visibleFeed.reserve(state.visibleFeed.size());
+        for (const auto& entry : state.visibleFeed)
+        {
+            auto kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Chat;
+
+            switch (entry.kind)
+            {
+                case RoomFeedEntryKind::Chat:
+                    kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Chat;
+                    break;
+                case RoomFeedEntryKind::Topic:
+                    kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Topic;
+                    break;
+                case RoomFeedEntryKind::Presence:
+                    kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Presence;
+                    break;
+                case RoomFeedEntryKind::VoteSystem:
+                    kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::VoteSystem;
+                    break;
+                case RoomFeedEntryKind::GenericSystem:
+                    kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::GenericSystem;
+                    break;
+            }
+
+            roomState.visibleFeed.push_back(FamaLamaJamAudioProcessorEditor::RoomFeedEntry {
+                .kind = kind,
+                .author = entry.author,
+                .text = entry.text,
+                .subdued = entry.subdued,
+            });
+        }
+
+        return roomState;
+    };
+    auto roomMessageHandler = [this](std::string text) { return sendRoomChatMessage(std::move(text)); };
+    auto roomVoteHandler = [this](FamaLamaJamAudioProcessorEditor::RoomVoteKind kind, int value) {
+        return submitRoomVote(kind == FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm ? RoomVoteKind::Bpm
+                                                                                          : RoomVoteKind::Bpi,
+                              value);
+    };
     auto mixerStripsGetter = [this]() {
         std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> strips;
         for (const auto& snapshot : getMixerStripSnapshots())
@@ -1124,7 +1184,10 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(mixerStripsGetter),
                                                std::move(mixerStripSetter),
                                                std::move(metronomeGetter),
-                                               std::move(metronomeSetter));
+                                               std::move(metronomeSetter),
+                                               std::move(roomUiGetter),
+                                               std::move(roomMessageHandler),
+                                               std::move(roomVoteHandler));
 }
 
 void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
