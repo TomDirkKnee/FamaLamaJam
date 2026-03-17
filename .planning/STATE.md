@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: collaboration-host-sync
-status: ready
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-03-16T22:10:12.215Z"
-last_activity: 2026-03-16 - Completed Phase 6 plan 06-03 with automated plus Ableton validation and a narrow host-sync feasibility decision.
+status: in_progress
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-17T09:27:13.000Z"
+last_activity: 2026-03-17 - Completed 07-01 with typed room-message transport, processor-owned room state, and Phase 7 integration coverage.
 progress:
   total_phases: 10
   completed_phases: 6
-  total_plans: 17
-  completed_plans: 17
-  percent: 60
+  total_plans: 20
+  completed_plans: 18
+  percent: 63
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 7 of 10 planned (Chat & Room Control Commands)  
-Plan: 0 planned in current phase  
-Status: Ready for planning  
-Last activity: 2026-03-16 - Completed Phase 6 plan 06-03 with automated plus Ableton validation and a narrow host-sync feasibility decision.
+Plan: 1 of 3 completed in current phase (next: 07-02)  
+Status: In progress  
+Last activity: 2026-03-17 - Completed 07-01 with typed room-message transport, processor-owned room state, and Phase 7 integration coverage.
 
-Progress: 100%
+Progress: 63%
 
 ## Accumulated Context
 
@@ -51,10 +51,13 @@ Progress: 100%
 - [Phase 06]: Keep host sync assist as a secondary transport-area action with explicit room target copy.
 - [Phase 06]: Phase 6 closes with a narrow read-only Ableton host-start assist, not generic DAW transport control.
 - [Phase 06]: Untested Ableton timing-loss and failed-start paths stay documented as residual risk instead of being inferred as passed.
+- [Phase 07]: Keep room commands on a typed `MESSAGE_CHAT_MESSAGE` path separate from upload interval framing.
+- [Phase 07]: Drain room events into processor-owned session-only state outside `processBlock()` so chat/topic parsing never lands on the realtime path.
+- [Phase 07]: Preserve empty-author room notices in the mixed feed and classify vote-related system feedback instead of dropping unknown server text.
 
 ### Pending Todos
 
-- Plan Phase 7.
+- Execute 07-02 and 07-03 to wire the compact room UI and final Phase 7 validation.
 - Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
 
 ### Blockers/Concerns
@@ -66,9 +69,10 @@ Progress: 100%
 
 - 2026-03-16: Completed Phase 06 plan 02 in 10 min across 3 task commits and 6 modified files.
 - 2026-03-16: Completed Phase 06 plan 03 in 28 min across 3 task commits and 6 modified files.
+- 2026-03-17: Completed Phase 07 plan 01 in 11 min across 2 task commits and 7 modified files.
 
 ## Session Continuity
 
-Last session: 2026-03-16T22:10:12.212Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-03-17T09:27:13.000Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None

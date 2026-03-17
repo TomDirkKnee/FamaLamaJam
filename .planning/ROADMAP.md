@@ -129,7 +129,12 @@ Plans:
 2. User can issue BPM and BPI vote commands from the UI without manual slash-command typing.
 3. Chat and vote feedback remain understandable and visible during normal rehearsal use.
 4. The implementation preserves realtime safety and does not destabilize the audio/session core.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [x] 07-01-PLAN.md - Add room-message transport support, vote command plumbing, and processor-owned session-only room state.
+- [ ] 07-02-PLAN.md - Add the compact room feed, always-visible composer, and direct BPM/BPI vote controls to the current editor.
+- [ ] 07-03-PLAN.md - Run automated plus Ableton validation and record the Phase 7 verification outcome.
 
 ### Phase 8: Server Discovery & History
 **Goal**: Improve room entry workflow with public server discovery and remembered private server history.
@@ -213,7 +218,7 @@ Plans:
 | 4. Audio Streaming, Mix, and Monitoring Core | 3/3 | Complete    | 2026-03-15 |
 | 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
 | 6. Ableton Sync Assist Research & Prototype | 3/3 | Complete    | 2026-03-16 |
-| 7. Chat & Room Control Commands | 0/TBD | Planned     | - |
+| 7. Chat & Room Control Commands | 1/3 | In Progress | - |
 | 8. Server Discovery & History | 0/TBD | Planned     | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |

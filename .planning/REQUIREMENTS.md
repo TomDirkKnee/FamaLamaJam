@@ -47,8 +47,8 @@
 
 ### Room Interaction
 
-- **ROOM-01**: User can send and receive Ninjam room chat messages from inside the plugin.
-- **ROOM-02**: User can issue BPM/BPI vote commands from the plugin UI and see room feedback/results.
+- [x] **ROOM-01**: User can send and receive Ninjam room chat messages from inside the plugin.
+- [x] **ROOM-02**: User can issue BPM/BPI vote commands from the plugin UI and see room feedback/results.
 
 ### Server Discovery
 
@@ -114,8 +114,8 @@
 | UI-02 | Phase 5 - Ableton Reliability & v1 Rehearsal UX Validation | Complete |
 | HSYNC-01 | Phase 6 - Ableton Sync Assist Research & Prototype | Complete |
 | HSYNC-02 | Phase 6 - Ableton Sync Assist Research & Prototype | Complete |
-| ROOM-01 | Phase 7 - Chat & Room Control Commands | Planned |
-| ROOM-02 | Phase 7 - Chat & Room Control Commands | Planned |
+| ROOM-01 | Phase 7 - Chat & Room Control Commands | Complete |
+| ROOM-02 | Phase 7 - Chat & Room Control Commands | Complete |
 | DISC-01 | Phase 8 - Server Discovery & History | Planned |
 | DISC-02 | Phase 8 - Server Discovery & History | Planned |
 | LAYOUT-01 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
@@ -132,4 +132,4 @@
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-16 after Phase 6 plan 03 close-out*
+*Last updated: 2026-03-17 after Phase 7 plan 01 close-out*
