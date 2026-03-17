@@ -23,6 +23,7 @@ add_executable(famalamajam_tests
     integration/plugin_mixer_controls_tests.cpp
     integration/plugin_mixer_ui_tests.cpp
     integration/plugin_streaming_runtime_compat_tests.cpp
+    integration/plugin_room_chat_tests.cpp
     integration/plugin_remote_interval_alignment_tests.cpp)
 
 target_link_libraries(famalamajam_tests

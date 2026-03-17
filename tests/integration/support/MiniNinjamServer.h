@@ -25,6 +25,7 @@ constexpr std::uint8_t kMessageClientSetUserMask = 0x81;
 constexpr std::uint8_t kMessageClientSetChannelInfo = 0x82;
 constexpr std::uint8_t kMessageClientUploadIntervalBegin = 0x83;
 constexpr std::uint8_t kMessageClientUploadIntervalWrite = 0x84;
+constexpr std::uint8_t MESSAGE_CHAT_MESSAGE = 0xC0;
 
 constexpr std::uint32_t kProtoVerCur = 0x00020000u;
 constexpr std::uint32_t kUploadFourCcOggv = static_cast<std::uint32_t>('O')
@@ -68,6 +69,11 @@ struct NetMessage
 class MiniNinjamServer final : private juce::Thread
 {
 public:
+    struct RoomMessage
+    {
+        std::array<std::string, 5> fields;
+    };
+
     struct RemotePeer
     {
         std::string username { "peer" };
@@ -164,9 +170,83 @@ public:
         wakeEvent_.signal();
     }
 
+    static juce::MemoryBlock buildRoomMessagePayload(const RoomMessage& message)
+    {
+        juce::MemoryBlock payload;
+
+        for (const auto& field : message.fields)
+        {
+            payload.append(field.data(), field.size());
+            const char terminator = '\0';
+            payload.append(&terminator, 1);
+        }
+
+        return payload;
+    }
+
+    void enqueueRoomMessage(RoomMessage message)
+    {
+        const juce::ScopedLock lock(configLock_);
+        pendingRoomMessages_.push_back(std::move(message));
+        wakeEvent_.signal();
+    }
+
+    void enqueueRoomChatMessage(std::string author, std::string text)
+    {
+        enqueueRoomMessage(RoomMessage {
+            .fields = { "MSG", std::move(author), std::move(text), {}, {} },
+        });
+    }
+
+    void enqueueRoomSystemMessage(std::string text)
+    {
+        enqueueRoomChatMessage({}, std::move(text));
+    }
+
+    void enqueueRoomTopic(std::string author, std::string topic)
+    {
+        enqueueRoomMessage(RoomMessage {
+            .fields = { "TOPIC", std::move(author), std::move(topic), {}, {} },
+        });
+    }
+
+    void enqueueRoomJoin(std::string username)
+    {
+        enqueueRoomMessage(RoomMessage {
+            .fields = { "JOIN", std::move(username), {}, {}, {} },
+        });
+    }
+
+    void enqueueRoomPart(std::string username)
+    {
+        enqueueRoomMessage(RoomMessage {
+            .fields = { "PART", std::move(username), {}, {}, {} },
+        });
+    }
+
     bool waitForAuthentication(int timeoutMs) const
     {
         return authEvent_.wait(timeoutMs);
+    }
+
+    bool waitForCapturedRoomMessage(int timeoutMs, RoomMessage& out)
+    {
+        const auto boundedTimeout = juce::jmax(1, timeoutMs);
+
+        if (! roomMessageEvent_.wait(boundedTimeout))
+            return false;
+
+        const juce::ScopedLock lock(clientLock_);
+        if (capturedRoomMessages_.empty())
+            return false;
+
+        out = std::move(capturedRoomMessages_.front());
+        capturedRoomMessages_.erase(capturedRoomMessages_.begin());
+
+        if (! capturedRoomMessages_.empty())
+            roomMessageEvent_.signal();
+
+        return true;
     }
 
 private:
@@ -242,6 +322,26 @@ private:
             std::memcpy(bytes + 5, payload, payloadBytes);
 
         return writeExact(socket, frame.getData(), static_cast<int>(frame.getSize()));
+    }
+
+    static RoomMessage parseRoomMessage(const juce::MemoryBlock& payload)
+    {
+        RoomMessage message;
+        const auto* cursor = static_cast<const char*>(payload.getData());
+        const auto* end = cursor + payload.getSize();
+
+        for (auto& field : message.fields)
+        {
+            if (cursor >= end)
+                break;
+
+            const auto remaining = static_cast<std::size_t>(end - cursor);
+            const auto fieldLength = boundedStrnlen(cursor, remaining);
+            field.assign(cursor, fieldLength);
+            cursor += fieldLength + 1;
+        }
+
+        return message;
     }
 
     bool sendChallenge(juce::StreamingSocket& socket)
@@ -379,6 +479,25 @@ private:
         return true;
     }
 
+    bool flushPendingRoomMessages(juce::StreamingSocket& socket)
+    {
+        std::vector<RoomMessage> messages;
+
+        {
+            const juce::ScopedLock lock(configLock_);
+            messages.swap(pendingRoomMessages_);
+        }
+
+        for (const auto& message : messages)
+        {
+            const auto payload = buildRoomMessagePayload(message);
+            if (! writeMessage(socket, MESSAGE_CHAT_MESSAGE, payload.getData(), payload.getSize()))
+                return false;
+        }
+
+        return true;
+    }
+
     void run() override
     {
         while (! threadShouldExit())
@@ -424,6 +543,8 @@ private:
                 if (authed && ! flushPendingConfigChanges(*socket))
                     return;
                 if (authed && ! flushPendingUserInfoChanges(*socket))
+                    return;
+                if (authed && ! flushPendingRoomMessages(*socket))
                     return;
 
                 if (socket->waitUntilReady(true, 20) <= 0)
@@ -552,6 +673,19 @@ private:
                     continue;
                 }
 
+                if (message.type == MESSAGE_CHAT_MESSAGE)
+                {
+                    const auto roomMessage = parseRoomMessage(message.payload);
+
+                    {
+                        const juce::ScopedLock lock(clientLock_);
+                        capturedRoomMessages_.push_back(roomMessage);
+                    }
+
+                    roomMessageEvent_.signal();
+                    continue;
+                }
+
                 if (message.type == kMessageClientSetChannelInfo || message.type == kMessageClientSetUserMask)
                     continue;
             }
@@ -567,10 +701,13 @@ private:
     mutable juce::CriticalSection clientLock_;
     std::unique_ptr<juce::StreamingSocket> client_;
     mutable juce::WaitableEvent authEvent_;
+    mutable juce::WaitableEvent roomMessageEvent_;
     juce::WaitableEvent wakeEvent_;
     mutable juce::CriticalSection configLock_;
     std::vector<std::pair<std::uint16_t, std::uint16_t>> pendingConfigChanges_;
     std::vector<UserInfoChange> pendingUserInfoChanges_;
+    std::vector<RoomMessage> pendingRoomMessages_;
+    std::vector<RoomMessage> capturedRoomMessages_;
     std::vector<RemotePeer> remotePeers_ { RemotePeer {} };
     std::uint16_t initialBpm_ { 120 };
     std::uint16_t initialBpi_ { 16 };
