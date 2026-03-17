@@ -74,7 +74,9 @@ struct EditorHarness
                 return false;
             },
             [this]() { return metronomeEnabled; },
-            [this](bool enabled) { metronomeEnabled = enabled; });
+            [this](bool enabled) { metronomeEnabled = enabled; },
+            []() { return FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState {}; },
+            [](bool) { return false; });
     }
 };
 } // namespace

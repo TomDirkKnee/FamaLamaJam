@@ -129,6 +129,8 @@ struct EditorHarness
             },
             [this]() { return metronomeEnabled; },
             [this](bool enabled) { metronomeEnabled = enabled; },
+            []() { return FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState {}; },
+            [](bool) { return false; },
             [this]() { return roomUi; },
             [this](std::string text) {
                 ++sentMessageCount;

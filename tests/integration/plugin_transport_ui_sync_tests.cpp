@@ -83,7 +83,9 @@ struct EditorHarness
             []() { return std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> {}; },
             [](const std::string&, float, float, bool) { return true; },
             [this]() { return metronomeEnabled; },
-            [this](bool enabled) { metronomeEnabled = enabled; });
+            [this](bool enabled) { metronomeEnabled = enabled; },
+            []() { return FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState {}; },
+            [](bool) { return false; });
     }
 };
 } // namespace

@@ -2,6 +2,7 @@ add_executable(famalamajam_tests
     unit/audio_buffer_resampler_tests.cpp
     unit/settings_validation_tests.cpp
     unit/state_serialization_tests.cpp
+    unit/server_discovery_parser_tests.cpp
     unit/connection_lifecycle_tests.cpp
     unit/retry_policy_tests.cpp
     unit/connection_failure_classification_tests.cpp
@@ -25,6 +26,8 @@ add_executable(famalamajam_tests
     integration/plugin_mixer_ui_tests.cpp
     integration/plugin_streaming_runtime_compat_tests.cpp
     integration/plugin_room_chat_tests.cpp
+    integration/plugin_server_discovery_tests.cpp
+    integration/plugin_server_discovery_ui_tests.cpp
     integration/plugin_remote_interval_alignment_tests.cpp)
 
 target_link_libraries(famalamajam_tests

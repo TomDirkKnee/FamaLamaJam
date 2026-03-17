@@ -87,6 +87,46 @@ TEST_CASE("plugin_state_roundtrip restores saved settings in fresh instance", "[
     CHECK(restored.getLastStatusMessage() == "Settings restored");
 }
 
+TEST_CASE("plugin_state_roundtrip preserves remembered server history while clearing transient discovery state",
+          "[plugin_state_roundtrip]")
+{
+    FamaLamaJamAudioProcessor source;
+
+    auto settings = source.getActiveSettings();
+    settings.username = "history_user";
+
+    settings.serverHost = "alpha.example.org";
+    settings.serverPort = 2050;
+    REQUIRE(source.applySettingsFromUi(settings));
+    REQUIRE(source.requestConnect());
+    source.handleConnectionEvent(ConnectionEvent { .type = ConnectionEventType::Connected });
+    REQUIRE(source.requestDisconnect());
+
+    settings.serverHost = "beta.example.org";
+    settings.serverPort = 2051;
+    REQUIRE(source.applySettingsFromUi(settings));
+    REQUIRE(source.requestConnect());
+    source.handleConnectionEvent(ConnectionEvent { .type = ConnectionEventType::Connected });
+    REQUIRE(source.requestDisconnect());
+
+    juce::MemoryBlock state;
+    source.getStateInformation(state);
+
+    FamaLamaJamAudioProcessor restored;
+    restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+
+    const auto discovery = restored.getServerDiscoveryUiState();
+    REQUIRE(discovery.combinedEntries.size() == 2);
+    CHECK(discovery.combinedEntries[0].host == "beta.example.org");
+    CHECK(discovery.combinedEntries[0].port == 2051);
+    CHECK(discovery.combinedEntries[1].host == "alpha.example.org");
+    CHECK(discovery.combinedEntries[1].port == 2050);
+    CHECK_FALSE(discovery.fetchInProgress);
+    CHECK_FALSE(discovery.hasStalePublicData);
+    CHECK(discovery.statusText.empty());
+    CHECK(restored.getLastStatusMessage() == "Settings restored");
+}
+
 TEST_CASE("plugin_state_roundtrip restores disconnected startup with brief last-error context", "[plugin_state_roundtrip]")
 {
     FamaLamaJamAudioProcessor source;

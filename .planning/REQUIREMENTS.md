@@ -116,8 +116,8 @@
 | HSYNC-02 | Phase 6 - Ableton Sync Assist Research & Prototype | Complete |
 | ROOM-01 | Phase 7 - Chat & Room Control Commands | Complete |
 | ROOM-02 | Phase 7 - Chat & Room Control Commands | Complete |
-| DISC-01 | Phase 8 - Server Discovery & History | Planned |
-| DISC-02 | Phase 8 - Server Discovery & History | Planned |
+| DISC-01 | Phase 8 / Phase 08.1 - Server Discovery & History / Server Discovery Polish & JamTaba Parity Check | Planned |
+| DISC-02 | Phase 8 / Phase 08.1 - Server Discovery & History / Server Discovery Polish & JamTaba Parity Check | Planned |
 | LAYOUT-01 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
 | LAYOUT-02 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
 | LAYOUT-03 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |

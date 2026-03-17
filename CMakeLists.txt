@@ -15,11 +15,13 @@ add_library(famalamajam_core STATIC)
 target_sources(famalamajam_core
     PRIVATE
         src/app/session/SessionSettings.cpp
+        src/app/session/ServerDiscoveryModel.cpp
         src/app/session/SessionSettingsController.cpp
         src/app/session/ConnectionLifecycle.cpp
         src/app/session/ConnectionLifecycleController.cpp
         src/app/session/RetryPolicy.cpp
         src/app/session/ConnectionFailureClassifier.cpp
+        src/infra/net/PublicServerDiscoveryClient.cpp
         src/audio/AudioBufferResampler.cpp
         src/audio/CodecStreamBridge.cpp
         src/audio/OggVorbisCodec.cpp
