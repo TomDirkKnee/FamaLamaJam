@@ -16,7 +16,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 4: Audio Streaming, Mix, and Monitoring Core** - Build functional send/receive audio pipeline with essential channel controls. (completed 2026-03-15)
 - [x] **Phase 5: Ableton Reliability & v1 Rehearsal UX Validation** - Harden host lifecycle behavior and validate complete user jam workflow. (completed 2026-03-16)
 - [x] **Phase 6: Ableton Sync Assist Research & Prototype** - Research JamTaba/ReaNINJAM host-sync behavior and prototype a safe one-shot Ableton host-start assist. (completed 2026-03-16)
-- [ ] **Phase 7: Chat & Room Control Commands** - Add room chat plus BPM/BPI voting controls and feedback.
+- [x] **Phase 7: Chat & Room Control Commands** - Add room chat plus BPM/BPI voting controls and feedback. (completed 2026-03-17)
 - [ ] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
@@ -133,8 +133,8 @@ Plans:
 
 Plans:
 - [x] 07-01-PLAN.md - Add room-message transport support, vote command plumbing, and processor-owned session-only room state.
-- [ ] 07-02-PLAN.md - Add the compact room feed, always-visible composer, and direct BPM/BPI vote controls to the current editor.
-- [ ] 07-03-PLAN.md - Run automated plus Ableton validation and record the Phase 7 verification outcome.
+- [x] 07-02-PLAN.md - Add the compact room feed, always-visible composer, and direct BPM/BPI vote controls to the current editor.
+- [x] 07-03-PLAN.md - Run automated plus Ableton validation and record the Phase 7 verification outcome.
 
 ### Phase 8: Server Discovery & History
 **Goal**: Improve room entry workflow with public server discovery and remembered private server history.
@@ -218,7 +218,7 @@ Plans:
 | 4. Audio Streaming, Mix, and Monitoring Core | 3/3 | Complete    | 2026-03-15 |
 | 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
 | 6. Ableton Sync Assist Research & Prototype | 3/3 | Complete    | 2026-03-16 |
-| 7. Chat & Room Control Commands | 1/3 | In Progress | - |
+| 7. Chat & Room Control Commands | 3/3 | Complete    | 2026-03-17 |
 | 8. Server Discovery & History | 0/TBD | Planned     | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
