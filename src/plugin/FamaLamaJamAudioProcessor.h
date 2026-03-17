@@ -91,6 +91,46 @@ public:
         HostTransportSnapshot hostTransport;
     };
 
+    enum class RoomVoteKind
+    {
+        Bpm,
+        Bpi,
+    };
+
+    enum class RoomFeedEntryKind
+    {
+        Chat,
+        Topic,
+        Presence,
+        VoteSystem,
+        GenericSystem,
+    };
+
+    struct RoomVoteUiState
+    {
+        bool pending { false };
+        bool failed { false };
+        int requestedValue { 0 };
+        std::string statusText;
+    };
+
+    struct RoomFeedEntry
+    {
+        RoomFeedEntryKind kind { RoomFeedEntryKind::Chat };
+        std::string author;
+        std::string text;
+        bool subdued { false };
+    };
+
+    struct RoomUiState
+    {
+        bool connected { false };
+        std::string topic;
+        std::vector<RoomFeedEntry> visibleFeed;
+        RoomVoteUiState bpmVote;
+        RoomVoteUiState bpiVote;
+    };
+
     enum class MixerStripKind
     {
         LocalMonitor,
@@ -184,7 +224,10 @@ public:
     [[nodiscard]] std::size_t getPendingRemoteSourceCountForTesting() const noexcept;
     [[nodiscard]] TransportUiState getTransportUiState() const noexcept;
     [[nodiscard]] HostSyncAssistUiState getHostSyncAssistUiState() const noexcept;
+    [[nodiscard]] RoomUiState getRoomUiState() const;
     bool toggleHostSyncAssistArm();
+    bool sendRoomChatMessage(std::string text);
+    bool submitRoomVote(RoomVoteKind kind, int value);
     [[nodiscard]] bool isMetronomeEnabled() const noexcept;
     void setMetronomeEnabled(bool enabled) noexcept;
     [[nodiscard]] std::vector<MixerStripSnapshot> getMixerStripSnapshots() const;
@@ -244,6 +287,10 @@ private:
     void resetMixerStripMeters() noexcept;
     void clearHostTransportSnapshot() noexcept;
     void clearHostSyncAssistState() noexcept;
+    void drainRoomTransportEvents();
+    void applyRoomEvent(const net::FramedSocketTransport::RoomEvent& event);
+    void clearRoomUiState(bool connected);
+    void refreshPendingRoomVotesFromTiming();
 
     app::session::SessionSettingsStore settingsStore_;
     app::session::SessionSettingsController settingsController_;
@@ -292,6 +339,8 @@ private:
     std::atomic<HostSyncAssistFailureReason> hostSyncAssistFailureReason_ { HostSyncAssistFailureReason::None };
     std::atomic<int> hostSyncAssistTargetBpmForUi_ { 0 };
     std::atomic<int> hostSyncAssistTargetBpiForUi_ { 0 };
+    mutable std::mutex roomUiMutex_;
+    RoomUiState roomUiState_;
     AuthoritativeTimingState authoritativeTiming_;
     int metronomeClickRemainingSamples_ { 0 };
     float metronomeClickPhase_ { 0.0f };

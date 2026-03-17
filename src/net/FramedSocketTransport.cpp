@@ -23,6 +23,7 @@ constexpr std::uint8_t kMessageClientSetUserMask = 0x81;
 constexpr std::uint8_t kMessageClientSetChannelInfo = 0x82;
 constexpr std::uint8_t kMessageClientUploadIntervalBegin = 0x83;
 constexpr std::uint8_t kMessageClientUploadIntervalWrite = 0x84;
+constexpr std::uint8_t kMessageChatMessage = 0xc0;
 
 constexpr std::uint8_t kMessageKeepAlive = 0xfd;
 
@@ -88,6 +89,40 @@ std::string makeRemoteChannelLabel(const std::string& username, const std::strin
         return username + " - " + channelName;
 
     return username + " - Channel " + std::to_string(static_cast<unsigned>(channelIndex) + 1u);
+}
+
+juce::MemoryBlock buildRoomMessagePayload(const std::array<std::string, 5>& fields)
+{
+    juce::MemoryBlock payload;
+
+    for (const auto& field : fields)
+    {
+        payload.append(field.data(), field.size());
+        const char terminator = '\0';
+        payload.append(&terminator, 1);
+    }
+
+    return payload;
+}
+
+std::array<std::string, 5> parseRoomMessageFields(const juce::MemoryBlock& payload)
+{
+    std::array<std::string, 5> fields;
+    const auto* cursor = static_cast<const char*>(payload.getData());
+    const auto* end = cursor + payload.getSize();
+
+    for (auto& field : fields)
+    {
+        if (cursor >= end)
+            break;
+
+        const auto remaining = static_cast<std::size_t>(end - cursor);
+        const auto fieldLength = boundedStrnlen(cursor, remaining);
+        field.assign(cursor, fieldLength);
+        cursor += fieldLength + 1;
+    }
+
+    return fields;
 }
 
 std::uint32_t rotateLeft(std::uint32_t value, std::uint32_t bits)
@@ -234,6 +269,7 @@ bool FramedSocketTransport::start(std::unique_ptr<juce::StreamingSocket> socket,
         outboundQueue_.clear();
         inboundQueue_.clear();
         remoteSourceActivityQueue_.clear();
+        roomEventQueue_.clear();
         subscribedUserMasks_.clear();
         inboundTransfers_.clear();
         knownRemoteSourcesById_.clear();
@@ -322,6 +358,7 @@ void FramedSocketTransport::stop()
         outboundQueue_.clear();
         inboundQueue_.clear();
         remoteSourceActivityQueue_.clear();
+        roomEventQueue_.clear();
         subscribedUserMasks_.clear();
         inboundTransfers_.clear();
         knownRemoteSourcesById_.clear();
@@ -364,12 +401,38 @@ void FramedSocketTransport::enqueueOutbound(const juce::MemoryBlock& payload)
         return;
 
     const juce::ScopedLock lock(stateLock_);
-    outboundQueue_.push_back(payload);
+    outboundQueue_.push_back(OutboundMessage {
+        .kind = OutboundMessage::Kind::UploadInterval,
+        .payload = payload,
+    });
 
     while (outboundQueue_.size() > kMaxQueuedFrames)
         outboundQueue_.pop_front();
 
     wakeEvent_.signal();
+}
+
+bool FramedSocketTransport::enqueueRoomMessage(std::array<std::string, 5> fields)
+{
+    if (fields[0].empty())
+        return false;
+
+    auto payload = buildRoomMessagePayload(fields);
+
+    const juce::ScopedLock lock(stateLock_);
+    if (! authenticated_)
+        return false;
+
+    outboundQueue_.push_back(OutboundMessage {
+        .kind = OutboundMessage::Kind::RoomMessage,
+        .payload = std::move(payload),
+    });
+
+    while (outboundQueue_.size() > kMaxQueuedFrames)
+        outboundQueue_.pop_front();
+
+    wakeEvent_.signal();
+    return true;
 }
 
 bool FramedSocketTransport::popInbound(juce::MemoryBlock& payload)
@@ -403,6 +466,18 @@ bool FramedSocketTransport::popRemoteSourceActivityUpdate(RemoteSourceActivityUp
 
     update = std::move(remoteSourceActivityQueue_.front());
     remoteSourceActivityQueue_.pop_front();
+    return true;
+}
+
+bool FramedSocketTransport::popRoomEvent(RoomEvent& event)
+{
+    const juce::ScopedLock lock(stateLock_);
+
+    if (roomEventQueue_.empty())
+        return false;
+
+    event = std::move(roomEventQueue_.front());
+    roomEventQueue_.pop_front();
     return true;
 }
 
@@ -440,7 +515,7 @@ void FramedSocketTransport::run()
     {
         bool didWork = false;
 
-        juce::MemoryBlock outbound;
+        OutboundMessage outbound;
         {
             const juce::ScopedLock lock(stateLock_);
             if (authenticated_ && ! outboundQueue_.empty())
@@ -450,9 +525,18 @@ void FramedSocketTransport::run()
             }
         }
 
-        if (outbound.getSize() > 0)
+        if (outbound.payload.getSize() > 0)
         {
-            if (! writeUploadInterval(outbound))
+            bool wroteOutbound = false;
+
+            if (outbound.kind == OutboundMessage::Kind::UploadInterval)
+                wroteOutbound = writeUploadInterval(outbound.payload);
+            else
+                wroteOutbound = writeMessage(kMessageChatMessage,
+                                             outbound.payload.getData(),
+                                             outbound.payload.getSize());
+
+            if (! wroteOutbound)
                 break;
 
             {
@@ -752,6 +836,10 @@ void FramedSocketTransport::processInboundMessage(std::uint8_t type, const juce:
             handleUserInfo(payload);
             break;
 
+        case kMessageChatMessage:
+            handleRoomMessage(payload);
+            break;
+
         case kMessageServerDownloadIntervalBegin:
             handleDownloadBegin(payload);
             break;
@@ -987,6 +1075,59 @@ void FramedSocketTransport::handleUserInfo(const juce::MemoryBlock& payload)
         if (nextMask != existingMask)
             sendUserMask(remoteUser, nextMask);
     }
+}
+
+void FramedSocketTransport::handleRoomMessage(const juce::MemoryBlock& payload)
+{
+    const auto fields = parseRoomMessageFields(payload);
+    if (fields[0].empty())
+        return;
+
+    RoomEvent event;
+
+    if (fields[0] == "MSG")
+    {
+        if (fields[1].empty() && fields[2].empty())
+            return;
+
+        event.kind = fields[1].empty() ? RoomEvent::Kind::System : RoomEvent::Kind::Chat;
+        event.author = fields[1];
+        event.text = fields[2].empty() ? fields[1] : fields[2];
+    }
+    else if (fields[0] == "TOPIC")
+    {
+        event.kind = RoomEvent::Kind::Topic;
+        event.author = fields[2].empty() ? std::string() : fields[1];
+        event.text = fields[2].empty() ? fields[1] : fields[2];
+    }
+    else if (fields[0] == "JOIN")
+    {
+        if (fields[1].empty())
+            return;
+
+        event.kind = RoomEvent::Kind::Join;
+        event.author = fields[1];
+        event.text = fields[1];
+    }
+    else if (fields[0] == "PART")
+    {
+        if (fields[1].empty())
+            return;
+
+        event.kind = RoomEvent::Kind::Part;
+        event.author = fields[1];
+        event.text = fields[1];
+    }
+    else
+    {
+        return;
+    }
+
+    const juce::ScopedLock lock(stateLock_);
+    roomEventQueue_.push_back(std::move(event));
+
+    while (roomEventQueue_.size() > kMaxQueuedFrames)
+        roomEventQueue_.pop_front();
 }
 
 void FramedSocketTransport::handleDownloadBegin(const juce::MemoryBlock& payload)

@@ -101,6 +101,53 @@ constexpr double kHostTempoMatchToleranceBpm = 0.05;
 constexpr std::uint64_t kInactiveStripRetentionIntervals = 2;
 constexpr float kMinMixerGainDb = -60.0f;
 constexpr float kMaxMixerGainDb = 12.0f;
+constexpr std::size_t kMaxRoomFeedEntries = 128;
+
+[[nodiscard]] std::string trimRoomText(std::string text)
+{
+    return juce::String(text).trim().toStdString();
+}
+
+[[nodiscard]] juce::String toLowerString(const std::string& text)
+{
+    return juce::String(text).toLowerCase();
+}
+
+[[nodiscard]] bool isVoteSystemText(const std::string& text)
+{
+    const auto normalized = toLowerString(text);
+    return normalized.contains("[voting system]")
+        || (normalized.contains("vote") && (normalized.contains("bpm") || normalized.contains("bpi")));
+}
+
+[[nodiscard]] bool voteTextMatchesRequest(const std::string& text,
+                                          FamaLamaJamAudioProcessor::RoomVoteKind kind,
+                                          int requestedValue)
+{
+    if (requestedValue <= 0)
+        return false;
+
+    const auto normalized = toLowerString(text);
+    const auto kindToken = kind == FamaLamaJamAudioProcessor::RoomVoteKind::Bpm ? "bpm" : "bpi";
+    return normalized.contains(kindToken) && normalized.contains(std::to_string(requestedValue));
+}
+
+[[nodiscard]] bool voteTextLooksFailed(const std::string& text)
+{
+    const auto normalized = toLowerString(text);
+    return normalized.contains("fail")
+        || normalized.contains("denied")
+        || normalized.contains("reject")
+        || normalized.contains("not allowed")
+        || normalized.contains("permission");
+}
+
+[[nodiscard]] std::string makeVoteCommandText(FamaLamaJamAudioProcessor::RoomVoteKind kind, int value)
+{
+    return kind == FamaLamaJamAudioProcessor::RoomVoteKind::Bpm
+        ? "!vote bpm " + std::to_string(value)
+        : "!vote bpi " + std::to_string(value);
+}
 
 [[nodiscard]] int computeIntervalSamplesFromServerTiming(double sampleRate, int bpm, int bpi)
 {
@@ -551,9 +598,10 @@ void FamaLamaJamAudioProcessor::releaseResources()
     lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
     lastDecodedSamples_.store(0, std::memory_order_relaxed);
     remoteQueuedIntervalsBySource_.clear();
-    remoteActiveIntervalBySource_.clear();
+   remoteActiveIntervalBySource_.clear();
     remotePendingIntervalsBySource_.clear();
     clearAuthoritativeTiming();
+    clearRoomUiState(false);
     resetMixerStripMeters();
     updateRemoteMixerStripActivity();
 }
@@ -1424,6 +1472,17 @@ FamaLamaJamAudioProcessor::HostSyncAssistUiState FamaLamaJamAudioProcessor::getH
     };
 }
 
+FamaLamaJamAudioProcessor::RoomUiState FamaLamaJamAudioProcessor::getRoomUiState() const
+{
+    const_cast<FamaLamaJamAudioProcessor*>(this)->drainRoomTransportEvents();
+    const_cast<FamaLamaJamAudioProcessor*>(this)->refreshPendingRoomVotesFromTiming();
+
+    const std::scoped_lock lock(roomUiMutex_);
+    auto state = roomUiState_;
+    state.connected = isSessionConnected();
+    return state;
+}
+
 bool FamaLamaJamAudioProcessor::toggleHostSyncAssistArm()
 {
     if (hostSyncAssistArmed_.load(std::memory_order_relaxed))
@@ -1458,6 +1517,34 @@ bool FamaLamaJamAudioProcessor::toggleHostSyncAssistArm()
     hostSyncAssistWaitingForHost_.store(true, std::memory_order_relaxed);
     hostSyncAssistFailed_.store(false, std::memory_order_relaxed);
     hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::None, std::memory_order_relaxed);
+    return true;
+}
+
+bool FamaLamaJamAudioProcessor::sendRoomChatMessage(std::string text)
+{
+    text = trimRoomText(std::move(text));
+
+    if (text.empty() || ! isSessionConnected() || ! experimentalStreamingEnabled_)
+        return false;
+
+    return framedTransport_.enqueueRoomMessage(std::array<std::string, 5> { "MSG", std::move(text), {}, {}, {} });
+}
+
+bool FamaLamaJamAudioProcessor::submitRoomVote(RoomVoteKind kind, int value)
+{
+    if (! isSessionConnected() || ! experimentalStreamingEnabled_ || value <= 0)
+        return false;
+
+    if (! framedTransport_.enqueueRoomMessage(
+            std::array<std::string, 5> { "MSG", makeVoteCommandText(kind, value), {}, {}, {} }))
+        return false;
+
+    std::scoped_lock lock(roomUiMutex_);
+    auto& voteState = kind == RoomVoteKind::Bpm ? roomUiState_.bpmVote : roomUiState_.bpiVote;
+    voteState.pending = true;
+    voteState.failed = false;
+    voteState.requestedValue = value;
+    voteState.statusText = "Vote pending";
     return true;
 }
 
@@ -1530,6 +1617,8 @@ bool FamaLamaJamAudioProcessor::setMixerStripMixState(const std::string& sourceI
 
 void FamaLamaJamAudioProcessor::timerCallback()
 {
+    drainRoomTransportEvents();
+    refreshPendingRoomVotesFromTiming();
     triggerScheduledReconnectForTesting();
 }
 
@@ -1548,6 +1637,7 @@ void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::Con
     if (transition.snapshot.state == app::session::ConnectionState::Active)
     {
         codecStreamBridge_.start();
+        clearRoomUiState(true);
     }
     else
     {
@@ -1560,6 +1650,7 @@ void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::Con
         remoteActiveIntervalBySource_.clear();
         remotePendingIntervalsBySource_.clear();
         clearAuthoritativeTiming();
+        clearRoomUiState(false);
         hideAllRemoteMixerStrips();
 
         if (transition.snapshot.state == app::session::ConnectionState::Idle
@@ -1652,6 +1743,116 @@ void FamaLamaJamAudioProcessor::clearHostSyncAssistState() noexcept
     hostSyncAssistWaitingForHost_.store(false, std::memory_order_relaxed);
     hostSyncAssistFailed_.store(false, std::memory_order_relaxed);
     hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::None, std::memory_order_relaxed);
+}
+
+void FamaLamaJamAudioProcessor::drainRoomTransportEvents()
+{
+    if (! experimentalStreamingEnabled_)
+        return;
+
+    net::FramedSocketTransport::RoomEvent event;
+    int drainedEvents = 0;
+
+    while (drainedEvents < 32 && framedTransport_.popRoomEvent(event))
+    {
+        applyRoomEvent(event);
+        ++drainedEvents;
+    }
+}
+
+void FamaLamaJamAudioProcessor::applyRoomEvent(const net::FramedSocketTransport::RoomEvent& event)
+{
+    std::scoped_lock lock(roomUiMutex_);
+
+    RoomFeedEntry entry;
+
+    switch (event.kind)
+    {
+        case net::FramedSocketTransport::RoomEvent::Kind::Chat:
+            entry.kind = RoomFeedEntryKind::Chat;
+            entry.author = event.author;
+            entry.text = event.text;
+            break;
+
+        case net::FramedSocketTransport::RoomEvent::Kind::Topic:
+            entry.kind = RoomFeedEntryKind::Topic;
+            entry.author = event.author;
+            entry.text = event.text;
+            roomUiState_.topic = event.text;
+            break;
+
+        case net::FramedSocketTransport::RoomEvent::Kind::Join:
+            entry.kind = RoomFeedEntryKind::Presence;
+            entry.author = event.author;
+            entry.text = "joined the room";
+            entry.subdued = true;
+            break;
+
+        case net::FramedSocketTransport::RoomEvent::Kind::Part:
+            entry.kind = RoomFeedEntryKind::Presence;
+            entry.author = event.author;
+            entry.text = "left the room";
+            entry.subdued = true;
+            break;
+
+        case net::FramedSocketTransport::RoomEvent::Kind::System:
+            entry.kind = isVoteSystemText(event.text) ? RoomFeedEntryKind::VoteSystem : RoomFeedEntryKind::GenericSystem;
+            entry.author = event.author;
+            entry.text = event.text;
+            break;
+    }
+
+    roomUiState_.visibleFeed.push_back(std::move(entry));
+    while (roomUiState_.visibleFeed.size() > kMaxRoomFeedEntries)
+        roomUiState_.visibleFeed.erase(roomUiState_.visibleFeed.begin());
+
+    auto applyVoteFeedback = [&](RoomVoteKind kind, RoomVoteUiState& voteState) {
+        if (! voteState.pending || ! voteTextMatchesRequest(event.text, kind, voteState.requestedValue))
+            return;
+
+        voteState.pending = false;
+        voteState.failed = voteTextLooksFailed(event.text);
+        voteState.statusText = event.text;
+    };
+
+    if (event.kind == net::FramedSocketTransport::RoomEvent::Kind::System)
+    {
+        applyVoteFeedback(RoomVoteKind::Bpm, roomUiState_.bpmVote);
+        applyVoteFeedback(RoomVoteKind::Bpi, roomUiState_.bpiVote);
+    }
+}
+
+void FamaLamaJamAudioProcessor::clearRoomUiState(bool connected)
+{
+    std::scoped_lock lock(roomUiMutex_);
+    roomUiState_ = {};
+    roomUiState_.connected = connected;
+}
+
+void FamaLamaJamAudioProcessor::refreshPendingRoomVotesFromTiming()
+{
+    const auto currentBpm = serverBpmForUi_.load(std::memory_order_relaxed);
+    const auto currentBpi = beatsPerIntervalForUi_.load(std::memory_order_relaxed);
+
+    std::scoped_lock lock(roomUiMutex_);
+
+    if (roomUiState_.bpmVote.pending && roomUiState_.bpmVote.requestedValue > 0
+        && roomUiState_.bpmVote.requestedValue == currentBpm)
+    {
+        roomUiState_.bpmVote.pending = false;
+        roomUiState_.bpmVote.failed = false;
+        roomUiState_.bpmVote.statusText = "Room BPM updated";
+    }
+
+    if (roomUiState_.bpiVote.pending && roomUiState_.bpiVote.requestedValue > 0
+        && roomUiState_.bpiVote.requestedValue == currentBpi)
+    {
+        roomUiState_.bpiVote.pending = false;
+        roomUiState_.bpiVote.failed = false;
+        roomUiState_.bpiVote.statusText = "Room BPI updated";
+    }
+
+    roomUiState_.connected = isSessionConnected();
 }
 
 void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()

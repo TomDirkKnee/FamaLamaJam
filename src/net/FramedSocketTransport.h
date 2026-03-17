@@ -44,6 +44,22 @@ public:
         bool active { false };
     };
 
+    struct RoomEvent
+    {
+        enum class Kind
+        {
+            Chat,
+            Topic,
+            Join,
+            Part,
+            System,
+        };
+
+        Kind kind { Kind::Chat };
+        std::string author;
+        std::string text;
+    };
+
     explicit FramedSocketTransport(std::size_t maxFrameBytes = 1u << 20);
     ~FramedSocketTransport() override;
 
@@ -55,9 +71,11 @@ public:
     [[nodiscard]] bool isRunning() const;
 
     void enqueueOutbound(const juce::MemoryBlock& payload);
+    bool enqueueRoomMessage(std::array<std::string, 5> fields);
     bool popInbound(juce::MemoryBlock& payload);
     bool popInboundFrame(InboundFrame& frame);
     bool popRemoteSourceActivityUpdate(RemoteSourceActivityUpdate& update);
+    bool popRoomEvent(RoomEvent& event);
     bool getServerTimingConfig(ServerTimingConfig& config) const;
 
     [[nodiscard]] std::size_t getSentFrameCount() const;
@@ -75,6 +93,7 @@ private:
     void handleAuthReply(const juce::MemoryBlock& payload);
     void handleConfigChange(const juce::MemoryBlock& payload);
     void handleUserInfo(const juce::MemoryBlock& payload);
+    void handleRoomMessage(const juce::MemoryBlock& payload);
     void handleDownloadBegin(const juce::MemoryBlock& payload);
     void handleDownloadWrite(const juce::MemoryBlock& payload);
     void sendUserMask(const std::string& username, std::uint32_t channelMask);
@@ -96,11 +115,24 @@ private:
         RemoteSourceInfo sourceInfo;
     };
 
+    struct OutboundMessage
+    {
+        enum class Kind
+        {
+            UploadInterval,
+            RoomMessage,
+        };
+
+        Kind kind { Kind::UploadInterval };
+        juce::MemoryBlock payload;
+    };
+
     std::unique_ptr<juce::StreamingSocket> socket_;
     mutable juce::CriticalSection stateLock_;
-    std::deque<juce::MemoryBlock> outboundQueue_;
+    std::deque<OutboundMessage> outboundQueue_;
     std::deque<InboundFrame> inboundQueue_;
     std::deque<RemoteSourceActivityUpdate> remoteSourceActivityQueue_;
+    std::deque<RoomEvent> roomEventQueue_;
 
     std::array<char, 5> inboundHeader_ { 0, 0, 0, 0, 0 };
     int inboundHeaderBytes_ { 0 };
