@@ -114,6 +114,11 @@ void StereoMeterComponent::paint(juce::Graphics& graphics)
 
 namespace
 {
+[[nodiscard]] std::string makeServerDiscoveryEndpointKey(std::string_view host, std::uint16_t port)
+{
+    return juce::String(host.data()).trim().toLowerCase().toStdString() + ":" + std::to_string(port);
+}
+
 [[nodiscard]] int secondsFromDelayMs(int delayMs)
 {
     if (delayMs <= 0)
@@ -334,6 +339,18 @@ namespace
 
     return value >= 2 && value <= 64;
 }
+
+[[nodiscard]] juce::String formatServerDiscoveryStatus(
+    const FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState& state)
+{
+    if (! state.statusText.empty())
+        return state.statusText;
+
+    if (state.fetchInProgress)
+        return "Refreshing public server list...";
+
+    return "Pick a public or remembered server, or type Host and Port manually.";
+}
 } // namespace
 
 FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
@@ -349,6 +366,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  MixerStripSetter mixerStripSetter,
                                                                  BoolGetter metronomeGetter,
                                                                  BoolSetter metronomeSetter,
+                                                                 ServerDiscoveryUiGetter serverDiscoveryUiGetter,
+                                                                 ServerDiscoveryRefreshHandler serverDiscoveryRefreshHandler,
                                                                  RoomUiGetter roomUiGetter,
                                                                  RoomMessageHandler roomMessageHandler,
                                                                  RoomVoteHandler roomVoteHandler)
@@ -365,6 +384,10 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , mixerStripSetter_(std::move(mixerStripSetter))
     , metronomeGetter_(std::move(metronomeGetter))
     , metronomeSetter_(std::move(metronomeSetter))
+    , serverDiscoveryUiGetter_(serverDiscoveryUiGetter ? std::move(serverDiscoveryUiGetter)
+                                                       : []() { return ServerDiscoveryUiState {}; })
+    , serverDiscoveryRefreshHandler_(serverDiscoveryRefreshHandler ? std::move(serverDiscoveryRefreshHandler)
+                                                                   : [](bool) { return false; })
     , roomUiGetter_(roomUiGetter ? std::move(roomUiGetter) : []() { return RoomUiState {}; })
     , roomMessageHandler_(roomMessageHandler ? std::move(roomMessageHandler) : [](std::string) { return false; })
     , roomVoteHandler_(roomVoteHandler ? std::move(roomVoteHandler) : [](RoomVoteKind, int) { return false; })
@@ -378,12 +401,40 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     usernameLabel_.setText("Username", juce::dontSendNotification);
     gainLabel_.setText("Default Gain (dB)", juce::dontSendNotification);
     panLabel_.setText("Default Pan", juce::dontSendNotification);
+    serverPickerLabel_.setText("Servers", juce::dontSendNotification);
 
     addAndMakeVisible(hostLabel_);
     addAndMakeVisible(portLabel_);
     addAndMakeVisible(usernameLabel_);
     addAndMakeVisible(gainLabel_);
     addAndMakeVisible(panLabel_);
+    addAndMakeVisible(serverPickerLabel_);
+
+    serverPickerCombo_.setTextWhenNothingSelected("No servers listed yet");
+    serverPickerCombo_.onChange = [this]() {
+        const auto index = serverPickerCombo_.getSelectedItemIndex();
+        if (index < 0 || index >= static_cast<int>(currentServerDiscoveryUiState_.combinedEntries.size()))
+        {
+            selectedServerDiscoveryEndpointKey_.clear();
+            return;
+        }
+
+        const auto& entry = currentServerDiscoveryUiState_.combinedEntries[static_cast<std::size_t>(index)];
+        selectedServerDiscoveryEndpointKey_ = makeServerDiscoveryEndpointKey(entry.host, entry.port);
+        hostEditor_.setText(entry.host, juce::dontSendNotification);
+        portEditor_.setText(juce::String(static_cast<int>(entry.port)), juce::dontSendNotification);
+    };
+    addAndMakeVisible(serverPickerCombo_);
+
+    refreshServersButton_.setButtonText("Refresh");
+    refreshServersButton_.onClick = [this]() {
+        if (serverDiscoveryRefreshHandler_(true))
+            refreshServerDiscoveryUi();
+    };
+    addAndMakeVisible(refreshServersButton_);
+
+    serverDiscoveryStatusLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(serverDiscoveryStatusLabel_);
 
     addAndMakeVisible(hostEditor_);
     portEditor_.setInputRestrictions(5, "0123456789");
@@ -524,12 +575,51 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 
     loadFromSettings(settingsGetter_());
     metronomeToggle_.setToggleState(metronomeGetter_(), juce::dontSendNotification);
+    (void) serverDiscoveryRefreshHandler_(false);
     refreshLifecycleStatus();
     refreshTransportStatus();
+    refreshServerDiscoveryUi();
     refreshRoomUi();
     refreshMixerStrips();
     startTimerHz(20);
     setSize(760, 900);
+}
+
+FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
+                                                                 SettingsGetter settingsGetter,
+                                                                 ApplyHandler applyHandler,
+                                                                 LifecycleGetter lifecycleGetter,
+                                                                 CommandHandler connectHandler,
+                                                                 CommandHandler disconnectHandler,
+                                                                 TransportUiGetter transportUiGetter,
+                                                                 HostSyncAssistUiGetter hostSyncAssistUiGetter,
+                                                                 CommandHandler hostSyncAssistToggleHandler,
+                                                                 MixerStripsGetter mixerStripsGetter,
+                                                                 MixerStripSetter mixerStripSetter,
+                                                                 BoolGetter metronomeGetter,
+                                                                 BoolSetter metronomeSetter,
+                                                                 RoomUiGetter roomUiGetter,
+                                                                 RoomMessageHandler roomMessageHandler,
+                                                                 RoomVoteHandler roomVoteHandler)
+    : FamaLamaJamAudioProcessorEditor(processor,
+                                      std::move(settingsGetter),
+                                      std::move(applyHandler),
+                                      std::move(lifecycleGetter),
+                                      std::move(connectHandler),
+                                      std::move(disconnectHandler),
+                                      std::move(transportUiGetter),
+                                      std::move(hostSyncAssistUiGetter),
+                                      std::move(hostSyncAssistToggleHandler),
+                                      std::move(mixerStripsGetter),
+                                      std::move(mixerStripSetter),
+                                      std::move(metronomeGetter),
+                                      std::move(metronomeSetter),
+                                      {},
+                                      {},
+                                      std::move(roomUiGetter),
+                                      std::move(roomMessageHandler),
+                                      std::move(roomVoteHandler))
+{
 }
 
 void FamaLamaJamAudioProcessorEditor::resized()
@@ -545,6 +635,15 @@ void FamaLamaJamAudioProcessorEditor::resized()
         editor.setBounds(current);
         area.removeFromTop(4);
     };
+
+    auto serverRow = area.removeFromTop(28);
+    serverPickerLabel_.setBounds(serverRow.removeFromLeft(160));
+    refreshServersButton_.setBounds(serverRow.removeFromRight(90));
+    serverRow.removeFromRight(8);
+    serverPickerCombo_.setBounds(serverRow);
+    area.removeFromTop(4);
+    serverDiscoveryStatusLabel_.setBounds(area.removeFromTop(22));
+    area.removeFromTop(4);
 
     row(hostLabel_, hostEditor_);
     row(portLabel_, portEditor_);
@@ -660,6 +759,7 @@ void FamaLamaJamAudioProcessorEditor::timerCallback()
 {
     refreshLifecycleStatus();
     refreshTransportStatus();
+    refreshServerDiscoveryUi();
     refreshRoomUi();
     refreshMixerStrips();
 }
@@ -729,6 +829,48 @@ void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
     const auto enabled = hostSyncAssist.armed || hostSyncAssist.waitingForHost || hostSyncAssist.armable;
     hostSyncAssistButton_.setEnabled(enabled);
     hostSyncAssistButton_.setAlpha(enabled ? 1.0f : 0.65f);
+}
+
+void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
+{
+    const auto previousSelection = serverPickerCombo_.getSelectedItemIndex();
+    auto selectedEndpointKey = selectedServerDiscoveryEndpointKey_;
+    if (selectedEndpointKey.empty()
+        && previousSelection >= 0
+        && previousSelection < static_cast<int>(currentServerDiscoveryUiState_.combinedEntries.size()))
+    {
+        const auto& previousEntry = currentServerDiscoveryUiState_.combinedEntries[static_cast<std::size_t>(previousSelection)];
+        selectedEndpointKey = makeServerDiscoveryEndpointKey(previousEntry.host, previousEntry.port);
+    }
+
+    currentServerDiscoveryUiState_ = serverDiscoveryUiGetter_();
+    serverPickerCombo_.clear(juce::dontSendNotification);
+
+    int itemId = 1;
+    for (const auto& entry : currentServerDiscoveryUiState_.combinedEntries)
+        serverPickerCombo_.addItem(entry.label, itemId++);
+
+    selectedServerDiscoveryEndpointKey_.clear();
+    if (! selectedEndpointKey.empty())
+    {
+        for (std::size_t index = 0; index < currentServerDiscoveryUiState_.combinedEntries.size(); ++index)
+        {
+            const auto& entry = currentServerDiscoveryUiState_.combinedEntries[index];
+            if (makeServerDiscoveryEndpointKey(entry.host, entry.port) != selectedEndpointKey)
+                continue;
+
+            serverPickerCombo_.setSelectedItemIndex(static_cast<int>(index), juce::dontSendNotification);
+            selectedServerDiscoveryEndpointKey_ = selectedEndpointKey;
+            break;
+        }
+    }
+
+    serverPickerCombo_.setTextWhenNothingSelected(serverPickerCombo_.getNumItems() > 0
+                                                      ? "Choose a public or recent server"
+                                                      : "No servers listed yet");
+    serverDiscoveryStatusLabel_.setText(formatServerDiscoveryStatus(currentServerDiscoveryUiState_),
+                                        juce::dontSendNotification);
+    refreshServersButton_.setEnabled(! currentServerDiscoveryUiState_.fetchInProgress);
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
@@ -1026,6 +1168,37 @@ juce::String FamaLamaJamAudioProcessorEditor::getRoomStatusTextForTesting() cons
     return roomStatusLabel_.getText();
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getServerDiscoveryStatusTextForTesting() const
+{
+    return serverDiscoveryStatusLabel_.getText();
+}
+
+std::vector<juce::String> FamaLamaJamAudioProcessorEditor::getVisibleServerDiscoveryLabelsForTesting() const
+{
+    std::vector<juce::String> labels;
+    labels.reserve(currentServerDiscoveryUiState_.combinedEntries.size());
+
+    for (const auto& entry : currentServerDiscoveryUiState_.combinedEntries)
+        labels.push_back(entry.label);
+
+    return labels;
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getSelectedServerDiscoveryLabelForTesting() const
+{
+    return serverPickerCombo_.getText();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getHostTextForTesting() const
+{
+    return hostEditor_.getText();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getPortTextForTesting() const
+{
+    return portEditor_.getText();
+}
+
 std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry> FamaLamaJamAudioProcessorEditor::getVisibleRoomFeedForTesting() const
 {
     return currentRoomUiState_.visibleFeed;
@@ -1064,6 +1237,24 @@ juce::String FamaLamaJamAudioProcessorEditor::getRoomComposerTextForTesting() co
 void FamaLamaJamAudioProcessorEditor::setRoomComposerTextForTesting(const juce::String& text)
 {
     roomComposerEditor_.setText(text, juce::dontSendNotification);
+}
+
+bool FamaLamaJamAudioProcessorEditor::selectServerDiscoveryEntryForTesting(int index)
+{
+    if (index < 0 || index >= serverPickerCombo_.getNumItems())
+        return false;
+
+    serverPickerCombo_.setSelectedItemIndex(index, juce::sendNotificationSync);
+    return true;
+}
+
+bool FamaLamaJamAudioProcessorEditor::clickServerDiscoveryRefreshForTesting()
+{
+    if (refreshServersButton_.onClick == nullptr)
+        return false;
+
+    refreshServersButton_.onClick();
+    return true;
 }
 
 bool FamaLamaJamAudioProcessorEditor::submitRoomComposerForTesting(bool useReturnKey)
@@ -1162,6 +1353,7 @@ void FamaLamaJamAudioProcessorEditor::refreshForTesting()
 {
     refreshLifecycleStatus();
     refreshTransportStatus();
+    refreshServerDiscoveryUi();
     refreshRoomUi();
     refreshMixerStrips();
 }

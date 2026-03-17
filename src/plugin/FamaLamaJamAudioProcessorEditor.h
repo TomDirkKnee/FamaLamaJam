@@ -137,6 +137,30 @@ public:
         RoomVoteUiState bpiVote;
     };
 
+    struct ServerDiscoveryEntry
+    {
+        enum class Source
+        {
+            Remembered,
+            Public,
+        };
+
+        Source source { Source::Remembered };
+        std::string label;
+        std::string host;
+        std::uint16_t port { 0 };
+        int connectedUsers { -1 };
+        bool stale { false };
+    };
+
+    struct ServerDiscoveryUiState
+    {
+        bool fetchInProgress { false };
+        bool hasStalePublicData { false };
+        std::string statusText;
+        std::vector<ServerDiscoveryEntry> combinedEntries;
+    };
+
     enum class MixerStripKind
     {
         LocalMonitor,
@@ -166,6 +190,8 @@ public:
     using CommandHandler = std::function<bool()>;
     using TransportUiGetter = std::function<TransportUiState()>;
     using HostSyncAssistUiGetter = std::function<HostSyncAssistUiState()>;
+    using ServerDiscoveryUiGetter = std::function<ServerDiscoveryUiState()>;
+    using ServerDiscoveryRefreshHandler = std::function<bool(bool)>;
     using RoomUiGetter = std::function<RoomUiState()>;
     using RoomMessageHandler = std::function<bool(std::string)>;
     using RoomVoteHandler = std::function<bool(RoomVoteKind, int)>;
@@ -187,9 +213,27 @@ public:
                                     MixerStripSetter mixerStripSetter,
                                     BoolGetter metronomeGetter,
                                     BoolSetter metronomeSetter,
+                                    ServerDiscoveryUiGetter serverDiscoveryUiGetter = {},
+                                    ServerDiscoveryRefreshHandler serverDiscoveryRefreshHandler = {},
                                     RoomUiGetter roomUiGetter = {},
                                     RoomMessageHandler roomMessageHandler = {},
                                     RoomVoteHandler roomVoteHandler = {});
+    FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
+                                    SettingsGetter settingsGetter,
+                                    ApplyHandler applyHandler,
+                                    LifecycleGetter lifecycleGetter,
+                                    CommandHandler connectHandler,
+                                    CommandHandler disconnectHandler,
+                                    TransportUiGetter transportUiGetter,
+                                    HostSyncAssistUiGetter hostSyncAssistUiGetter,
+                                    CommandHandler hostSyncAssistToggleHandler,
+                                    MixerStripsGetter mixerStripsGetter,
+                                    MixerStripSetter mixerStripSetter,
+                                    BoolGetter metronomeGetter,
+                                    BoolSetter metronomeSetter,
+                                    RoomUiGetter roomUiGetter,
+                                    RoomMessageHandler roomMessageHandler,
+                                    RoomVoteHandler roomVoteHandler);
 
     void resized() override;
 
@@ -202,6 +246,11 @@ public:
     [[nodiscard]] bool isMetronomeToggleEnabledForTesting() const noexcept;
     [[nodiscard]] juce::String getRoomTopicTextForTesting() const;
     [[nodiscard]] juce::String getRoomStatusTextForTesting() const;
+    [[nodiscard]] juce::String getServerDiscoveryStatusTextForTesting() const;
+    [[nodiscard]] std::vector<juce::String> getVisibleServerDiscoveryLabelsForTesting() const;
+    [[nodiscard]] juce::String getSelectedServerDiscoveryLabelForTesting() const;
+    [[nodiscard]] juce::String getHostTextForTesting() const;
+    [[nodiscard]] juce::String getPortTextForTesting() const;
     [[nodiscard]] std::vector<RoomFeedEntry> getVisibleRoomFeedForTesting() const;
     [[nodiscard]] juce::String getRoomVoteStatusTextForTesting(RoomVoteKind kind) const;
     [[nodiscard]] bool isRoomComposerEnabledForTesting() const noexcept;
@@ -210,6 +259,8 @@ public:
     [[nodiscard]] bool hasRoomFeedViewportForTesting() const noexcept;
     [[nodiscard]] juce::String getRoomComposerTextForTesting() const;
     void setRoomComposerTextForTesting(const juce::String& text);
+    bool selectServerDiscoveryEntryForTesting(int index);
+    bool clickServerDiscoveryRefreshForTesting();
     bool submitRoomComposerForTesting(bool useReturnKey);
     void setRoomVoteValueForTesting(RoomVoteKind kind, int value);
     bool submitRoomVoteForTesting(RoomVoteKind kind);
@@ -261,6 +312,7 @@ private:
     void refreshLifecycleStatus();
     void refreshTransportStatus();
     void refreshHostSyncAssistStatus();
+    void refreshServerDiscoveryUi();
     void refreshRoomUi();
     void rebuildRoomFeedWidgets(const std::vector<RoomFeedEntry>& entries);
     bool submitRoomComposerMessage();
@@ -280,6 +332,8 @@ private:
     MixerStripSetter mixerStripSetter_;
     BoolGetter metronomeGetter_;
     BoolSetter metronomeSetter_;
+    ServerDiscoveryUiGetter serverDiscoveryUiGetter_;
+    ServerDiscoveryRefreshHandler serverDiscoveryRefreshHandler_;
     RoomUiGetter roomUiGetter_;
     RoomMessageHandler roomMessageHandler_;
     RoomVoteHandler roomVoteHandler_;
@@ -290,7 +344,11 @@ private:
     juce::Label usernameLabel_;
     juce::Label gainLabel_;
     juce::Label panLabel_;
+    juce::Label serverPickerLabel_;
 
+    juce::ComboBox serverPickerCombo_;
+    juce::TextButton refreshServersButton_;
+    juce::Label serverDiscoveryStatusLabel_;
     juce::TextEditor hostEditor_;
     juce::TextEditor portEditor_;
     juce::TextEditor usernameEditor_;
@@ -331,6 +389,8 @@ private:
     juce::Component mixerContent_;
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;
     std::vector<std::string> visibleMixerStripOrder_;
+    std::string selectedServerDiscoveryEndpointKey_;
+    ServerDiscoveryUiState currentServerDiscoveryUiState_;
     RoomUiState currentRoomUiState_;
     juce::Label statusLabel_;
     bool hostSyncAssistLastActionWasCancel_ { false };
