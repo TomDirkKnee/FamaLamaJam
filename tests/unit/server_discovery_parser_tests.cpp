@@ -81,7 +81,7 @@ TEST_CASE("server discovery parser prefers structured room counts and sorts busi
             {
                 "name": "busy.example.org:2052",
                 "user_max": "10",
-                "users": [{ "name": "amy" }, { "name": "bob" }, { "name": "carol" }, { "name": "ninbot" }],
+                "users": [{ "name": "amy" }, { "name": "bob" }, { "name": "carol" }, { "name": "ninbot_" }],
                 "bpm": "135",
                 "bpi": "16"
             },

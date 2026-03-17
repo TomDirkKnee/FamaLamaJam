@@ -13,9 +13,11 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "app/session/ConnectionLifecycleController.h"
+#include "app/session/ServerDiscoveryModel.h"
 #include "app/session/SessionSettings.h"
 #include "app/session/SessionSettingsController.h"
 #include "audio/CodecStreamBridge.h"
+#include "infra/net/PublicServerDiscoveryClient.h"
 #include "net/FramedSocketTransport.h"
 
 namespace famalamajam::plugin
@@ -131,6 +133,31 @@ public:
         RoomVoteUiState bpiVote;
     };
 
+    struct ServerDiscoveryEntry
+    {
+        enum class Source
+        {
+            Remembered,
+            Public,
+        };
+
+        Source source { Source::Remembered };
+        std::string label;
+        std::string host;
+        std::uint16_t port { 0 };
+        int connectedUsers { -1 };
+        int maxUsers { -1 };
+        bool stale { false };
+    };
+
+    struct ServerDiscoveryUiState
+    {
+        bool fetchInProgress { false };
+        bool hasStalePublicData { false };
+        std::string statusText;
+        std::vector<ServerDiscoveryEntry> combinedEntries;
+    };
+
     enum class MixerStripKind
     {
         LocalMonitor,
@@ -225,6 +252,8 @@ public:
     [[nodiscard]] TransportUiState getTransportUiState() const noexcept;
     [[nodiscard]] HostSyncAssistUiState getHostSyncAssistUiState() const noexcept;
     [[nodiscard]] RoomUiState getRoomUiState() const;
+    [[nodiscard]] ServerDiscoveryUiState getServerDiscoveryUiState() const;
+    bool requestPublicServerDiscoveryRefresh(bool manual);
     bool toggleHostSyncAssistArm();
     bool sendRoomChatMessage(std::string text);
     bool submitRoomVote(RoomVoteKind kind, int value);
@@ -233,6 +262,8 @@ public:
     [[nodiscard]] std::vector<MixerStripSnapshot> getMixerStripSnapshots() const;
     [[nodiscard]] bool getMixerStripSnapshot(const std::string& sourceId, MixerStripSnapshot& snapshot) const;
     bool setMixerStripMixState(const std::string& sourceId, float gainDb, float pan, bool muted);
+    void setPublicServerDiscoveryClientForTesting(std::unique_ptr<infra::net::PublicServerDiscoveryClient> client);
+    bool requestPublicServerDiscoveryRefreshForTesting(bool manual);
 
     struct AuthoritativeTimingState
     {
@@ -288,9 +319,11 @@ private:
     void clearHostTransportSnapshot() noexcept;
     void clearHostSyncAssistState() noexcept;
     void drainRoomTransportEvents();
+    void drainPublicServerDiscoveryResults();
     void applyRoomEvent(const net::FramedSocketTransport::RoomEvent& event);
     void clearRoomUiState(bool connected);
     void refreshPendingRoomVotesFromTiming();
+    void rememberSuccessfulServer();
 
     app::session::SessionSettingsStore settingsStore_;
     app::session::SessionSettingsController settingsController_;
@@ -341,6 +374,13 @@ private:
     std::atomic<int> hostSyncAssistTargetBpiForUi_ { 0 };
     mutable std::mutex roomUiMutex_;
     RoomUiState roomUiState_;
+    mutable std::mutex serverDiscoveryMutex_;
+    std::vector<app::session::RememberedServerEntry> rememberedServers_;
+    std::vector<app::session::ParsedPublicServerEntry> cachedPublicServers_;
+    bool publicServerListFetchInProgress_ { false };
+    bool publicServerListStale_ { false };
+    std::string publicServerListStatusText_;
+    std::unique_ptr<infra::net::PublicServerDiscoveryClient> publicServerDiscoveryClient_;
     AuthoritativeTimingState authoritativeTiming_;
     int metronomeClickRemainingSamples_ { 0 };
     float metronomeClickPhase_ { 0.0f };

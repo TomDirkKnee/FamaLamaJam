@@ -142,7 +142,7 @@ TEST_CASE("plugin server discovery combines remembered and public entries withou
                 {
                     "name": "busy.example.org:2054",
                     "user_max": "10",
-                    "users": [{ "name": "amy" }, { "name": "bob" }, { "name": "carol" }, { "name": "ninbot" }],
+                    "users": [{ "name": "amy" }, { "name": "bob" }, { "name": "carol" }, { "name": "ninbot_" }],
                     "bpm": "135",
                     "bpi": "16"
                 }

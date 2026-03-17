@@ -4,8 +4,10 @@
 #include <cmath>
 #include <cstdint>
 #include <sstream>
+#include <unordered_set>
 
 #include "audio/AudioBufferResampler.h"
+#include "infra/net/PublicServerDiscoveryClient.h"
 #include "infra/state/SessionSettingsSerializer.h"
 #include "plugin/FamaLamaJamAudioProcessorEditor.h"
 
@@ -29,9 +31,15 @@ const juce::Identifier kPluginStateMixerStripChannelIndex("channelIndex");
 const juce::Identifier kPluginStateMixerStripGainDb("gainDb");
 const juce::Identifier kPluginStateMixerStripPan("pan");
 const juce::Identifier kPluginStateMixerStripMuted("muted");
+const juce::Identifier kPluginStateRememberedServerHistory("rememberedServerHistory");
+const juce::Identifier kPluginStateRememberedServer("rememberedServer");
+const juce::Identifier kPluginStateRememberedServerHost("host");
+const juce::Identifier kPluginStateRememberedServerPort("port");
+const juce::Identifier kSessionSettingsStateType("famalamajam.session.settings");
 constexpr int kPluginStateSchema = 1;
 constexpr std::size_t kMaxLastErrorContextLength = 64;
 constexpr int kConnectTimeoutMs = 3000;
+constexpr std::size_t kMaxRememberedServers = 12;
 
 [[nodiscard]] std::string shortenLastErrorContext(const std::string& context)
 {
@@ -106,6 +114,28 @@ constexpr std::size_t kMaxRoomFeedEntries = 128;
 [[nodiscard]] std::string trimRoomText(std::string text)
 {
     return juce::String(text).trim().toStdString();
+}
+
+[[nodiscard]] std::string makeDiscoveryEntryLabel(std::string_view host, std::uint16_t port)
+{
+    return std::string(host) + ":" + std::to_string(port);
+}
+
+[[nodiscard]] std::string makePublicDiscoveryEntryLabel(const app::session::ParsedPublicServerEntry& entry)
+{
+    auto label = makeDiscoveryEntryLabel(entry.host, entry.port);
+
+    if (! entry.infoText.empty())
+        label += " - " + entry.infoText;
+
+    if (entry.connectedUsers >= 0 && entry.maxUsers >= 0)
+        label += " (" + std::to_string(entry.connectedUsers) + "/" + std::to_string(entry.maxUsers) + " users)";
+    else if (entry.connectedUsers >= 0)
+        label += " (" + std::to_string(entry.connectedUsers) + " users)";
+    else if (! entry.usersText.empty())
+        label += " (" + entry.usersText + ")";
+
+    return label;
 }
 
 [[nodiscard]] juce::String toLowerString(const std::string& text)
@@ -529,6 +559,7 @@ FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor(bool enableLiveTransport, b
     , settingsController_(settingsStore_)
     , liveTransportEnabled_(enableLiveTransport)
     , experimentalStreamingEnabled_(enableExperimentalStreaming)
+    , publicServerDiscoveryClient_(infra::net::makePublicServerDiscoveryClient())
 {
     ensureLocalMonitorMixerStrip();
 }
@@ -1137,6 +1168,32 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                                                           : RoomVoteKind::Bpi,
                               value);
     };
+    auto serverDiscoveryUiGetter = [this]() {
+        const auto state = getServerDiscoveryUiState();
+        FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState editorState {
+            .fetchInProgress = state.fetchInProgress,
+            .hasStalePublicData = state.hasStalePublicData,
+            .statusText = state.statusText,
+        };
+
+        editorState.combinedEntries.reserve(state.combinedEntries.size());
+        for (const auto& entry : state.combinedEntries)
+        {
+            editorState.combinedEntries.push_back(FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry {
+                .source = entry.source == ServerDiscoveryEntry::Source::Remembered
+                    ? FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Remembered
+                    : FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Public,
+                .label = entry.label,
+                .host = entry.host,
+                .port = entry.port,
+                .connectedUsers = entry.connectedUsers,
+                .stale = entry.stale,
+            });
+        }
+
+        return editorState;
+    };
+    auto serverDiscoveryRefreshHandler = [this](bool manual) { return requestPublicServerDiscoveryRefresh(manual); };
     auto mixerStripsGetter = [this]() {
         std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> strips;
         for (const auto& snapshot : getMixerStripSnapshots())
@@ -1185,6 +1242,8 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(mixerStripSetter),
                                                std::move(metronomeGetter),
                                                std::move(metronomeSetter),
+                                               std::move(serverDiscoveryUiGetter),
+                                               std::move(serverDiscoveryRefreshHandler),
                                                std::move(roomUiGetter),
                                                std::move(roomMessageHandler),
                                                std::move(roomVoteHandler));
@@ -1201,6 +1260,19 @@ void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     const auto settingsTree = parseValueTree(settingsPayload.getData(), static_cast<int>(settingsPayload.getSize()));
     if (settingsTree.isValid())
         stateTree.addChild(settingsTree.createCopy(), -1, nullptr);
+
+    juce::ValueTree rememberedServerHistoryTree(kPluginStateRememberedServerHistory);
+    {
+        const std::scoped_lock lock(serverDiscoveryMutex_);
+        for (const auto& entry : rememberedServers_)
+        {
+            juce::ValueTree rememberedServerTree(kPluginStateRememberedServer);
+            rememberedServerTree.setProperty(kPluginStateRememberedServerHost, juce::String(entry.host), nullptr);
+            rememberedServerTree.setProperty(kPluginStateRememberedServerPort, static_cast<int>(entry.port), nullptr);
+            rememberedServerHistoryTree.addChild(rememberedServerTree, -1, nullptr);
+        }
+    }
+    stateTree.addChild(rememberedServerHistoryTree, -1, nullptr);
 
     const auto lastErrorContext = shortenLastErrorContext(lifecycleController_.getSnapshot().lastError);
     if (! lastErrorContext.empty())
@@ -1240,6 +1312,7 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     std::string restoredLastErrorContext;
     bool restoredMetronomeEnabled = false;
     std::vector<MixerStripSnapshot> restoredMixerStrips;
+    std::vector<app::session::RememberedServerEntry> restoredRememberedServers;
 
     const auto stateTree = parseValueTree(data, sizeInBytes);
     const bool hasWrappedState = stateTree.isValid() && stateTree.hasType(kPluginStateType)
@@ -1247,15 +1320,44 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
 
     if (hasWrappedState)
     {
-        if (stateTree.getNumChildren() > 0)
+        for (int childIndex = 0; childIndex < stateTree.getNumChildren(); ++childIndex)
         {
-            juce::MemoryOutputStream settingsStream(settingsPayload, false);
-            stateTree.getChild(0).writeToStream(settingsStream);
+            const auto child = stateTree.getChild(childIndex);
+            if (child.hasType(kSessionSettingsStateType))
+            {
+                juce::MemoryOutputStream settingsStream(settingsPayload, false);
+                child.writeToStream(settingsStream);
+                break;
+            }
         }
 
         restoredLastErrorContext = shortenLastErrorContext(
             stateTree.getProperty(kPluginStateLastErrorContext, juce::String()).toString().toStdString());
         restoredMetronomeEnabled = static_cast<bool>(stateTree.getProperty(kPluginStateMetronomeEnabled, false));
+
+        if (const auto rememberedServerHistoryTree = stateTree.getChildWithName(kPluginStateRememberedServerHistory);
+            rememberedServerHistoryTree.isValid())
+        {
+            for (int childIndex = rememberedServerHistoryTree.getNumChildren(); --childIndex >= 0;)
+            {
+                const auto rememberedServerTree = rememberedServerHistoryTree.getChild(childIndex);
+                if (! rememberedServerTree.hasType(kPluginStateRememberedServer))
+                    continue;
+
+                app::session::rememberSuccessfulServer(
+                    restoredRememberedServers,
+                    app::session::RememberedServerEntry {
+                        .host = rememberedServerTree.getProperty(kPluginStateRememberedServerHost, juce::String())
+                                    .toString()
+                                    .toStdString(),
+                        .port = static_cast<std::uint16_t>(juce::jlimit(
+                            0,
+                            65535,
+                            static_cast<int>(rememberedServerTree.getProperty(kPluginStateRememberedServerPort, 0)))),
+                    },
+                    kMaxRememberedServers);
+            }
+        }
 
         if (const auto mixerStateTree = stateTree.getChildWithName(kPluginStateMixerState); mixerStateTree.isValid())
         {
@@ -1315,6 +1417,10 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     closeLiveSocket();
     applyLifecycleTransition(lifecycleController_.resetToIdle());
     mixerStripsBySourceId_.clear();
+    {
+        const std::scoped_lock lock(serverDiscoveryMutex_);
+        rememberedServers_ = std::move(restoredRememberedServers);
+    }
     ensureLocalMonitorMixerStrip();
 
     for (const auto& restoredStrip : restoredMixerStrips)
@@ -1332,6 +1438,13 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
 
     ensureLocalMonitorMixerStrip();
     updateRemoteMixerStripActivity();
+    {
+        const std::scoped_lock lock(serverDiscoveryMutex_);
+        cachedPublicServers_.clear();
+        publicServerListFetchInProgress_ = false;
+        publicServerListStale_ = false;
+        publicServerListStatusText_.clear();
+    }
     lastStatusMessage_ = makeRestoreStatusMessage(usedFallback, restoredLastErrorContext);
 }
 
@@ -1393,6 +1506,13 @@ void FamaLamaJamAudioProcessor::handleConnectionEvent(const app::session::Connec
 {
     const auto transition = lifecycleController_.handleEvent(event);
     applyLifecycleTransition(transition);
+
+    if (event.type == app::session::ConnectionEventType::Connected
+        && transition.changed
+        && transition.snapshot.state == app::session::ConnectionState::Active)
+    {
+        rememberSuccessfulServer();
+    }
 }
 
 bool FamaLamaJamAudioProcessor::triggerScheduledReconnectForTesting()
@@ -1546,6 +1666,70 @@ FamaLamaJamAudioProcessor::RoomUiState FamaLamaJamAudioProcessor::getRoomUiState
     return state;
 }
 
+FamaLamaJamAudioProcessor::ServerDiscoveryUiState FamaLamaJamAudioProcessor::getServerDiscoveryUiState() const
+{
+    const_cast<FamaLamaJamAudioProcessor*>(this)->drainPublicServerDiscoveryResults();
+
+    ServerDiscoveryUiState state;
+    std::unordered_set<std::string> seenEndpoints;
+
+    const std::scoped_lock lock(serverDiscoveryMutex_);
+    state.fetchInProgress = publicServerListFetchInProgress_;
+    state.hasStalePublicData = publicServerListStale_ && ! cachedPublicServers_.empty();
+    state.statusText = publicServerListStatusText_;
+    state.combinedEntries.reserve(rememberedServers_.size() + cachedPublicServers_.size());
+
+    for (const auto& entry : rememberedServers_)
+    {
+        const auto key = app::session::makeDiscoveryEndpointKey(entry.host, entry.port);
+        seenEndpoints.insert(key);
+        state.combinedEntries.push_back(ServerDiscoveryEntry {
+            .source = ServerDiscoveryEntry::Source::Remembered,
+            .label = makeDiscoveryEntryLabel(entry.host, entry.port),
+            .host = entry.host,
+            .port = entry.port,
+            .connectedUsers = -1,
+            .maxUsers = -1,
+            .stale = false,
+        });
+    }
+
+    for (const auto& entry : cachedPublicServers_)
+    {
+        const auto key = app::session::makeDiscoveryEndpointKey(entry.host, entry.port);
+        if (seenEndpoints.contains(key))
+            continue;
+
+        state.combinedEntries.push_back(ServerDiscoveryEntry {
+            .source = ServerDiscoveryEntry::Source::Public,
+            .label = makePublicDiscoveryEntryLabel(entry),
+            .host = entry.host,
+            .port = entry.port,
+            .connectedUsers = entry.connectedUsers,
+            .maxUsers = entry.maxUsers,
+            .stale = publicServerListStale_,
+        });
+    }
+
+    return state;
+}
+
+bool FamaLamaJamAudioProcessor::requestPublicServerDiscoveryRefresh(bool manual)
+{
+    std::scoped_lock lock(serverDiscoveryMutex_);
+    if (publicServerDiscoveryClient_ == nullptr)
+        return false;
+
+    if (! publicServerDiscoveryClient_->requestRefresh(manual))
+        return false;
+
+    publicServerListFetchInProgress_ = true;
+    publicServerListStatusText_ = cachedPublicServers_.empty()
+        ? "Refreshing public server list..."
+        : "Refreshing public server list. Showing cached servers in the meantime.";
+    return true;
+}
+
 bool FamaLamaJamAudioProcessor::toggleHostSyncAssistArm()
 {
     if (hostSyncAssistArmed_.load(std::memory_order_relaxed))
@@ -1678,9 +1862,24 @@ bool FamaLamaJamAudioProcessor::setMixerStripMixState(const std::string& sourceI
     return false;
 }
 
+void FamaLamaJamAudioProcessor::setPublicServerDiscoveryClientForTesting(
+    std::unique_ptr<infra::net::PublicServerDiscoveryClient> client)
+{
+    const std::scoped_lock lock(serverDiscoveryMutex_);
+    publicServerDiscoveryClient_ = std::move(client);
+    publicServerListFetchInProgress_ = publicServerDiscoveryClient_ != nullptr
+        && publicServerDiscoveryClient_->isRefreshInProgress();
+}
+
+bool FamaLamaJamAudioProcessor::requestPublicServerDiscoveryRefreshForTesting(bool manual)
+{
+    return requestPublicServerDiscoveryRefresh(manual);
+}
+
 void FamaLamaJamAudioProcessor::timerCallback()
 {
     drainRoomTransportEvents();
+    drainPublicServerDiscoveryResults();
     refreshPendingRoomVotesFromTiming();
     triggerScheduledReconnectForTesting();
 }
@@ -1823,6 +2022,55 @@ void FamaLamaJamAudioProcessor::drainRoomTransportEvents()
     }
 }
 
+void FamaLamaJamAudioProcessor::drainPublicServerDiscoveryResults()
+{
+    infra::net::PublicServerDiscoveryClient* client = nullptr;
+
+    {
+        const std::scoped_lock lock(serverDiscoveryMutex_);
+        client = publicServerDiscoveryClient_.get();
+        if (client == nullptr)
+            return;
+    }
+
+    infra::net::PublicServerDiscoveryClient::Result result;
+    bool drainedAny = false;
+
+    while (client->popResult(result))
+    {
+        drainedAny = true;
+
+        std::scoped_lock lock(serverDiscoveryMutex_);
+        publicServerListFetchInProgress_ = client->isRefreshInProgress();
+
+        if (result.succeeded)
+        {
+            cachedPublicServers_ = app::session::parsePublicServerList(result.payloadText);
+            publicServerListStale_ = false;
+            publicServerListStatusText_ = cachedPublicServers_.empty()
+                ? "No public servers were listed."
+                : "Public server list updated.";
+        }
+        else
+        {
+            publicServerListStale_ = ! cachedPublicServers_.empty();
+            publicServerListStatusText_ = result.errorText.empty()
+                ? "Couldn't refresh the public server list."
+                : result.errorText;
+
+            if (publicServerListStale_)
+                publicServerListStatusText_ += " Showing cached servers.";
+        }
+    }
+
+    if (! drainedAny)
+    {
+        const std::scoped_lock lock(serverDiscoveryMutex_);
+        if (publicServerDiscoveryClient_ != nullptr)
+            publicServerListFetchInProgress_ = publicServerDiscoveryClient_->isRefreshInProgress();
+    }
+}
+
 void FamaLamaJamAudioProcessor::applyRoomEvent(const net::FramedSocketTransport::RoomEvent& event)
 {
     std::scoped_lock lock(roomUiMutex_);
@@ -1916,6 +2164,20 @@ void FamaLamaJamAudioProcessor::refreshPendingRoomVotesFromTiming()
     }
 
     roomUiState_.connected = isSessionConnected();
+}
+
+void FamaLamaJamAudioProcessor::rememberSuccessfulServer()
+{
+    const auto settings = settingsStore_.getActiveSettings();
+
+    const std::scoped_lock lock(serverDiscoveryMutex_);
+    app::session::rememberSuccessfulServer(
+        rememberedServers_,
+        app::session::RememberedServerEntry {
+            .host = settings.serverHost,
+            .port = settings.serverPort,
+        },
+        kMaxRememberedServers);
 }
 
 void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
