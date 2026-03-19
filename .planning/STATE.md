@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: collaboration-host-sync
-status: in_progress
-stopped_at: Phase 08.1 wave 2 complete
-last_updated: "2026-03-17T18:35:00+00:00"
-last_activity: 2026-03-17 - Completed Phase 08.1 plan 02 with endpoint-stable picker restore logic and discovery UI regression coverage.
+milestone_name: milestone
+status: executing
+stopped_at: Completed 08.2-01-PLAN.md
+last_updated: "2026-03-19T13:51:39.042Z"
+last_activity: 2026-03-19 - Completed Phase 08.2 plan 01 for password-bearing state persistence and controlled private-room auth coverage.
 progress:
-  total_phases: 11
-  completed_phases: 7
-  total_plans: 26
-  completed_plans: 24
-  percent: 92
+  total_phases: 12
+  completed_phases: 8
+  total_plans: 30
+  completed_plans: 26
+  percent: 87
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 8.1 - Server Discovery Polish & JamTaba Parity Check
+**Current focus:** Plan and execute urgent pre-Phase-9 fixes for CPU spikes, UI usability, mixer cleanup, and auth coverage
 
 ## Current Position
 
-Phase: 8.1 inserted before Phase 9 (Server Discovery Polish & JamTaba Parity Check)  
-Plan: 08.1-03 automated gate and manual discovery validation checkpoint.  
+Phase: 08.2 - Pre-Layout CPU, Mixer, UI, and Auth Hardening  
+Plan: 02 - Move the room workflow into a fixed right sidebar and finish mixer/auth UI cleanup.  
 Status: In progress  
-Last activity: 2026-03-17 - Completed 08.1-02 and moved Phase 08.1 to the final verification wave.
+Last activity: 2026-03-19 - Completed Phase 08.2 plan 01 for password-bearing state persistence and controlled private-room auth coverage.
 
-Progress: 92%
+Progress: 87%
 
 ## Accumulated Context
 
@@ -62,26 +62,26 @@ Progress: 92%
 - [Phase 08.1]: Prefer JamTaba-style structured discovery data from `ninbot.com/app/servers.php` when available, with the old `serverlist.php` text feed kept only as fallback.
 - [Phase 08.1]: Sort only the public-room section by active non-bot users descending while keeping remembered entries grouped first.
 - [Phase 08.1]: Restore discovery selection by endpoint key, not row index, so remembered insertion and reordering cannot scramble the picker label.
+- [Phase 08.2]: Keep password persistence inside SessionSettings serialization and default missing password fields to empty on restore.
+- [Phase 08.2]: Reuse MiniNinjamServer as the controlled auth harness for right-password and wrong-password outcomes.
 
 ### Roadmap Evolution
 
 - Phase 08.1 inserted after Phase 8: Server Discovery Polish & JamTaba Parity Check (URGENT)
+- Phase 08.2 inserted after Phase 8: Pre-Layout CPU, Mixer, UI, and Auth Hardening (URGENT)
 
 ### Pending Todos
 
 - Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
-- Finish Phase 08.1 Wave 3, then close the remaining Phase 8 discovery caveats cleanly before Phase 9.
-- Follow up on JamTaba-style public-room counts and busiest-room ordering during the 08.1 manual validation pass.
+- Investigate why processor spikes cluster around every four beats and compare the hot path against JamTaba's lower-CPU behavior.
+- Verify the full password/authentication UI flow against a local or controlled Ninjam test server once the password field and inline error copy land.
 
 ### Blockers/Concerns
 
 - Local Windows Ninja/CMake remains unreliable on this machine; use the verified `build-vs` path for now.
 - Phase 6 validated the healthy-path Ableton host-start workflow, but the timing-loss cancellation and failed-start re-arm paths were not manually exercised in Ableton.
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
-- Phase 7 room controls are readable, but the current single-page layout squeezes the mixer more than desired and should be addressed in a later layout phase.
-- Phase 8 automation is green, but the combined discovery picker still needs human validation for readability, stale/failure wording, and manual-entry non-regression inside the real plugin window.
-- Phase 8 manual testing found that the discovery area works functionally but is too cramped, the visible user-count display may be misleading, and the picker can jump to another server after Connect.
-- Phase 08.1 is now planned specifically to fix discovery correctness issues, but the broader cramped-layout complaint remains intentionally deferred to Phase 9.
+- Discovery correctness is no longer the blocker; the current blockers are CPU spikes, current UI overlap, missing master-output behavior, and unfinished password UI or inline-error work.
 
 ### Performance Metrics
 
@@ -90,9 +90,10 @@ Progress: 92%
 - 2026-03-17: Completed Phase 07 plan 01 in 11 min across 2 task commits and 7 modified files.
 - 2026-03-17: Completed Phase 07 plan 02 in 18 min across 3 task commits and 3 modified files.
 - 2026-03-17: Completed Phase 07 plan 03 in 177 min across 3 task commits and 6 modified files.
+- 2026-03-19: Completed Phase 08.2 plan 01 in 4 min across 2 task commits and 9 modified files.
 
 ## Session Continuity
 
-Last session: 2026-03-17T14:10:00+00:00
-Stopped at: Planned Phase 8
+Last session: 2026-03-19T13:51:34.143Z
+Stopped at: Completed 08.2-01-PLAN.md
 Resume file: None

@@ -17,7 +17,9 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 5: Ableton Reliability & v1 Rehearsal UX Validation** - Harden host lifecycle behavior and validate complete user jam workflow. (completed 2026-03-16)
 - [x] **Phase 6: Ableton Sync Assist Research & Prototype** - Research JamTaba/ReaNINJAM host-sync behavior and prototype a safe one-shot Ableton host-start assist. (completed 2026-03-16)
 - [x] **Phase 7: Chat & Room Control Commands** - Add room chat plus BPM/BPI voting controls and feedback. (completed 2026-03-17)
-- [ ] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history.
+- [x] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history. (completed 2026-03-19)
+- [x] **Phase 08.1: Server Discovery Polish & JamTaba Parity Check** - Correct discovery-count fidelity, ordering, and picker stability before the larger layout work. (completed 2026-03-19)
+- [ ] **Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)** - Reduce periodic CPU spikes, restore usable mixer/chat layout, replace dead default-strip controls with master output control, and verify password/auth workflow before the broader layout overhaul.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
@@ -150,7 +152,7 @@ Plans:
 Plans:
 - [x] 08-01-PLAN.md - Add remembered-server persistence, parser/history helpers, and processor-owned discovery state.
 - [x] 08-02-PLAN.md - Implement public discovery refresh, combined picker UI, and stale/failure behavior.
-- [ ] 08-03-PLAN.md - Run automated plus Ableton validation and record the Phase 8 verification outcome.
+- [x] 08-03-PLAN.md - Run automated plus Ableton validation and record the Phase 8 verification outcome.
 
 ### Phase 08.1: Server Discovery Polish & JamTaba Parity Check (INSERTED)
 
@@ -167,11 +169,29 @@ Plans:
 Plans:
 - [x] 08.1-01-PLAN.md - Upgrade public-room count semantics and busiest-room ordering with JamTaba-informed discovery modeling.
 - [x] 08.1-02-PLAN.md - Fix endpoint-stable picker selection and surface clearer public-room labels without harming manual connect.
-- [ ] 08.1-03-PLAN.md - Run the discovery-polish gate, manual Ableton matrix, and close the inserted follow-up phase.
+- [x] 08.1-03-PLAN.md - Run the discovery-polish gate, manual Ableton matrix, and close the inserted follow-up phase.
+
+### Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)
+
+**Goal**: Resolve the newly surfaced functional issues that make the current build hard to rehearse with before the larger JamTaba-inspired layout phase begins.
+**Depends on**: Phase 08.1
+**Requirements**: P082-SC1, P082-SC2, P082-SC3, P082-SC4
+**Success Criteria** (what must be TRUE):
+1. CPU spikes around interval or beat boundaries are investigated, reproduced, and materially reduced versus the current build.
+2. The chat area no longer obscures the mixer or stream-monitoring workflow in practical Ableton window sizes.
+3. Non-working `Default Gain`, `Default Pan`, and `Default Muted` controls are removed, and a clear master output control exists inside the mixer section.
+4. Password/authentication workflow is visible in the UI and validated against a local or controlled test server path.
+**Plans**: 4 plans
+
+Plans:
+- [x] 08.2-01-PLAN.md - Add password/auth and master-output state seams plus controlled Wave 0 coverage.
+- [ ] 08.2-02-PLAN.md - Move the room workflow into a fixed right sidebar and finish mixer/auth UI cleanup.
+- [ ] 08.2-03-PLAN.md - Diagnose and reduce periodic CPU spikes with measurement-first hardening.
+- [ ] 08.2-04-PLAN.md - Run the final hardening gate and capture manual Ableton/private-room validation.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
-**Depends on**: Phase 08.1
+**Depends on**: Phase 08.2
 **Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03
 **Success Criteria** (what must be TRUE):
 1. Mixer strips are presented horizontally with the local monitor clearly distinguished and visually anchored.
@@ -230,7 +250,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 9 -> 10
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -241,8 +261,9 @@ Plans:
 | 5. Ableton Reliability & v1 Rehearsal UX Validation | 3/3 | Complete    | 2026-03-16 |
 | 6. Ableton Sync Assist Research & Prototype | 3/3 | Complete    | 2026-03-16 |
 | 7. Chat & Room Control Commands | 3/3 | Complete    | 2026-03-17 |
-| 8. Server Discovery & History | 2/3 | In Progress | - |
-| 8.1. Server Discovery Polish & JamTaba Parity Check | 0/TBD | Planned     | - |
+| 8. Server Discovery & History | 3/3 | Complete    | 2026-03-19 |
+| 8.1. Server Discovery Polish & JamTaba Parity Check | 3/3 | Complete    | 2026-03-19 |
+| 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 1/4 | In Progress | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
