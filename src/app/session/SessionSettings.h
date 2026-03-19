@@ -11,6 +11,7 @@ struct SessionSettings
     std::string serverHost;
     std::uint16_t serverPort;
     std::string username;
+    std::string password;
     float defaultChannelGainDb;
     float defaultChannelPan;
     bool defaultChannelMuted;

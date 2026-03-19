@@ -11,6 +11,7 @@ const juce::Identifier kSchemaVersion("schemaVersion");
 const juce::Identifier kServerHost("serverHost");
 const juce::Identifier kServerPort("serverPort");
 const juce::Identifier kUsername("username");
+const juce::Identifier kPassword("password");
 const juce::Identifier kDefaultChannelGainDb("defaultChannelGainDb");
 const juce::Identifier kDefaultChannelPan("defaultChannelPan");
 const juce::Identifier kDefaultChannelMuted("defaultChannelMuted");
@@ -23,6 +24,7 @@ juce::ValueTree SessionSettingsSerializer::toValueTree(const app::session::Sessi
     tree.setProperty(kServerHost, juce::String(settings.serverHost), nullptr);
     tree.setProperty(kServerPort, static_cast<int>(settings.serverPort), nullptr);
     tree.setProperty(kUsername, juce::String(settings.username), nullptr);
+    tree.setProperty(kPassword, juce::String(settings.password), nullptr);
     tree.setProperty(kDefaultChannelGainDb, settings.defaultChannelGainDb, nullptr);
     tree.setProperty(kDefaultChannelPan, settings.defaultChannelPan, nullptr);
     tree.setProperty(kDefaultChannelMuted, settings.defaultChannelMuted, nullptr);
@@ -63,6 +65,7 @@ app::session::SessionSettings SessionSettingsSerializer::deserializeOrDefault(co
                                                               65535,
                                                               static_cast<int>(tree.getProperty(kServerPort, 0)))),
         .username = tree.getProperty(kUsername, juce::String()).toString().toStdString(),
+        .password = tree.getProperty(kPassword, juce::String()).toString().toStdString(),
         .defaultChannelGainDb = static_cast<float>(tree.getProperty(kDefaultChannelGainDb, 0.0f)),
         .defaultChannelPan = static_cast<float>(tree.getProperty(kDefaultChannelPan, 0.0f)),
         .defaultChannelMuted = static_cast<bool>(tree.getProperty(kDefaultChannelMuted, false)),

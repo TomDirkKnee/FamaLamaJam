@@ -2391,7 +2391,7 @@ void FamaLamaJamAudioProcessor::attemptLiveConnect()
     {
         const auto protocolUsername = makeProtocolUsername(settings.username);
 
-        if (! framedTransport_.start(std::move(socket), protocolUsername, ""))
+        if (! framedTransport_.start(std::move(socket), protocolUsername, settings.password))
         {
             handleConnectionEvent(app::session::ConnectionEvent {
                 .type = app::session::ConnectionEventType::ConnectionFailed,

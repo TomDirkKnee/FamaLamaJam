@@ -35,6 +35,7 @@ SessionSettings makeDefaultSessionSettings()
         .serverHost = "ninjam.com",
         .serverPort = 2049,
         .username = "guest",
+        .password = {},
         .defaultChannelGainDb = 0.0f,
         .defaultChannelPan = 0.0f,
         .defaultChannelMuted = false,
