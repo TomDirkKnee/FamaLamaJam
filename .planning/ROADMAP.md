@@ -181,15 +181,17 @@ Plans:
 2. The chat area no longer obscures the mixer or stream-monitoring workflow in practical Ableton window sizes.
 3. Non-working `Default Gain`, `Default Pan`, and `Default Muted` controls are removed, and a clear master output control exists inside the mixer section.
 4. Password/authentication workflow is visible in the UI and validated against a local or controlled test server path.
-**Plans**: 4 plans
+**Plans**: 6 plans
 
-**Current status (2026-03-19):** Plan 08.2-04 recorded the real host outcome. Sidebar usability and the mixer footer master-output baseline passed in Ableton, but the correct-password private-room auth path failed, the wrong-password inline error was not exercised after that failure, and the original every-four-beat CPU repro was deferred. Phase 08.2 remains blocked and Phase 9 should not be treated as unblocked yet.
+**Current status (2026-03-19):** Plan 08.2-04 recorded the real host outcome. Sidebar usability and the mixer footer master-output baseline passed in Ableton, but the correct-password private-room auth path failed, the wrong-password inline error was not exercised after that failure, and the original every-four-beat CPU repro was deferred. Gap-closure plans 08.2-05 and 08.2-06 now queue the auth handoff investigation plus the blocked Ableton rerun before Phase 9 can be treated as unblocked.
 
 Plans:
 - [x] 08.2-01-PLAN.md - Add password/auth and master-output state seams plus controlled Wave 0 coverage.
 - [x] 08.2-02-PLAN.md - Move the room workflow into a fixed right sidebar and finish mixer/auth UI cleanup.
 - [x] 08.2-03-PLAN.md - Diagnose and reduce periodic CPU spikes with measurement-first hardening.
 - [x] 08.2-04-PLAN.md - Captured the manual Ableton/private-room validation; the phase remains blocked by the failing correct-password auth path and deferred CPU follow-up.
+- [ ] 08.2-05-PLAN.md - Investigate and fix the live private-room auth handoff so the real plugin window matches the controlled auth harness.
+- [ ] 08.2-06-PLAN.md - Rebuild the host-validation artifact, rerun the blocked Ableton auth/CPU checks, and close 08.2 honestly from the recorded outcome.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
