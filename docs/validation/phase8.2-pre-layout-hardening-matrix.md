@@ -3,7 +3,7 @@
 **Phase:** 08.2-pre-layout-cpu-mixer-ui-and-auth-hardening  
 **Plan:** 08.2-04  
 **Host:** Ableton Live on Windows  
-**Plugin artifact:** `build-vs/famalamajam_plugin_artefacts/Debug/VST3/FamaLamaJam.vst3`
+**Plugin artifact:** `build-vs/famalamajam_plugin_artefacts/Debug/VST3/FamaLamaJam.vst3` (rebuild prepared for plan `08.2-06` at `2026-03-19T15:55:06Z`)
 
 Use this matrix for the real plugin verification pass. Record exactly what happened in the host, including failures and anything not exercised.
 
@@ -22,6 +22,7 @@ Use this matrix for the real plugin verification pass. Record exactly what happe
 - Controlled private-room path: same harness used for the host auth check
 - Ableton version: not recorded in this pass
 - Plugin build timestamp: rebuilt during Task 1 on 2026-03-19
+- Rerun prep: plan `08.2-06` rebuilt the same Debug VST3 artifact at `2026-03-19T15:55:06Z` and revalidated `"[plugin_experimental_transport],[plugin_rehearsal_ui_flow],[plugin_pre_layout_cpu_diagnostics]"` (`17` test cases / `145` assertions) before the next host pass.
 - Additional observations: none beyond the reported auth failure suspicion about an empty username
 
 ## Manual Outcome Summary
