@@ -1,4 +1,5 @@
 #include <memory>
+#include <algorithm>
 #include <unordered_map>
 
 #include <catch2/catch_approx.hpp>
@@ -79,6 +80,38 @@ struct EditorHarness
             [](bool) { return false; });
     }
 };
+
+template <typename ComponentType, typename Matcher>
+ComponentType* findComponent(juce::Component& parent, Matcher&& matcher)
+{
+    for (int index = 0; index < parent.getNumChildComponents(); ++index)
+    {
+        if (auto* child = dynamic_cast<ComponentType*>(parent.getChildComponent(index)))
+        {
+            if (matcher(*child))
+                return child;
+        }
+
+        if (auto* match = findComponent<ComponentType>(*parent.getChildComponent(index),
+                                                       std::forward<Matcher>(matcher)))
+        {
+            return match;
+        }
+    }
+
+    return nullptr;
+}
+
+juce::Label* findLabelWithText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
+}
+
+juce::ToggleButton* findToggleWithText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::ToggleButton>(parent,
+                                             [&](const juce::ToggleButton& toggle) { return toggle.getButtonText() == text; });
+}
 } // namespace
 
 TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[plugin_mixer_ui]")
@@ -130,6 +163,16 @@ TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[
     CHECK(stripLabels[1] == "alice - guitar");
     CHECK(stripLabels[2] == "alice - vocal");
     CHECK(stripLabels[3] == "bob - bass");
+
+    auto* mixerSectionLabel = findLabelWithText(*harness.editor, "Mixer");
+    auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
+
+    REQUIRE(mixerSectionLabel != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
+    CHECK(masterOutputLabel->getY() > mixerSectionLabel->getY());
+    CHECK(std::none_of(stripLabels.begin(),
+                       stripLabels.end(),
+                       [](const juce::String& label) { return label == "Master Output"; }));
 }
 
 TEST_CASE("plugin mixer ui writes strip controls back into processor-owned state and reflects meters",
@@ -217,4 +260,42 @@ TEST_CASE("plugin mixer ui respects hidden strips and reflects restored strip st
     CHECK(gain == Catch::Approx(-12.0));
     CHECK(pan == Catch::Approx(0.3));
     CHECK(muted);
+}
+
+TEST_CASE("plugin mixer ui removes dead default-strip controls and keeps local monitor distinct from the footer output",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = "local-monitor",
+          .groupId = "local",
+          .groupLabel = "Local Monitor",
+          .displayName = "Local Monitor",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true },
+    });
+
+    CHECK(findLabelWithText(*harness.editor, "Default Gain (dB)") == nullptr);
+    CHECK(findLabelWithText(*harness.editor, "Default Pan") == nullptr);
+    CHECK(findToggleWithText(*harness.editor, "Default Muted") == nullptr);
+
+    auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
+    REQUIRE(masterOutputLabel != nullptr);
+
+    const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
+    REQUIRE(stripLabels.size() == 2);
+    CHECK(stripLabels[0] == "Local Monitor");
+    CHECK(stripLabels[1] == "alice - guitar");
+    CHECK(std::none_of(stripLabels.begin(),
+                       stripLabels.end(),
+                       [](const juce::String& label) { return label == "Master Output"; }));
 }

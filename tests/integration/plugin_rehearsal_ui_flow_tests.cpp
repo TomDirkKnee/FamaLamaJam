@@ -135,6 +135,14 @@ juce::TextButton* findDirectButtonWithText(juce::Component& parent, const juce::
     return findDirectChild<juce::TextButton>(parent,
                                              [&](const juce::TextButton& button) { return button.getButtonText() == text; });
 }
+
+juce::TextEditor* findDirectTextEditorToRightOf(juce::Component& parent, const juce::Label& label)
+{
+    return findDirectChild<juce::TextEditor>(parent, [&](const juce::TextEditor& editor) {
+        return editor.getX() >= label.getRight()
+            && editor.getBounds().getCentreY() == label.getBounds().getCentreY();
+    });
+}
 } // namespace
 
 TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mixer", "[plugin_rehearsal_ui_flow]")
@@ -169,17 +177,20 @@ TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mix
                           });
 
     auto* hostLabel = findDirectLabelWithText(*harness.editor, "Host");
+    auto* passwordLabel = findDirectLabelWithText(*harness.editor, "Password");
     auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
     auto* statusLabel =
         findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
     auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
 
     REQUIRE(hostLabel != nullptr);
+    REQUIRE(passwordLabel != nullptr);
     REQUIRE(connectButton != nullptr);
     REQUIRE(statusLabel != nullptr);
     REQUIRE(mixerSectionLabel != nullptr);
 
     CHECK(hostLabel->isVisible());
+    CHECK(passwordLabel->isVisible());
     CHECK(connectButton->isVisible());
     CHECK(statusLabel->isVisible());
     CHECK(statusLabel->getY() < mixerSectionLabel->getY());
@@ -187,13 +198,13 @@ TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mix
     CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
 }
 
-TEST_CASE("plugin rehearsal ui flow keeps actionable failure copy visible until the state changes",
+TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure copy near the connect controls",
           "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
                               .state = ConnectionState::Error,
-                              .statusMessage = "Couldn't connect. Check settings and press Connect.",
-                              .lastError = "auth rejected",
+                              .statusMessage = "Error: Wrong room password. Update credentials and press Connect.",
+                              .lastError = "Wrong room password",
                           },
                           FamaLamaJamAudioProcessorEditor::TransportUiState {
                               .connected = false,
@@ -202,29 +213,26 @@ TEST_CASE("plugin rehearsal ui flow keeps actionable failure copy visible until 
                               .metronomeAvailable = false,
                           });
 
-    auto* statusLabel =
-        findDirectLabelWithText(*harness.editor, "Couldn't connect. Check settings and press Connect.");
-    REQUIRE(statusLabel != nullptr);
+    auto* passwordLabel = findDirectLabelWithText(*harness.editor, "Password");
+    auto* passwordEditor = passwordLabel == nullptr ? nullptr : findDirectTextEditorToRightOf(*harness.editor, *passwordLabel);
+    auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
+    auto* authLabel = findDirectLabelWithText(*harness.editor, "Authentication failed: Wrong room password");
+    auto* transportLabel =
+        findDirectLabelWithText(*harness.editor, "Interval timing lost. Wait for timing or reconnect.");
+
+    REQUIRE(passwordLabel != nullptr);
+    REQUIRE(passwordEditor != nullptr);
+    REQUIRE(connectButton != nullptr);
+    REQUIRE(authLabel != nullptr);
+    REQUIRE(transportLabel != nullptr);
+
+    CHECK(passwordLabel->isVisible());
+    CHECK(passwordEditor->isVisible());
+    CHECK(connectButton->isVisible());
+    CHECK(authLabel->isVisible());
+    CHECK(authLabel->getY() >= passwordLabel->getY());
+    CHECK(authLabel->getBottom() < transportLabel->getY());
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Interval timing lost. Wait for timing or reconnect.");
-
-    harness.editor->refreshForTesting();
-    CHECK(statusLabel->getText() == "Couldn't connect. Check settings and press Connect.");
-    CHECK(harness.editor->getTransportStatusTextForTesting() == "Interval timing lost. Wait for timing or reconnect.");
-
-    harness.lifecycle = ConnectionLifecycleSnapshot {
-        .state = ConnectionState::Active,
-        .statusMessage = "Connected. Start playing when the beat appears.",
-    };
-    harness.transport = FamaLamaJamAudioProcessorEditor::TransportUiState {
-        .connected = true,
-        .hasServerTiming = false,
-        .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::WaitingForTiming,
-        .metronomeAvailable = false,
-    };
-    harness.editor->refreshForTesting();
-
-    CHECK(statusLabel->getText() == "Connected. Start playing when the beat appears.");
-    CHECK(harness.editor->getTransportStatusTextForTesting() == "Waiting for interval timing. Start when the beat appears.");
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing recovery guidance",
@@ -334,7 +342,7 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
           == "Ready for 120 BPM / 16 BPI room timing. Arm sync when Ableton is stopped.");
 }
 
-TEST_CASE("plugin rehearsal ui flow keeps the room workflow above the mixer in the single-page editor",
+TEST_CASE("plugin rehearsal ui flow keeps the room workflow in a fixed right sidebar instead of above the mixer",
           "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
@@ -376,16 +384,19 @@ TEST_CASE("plugin rehearsal ui flow keeps the room workflow above the mixer in t
                               .targetBeatsPerInterval = 16,
                           });
 
+    auto* hostLabel = findDirectLabelWithText(*harness.editor, "Host");
     auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room");
     auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
     auto* roomTabButton = findDirectButtonWithText(*harness.editor, "Room Tab");
     auto* popoutButton = findDirectButtonWithText(*harness.editor, "Open Chat");
 
+    REQUIRE(hostLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
     REQUIRE(mixerSectionLabel != nullptr);
 
-    CHECK(roomLabel->getBottom() < mixerSectionLabel->getY());
-    CHECK(harness.editor->isRoomSectionAboveMixerForTesting());
+    CHECK(roomLabel->getX() > hostLabel->getRight());
+    CHECK(roomLabel->getX() > mixerSectionLabel->getX());
+    CHECK_FALSE(harness.editor->isRoomSectionAboveMixerForTesting());
     CHECK(roomTabButton == nullptr);
     CHECK(popoutButton == nullptr);
 }
@@ -403,9 +414,7 @@ TEST_CASE("plugin rehearsal ui flow applies the current draft when Connect is pr
     draft.serverHost = "ninjam.example.net";
     draft.serverPort = 2049;
     draft.username = "Dirk";
-    draft.defaultChannelGainDb = -9.0f;
-    draft.defaultChannelPan = 0.25f;
-    draft.defaultChannelMuted = true;
+    draft.password = "secret-room";
 
     harness.editor->setSettingsDraftForTesting(draft);
     harness.editor->clickConnectForTesting();
@@ -416,9 +425,7 @@ TEST_CASE("plugin rehearsal ui flow applies the current draft when Connect is pr
     CHECK(harness.settings.serverHost == "ninjam.example.net");
     CHECK(harness.settings.serverPort == 2049);
     CHECK(harness.settings.username == "Dirk");
-    CHECK(harness.settings.defaultChannelGainDb == Catch::Approx(-9.0f));
-    CHECK(harness.settings.defaultChannelPan == Catch::Approx(0.25f));
-    CHECK(harness.settings.defaultChannelMuted);
+    CHECK(harness.settings.password == "secret-room");
 }
 
 TEST_CASE("plugin rehearsal ui flow does not connect when the current draft fails validation",
