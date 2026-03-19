@@ -198,6 +198,15 @@ public:
         MixerStripMeter meter;
     };
 
+    struct CpuDiagnosticSnapshot
+    {
+        std::uint64_t processBlockCalls { 0 };
+        std::uint64_t meterResetCalls { 0 };
+        std::uint64_t remoteMixSourceVisits { 0 };
+        std::uint64_t remoteMixChannelWrites { 0 };
+        std::uint64_t remoteFramesDecoded { 0 };
+    };
+
     explicit FamaLamaJamAudioProcessor(bool enableLiveTransport = false,
                                        bool enableExperimentalStreaming = false);
     ~FamaLamaJamAudioProcessor() override;
@@ -249,6 +258,8 @@ public:
     [[nodiscard]] std::vector<std::string> getActiveRemoteSourceIdsForTesting() const;
     [[nodiscard]] std::size_t getQueuedRemoteSourceCountForTesting() const noexcept;
     [[nodiscard]] std::size_t getPendingRemoteSourceCountForTesting() const noexcept;
+    [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
+    void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] TransportUiState getTransportUiState() const noexcept;
     [[nodiscard]] HostSyncAssistUiState getHostSyncAssistUiState() const noexcept;
     [[nodiscard]] RoomUiState getRoomUiState() const;
@@ -349,6 +360,7 @@ private:
     std::unordered_map<std::string, juce::AudioBuffer<float>> remoteActiveIntervalBySource_;
     std::unordered_map<std::string, RemotePendingInterval> remotePendingIntervalsBySource_;
     std::unordered_map<std::string, MixerStripRuntimeState> mixerStripsBySourceId_;
+    CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::atomic<bool> hasServerTimingForUi_ { false };
     std::atomic<int> serverBpmForUi_ { 0 };
     std::atomic<int> beatsPerIntervalForUi_ { 0 };

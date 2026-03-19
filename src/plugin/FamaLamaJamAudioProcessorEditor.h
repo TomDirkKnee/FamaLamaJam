@@ -184,6 +184,18 @@ public:
         bool visible { false };
     };
 
+    struct CpuDiagnosticSnapshot
+    {
+        std::uint64_t resizedCalls { 0 };
+        std::uint64_t timerCallbackCalls { 0 };
+        std::uint64_t roomRefreshCalls { 0 };
+        std::uint64_t roomFeedRebuildCalls { 0 };
+        std::uint64_t roomFeedEntryWidgetsBuilt { 0 };
+        std::uint64_t mixerRefreshCalls { 0 };
+        std::uint64_t mixerStripUpdateCalls { 0 };
+        std::uint64_t mixerStripWidgetBuildCount { 0 };
+    };
+
     using SettingsGetter = std::function<app::session::SessionSettings()>;
     using ApplyHandler = std::function<app::session::SessionSettingsController::ApplyResult(app::session::SessionSettings)>;
     using LifecycleGetter = std::function<app::session::ConnectionLifecycleSnapshot()>;
@@ -277,6 +289,8 @@ public:
                                                            double& pan,
                                                            bool& muted) const;
     bool setMixerStripControlStateForTesting(const juce::String& sourceId, double gain, double pan, bool muted);
+    [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
+    void resetCpuDiagnosticSnapshotForTesting() noexcept;
     void setSettingsDraftForTesting(const app::session::SessionSettings& settings);
     void clickConnectForTesting();
     void clickHostSyncAssistForTesting();
@@ -402,6 +416,7 @@ private:
     juce::Slider masterOutputSlider_;
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;
     std::vector<std::string> visibleMixerStripOrder_;
+    CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::string selectedServerDiscoveryEndpointKey_;
     ServerDiscoveryUiState currentServerDiscoveryUiState_;
     RoomUiState currentRoomUiState_;

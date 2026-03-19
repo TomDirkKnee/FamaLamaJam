@@ -657,6 +657,7 @@ bool FamaLamaJamAudioProcessor::isBusesLayoutSupported(const BusesLayout& layout
 void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
+    ++cpuDiagnosticSnapshot_.processBlockCalls;
     ensureLocalMonitorMixerStrip();
     resetMixerStripMeters();
 
@@ -896,6 +897,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                                  sourceId,
                                  decodedAtHostRate);
 
+        ++cpuDiagnosticSnapshot_.remoteFramesDecoded;
+
         ++decodedFrames;
     }
 
@@ -974,6 +977,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 if (sourceChannels <= 0)
                     continue;
 
+                ++cpuDiagnosticSnapshot_.remoteMixSourceVisits;
+
                 float panLeft = 1.0f;
                 float panRight = 1.0f;
                 float panOther = 1.0f;
@@ -996,6 +1001,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                                                                     authoritativeTiming_.samplesIntoInterval)
                         * channelGain;
                     buffer.addSample(channel, sample, mixedSample);
+                    ++cpuDiagnosticSnapshot_.remoteMixChannelWrites;
 
                     const auto magnitude = std::abs(mixedSample);
                     if (channel == 0)
@@ -1637,6 +1643,16 @@ std::size_t FamaLamaJamAudioProcessor::getQueuedRemoteSourceCountForTesting() co
 std::size_t FamaLamaJamAudioProcessor::getPendingRemoteSourceCountForTesting() const noexcept
 {
     return remotePendingIntervalsBySource_.size();
+}
+
+FamaLamaJamAudioProcessor::CpuDiagnosticSnapshot FamaLamaJamAudioProcessor::getCpuDiagnosticSnapshotForTesting() const noexcept
+{
+    return cpuDiagnosticSnapshot_;
+}
+
+void FamaLamaJamAudioProcessor::resetCpuDiagnosticSnapshotForTesting() noexcept
+{
+    cpuDiagnosticSnapshot_ = {};
 }
 
 FamaLamaJamAudioProcessor::TransportUiState FamaLamaJamAudioProcessor::getTransportUiState() const noexcept
@@ -2391,6 +2407,7 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
 
 void FamaLamaJamAudioProcessor::resetMixerStripMeters() noexcept
 {
+    ++cpuDiagnosticSnapshot_.meterResetCalls;
     for (auto& [sourceId, runtimeState] : mixerStripsBySourceId_)
     {
         (void) sourceId;

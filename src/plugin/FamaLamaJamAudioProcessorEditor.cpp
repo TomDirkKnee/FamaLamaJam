@@ -651,6 +651,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 
 void FamaLamaJamAudioProcessorEditor::resized()
 {
+    ++cpuDiagnosticSnapshot_.resizedCalls;
     auto area = getLocalBounds().reduced(12);
 
     titleLabel_.setBounds(area.removeFromTop(28));
@@ -795,6 +796,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
 void FamaLamaJamAudioProcessorEditor::timerCallback()
 {
+    ++cpuDiagnosticSnapshot_.timerCallbackCalls;
     refreshLifecycleStatus();
     refreshTransportStatus();
     refreshServerDiscoveryUi();
@@ -910,6 +912,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
 
 void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
 {
+    ++cpuDiagnosticSnapshot_.roomRefreshCalls;
     currentRoomUiState_ = roomUiGetter_();
     rebuildRoomFeedWidgets(currentRoomUiState_.visibleFeed);
 
@@ -976,11 +979,13 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
 
 void FamaLamaJamAudioProcessorEditor::rebuildRoomFeedWidgets(const std::vector<RoomFeedEntry>& entries)
 {
+    ++cpuDiagnosticSnapshot_.roomFeedRebuildCalls;
     roomFeedContent_.removeAllChildren();
     roomFeedWidgets_.clear();
 
     if (entries.empty())
     {
+        ++cpuDiagnosticSnapshot_.roomFeedEntryWidgetsBuilt;
         auto widgets = std::make_unique<RoomFeedEntryWidgets>();
         widgets->label.setText("No room activity yet.", juce::dontSendNotification);
         widgets->label.setJustificationType(juce::Justification::centredLeft);
@@ -1001,6 +1006,8 @@ void FamaLamaJamAudioProcessorEditor::rebuildRoomFeedWidgets(const std::vector<R
         roomFeedContent_.addAndMakeVisible(widgets->label);
         roomFeedWidgets_.push_back(std::move(widgets));
     }
+
+    cpuDiagnosticSnapshot_.roomFeedEntryWidgetsBuilt += entries.size();
 
     resized();
 }
@@ -1054,6 +1061,7 @@ bool FamaLamaJamAudioProcessorEditor::submitRoomVote(RoomVoteKind kind)
 
 void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
 {
+    ++cpuDiagnosticSnapshot_.mixerRefreshCalls;
     const auto allStrips = mixerStripsGetter_();
     std::vector<MixerStripState> visibleStrips;
     visibleStrips.reserve(allStrips.size());
@@ -1076,6 +1084,7 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
     {
         const auto& strip = visibleStrips[index];
         auto& widgets = *mixerStripWidgets_[index];
+        ++cpuDiagnosticSnapshot_.mixerStripUpdateCalls;
 
         widgets.groupLabel.setText(strip.groupLabel, juce::dontSendNotification);
         widgets.titleLabel.setText(strip.displayName, juce::dontSendNotification);
@@ -1097,6 +1106,7 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
 
 void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips)
 {
+    cpuDiagnosticSnapshot_.mixerStripWidgetBuildCount += visibleStrips.size();
     mixerContent_.removeAllChildren();
     mixerStripWidgets_.clear();
     visibleMixerStripOrder_.clear();
@@ -1369,6 +1379,17 @@ bool FamaLamaJamAudioProcessorEditor::setMixerStripControlStateForTesting(const 
 
     refreshMixerStrips();
     return true;
+}
+
+FamaLamaJamAudioProcessorEditor::CpuDiagnosticSnapshot
+FamaLamaJamAudioProcessorEditor::getCpuDiagnosticSnapshotForTesting() const noexcept
+{
+    return cpuDiagnosticSnapshot_;
+}
+
+void FamaLamaJamAudioProcessorEditor::resetCpuDiagnosticSnapshotForTesting() noexcept
+{
+    cpuDiagnosticSnapshot_ = {};
 }
 
 void FamaLamaJamAudioProcessorEditor::setSettingsDraftForTesting(const app::session::SessionSettings& settings)
