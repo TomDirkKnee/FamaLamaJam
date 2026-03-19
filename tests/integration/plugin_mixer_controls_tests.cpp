@@ -44,6 +44,33 @@ bool processUntil(FamaLamaJamAudioProcessor& processor,
 
     return false;
 }
+
+float captureAudibleRms(FamaLamaJamAudioProcessor& processor,
+                        juce::AudioBuffer<float>& buffer,
+                        juce::MidiBuffer& midi,
+                        bool feedInput,
+                        int attempts = 128)
+{
+    for (int attempt = 0; attempt < attempts; ++attempt)
+    {
+        if (feedInput)
+            fillRampBuffer(buffer);
+        else
+            buffer.clear();
+
+        processor.processBlock(buffer, midi);
+
+        const auto left = buffer.getRMSLevel(0, 0, buffer.getNumSamples());
+        const auto right = buffer.getRMSLevel(1, 0, buffer.getNumSamples());
+        const auto rms = juce::jmax(left, right);
+        if (rms > 1.0e-6f)
+            return rms;
+
+        juce::Thread::sleep(1);
+    }
+
+    return 0.0f;
+}
 } // namespace
 
 TEST_CASE("plugin mixer controls applies remote gain pan and mute per user-plus-channel strip",
@@ -172,4 +199,45 @@ TEST_CASE("plugin mixer controls persists mix state across restore and reconnect
     CHECK(snapshot.mix.gainDb == Catch::Approx(-9.0f));
     CHECK(snapshot.mix.pan == Catch::Approx(0.25f));
     CHECK(snapshot.mix.muted);
+}
+
+TEST_CASE("plugin mixer controls master output scales both mixed playback and metronome-only output",
+          "[plugin_mixer_controls]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    server.setRemotePeers({ { "alice", 0, 0 } });
+    REQUIRE(server.startServer());
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    connectProcessor(processor, server);
+    processor.setMetronomeEnabled(true);
+
+    juce::AudioBuffer<float> buffer(2, 512);
+    juce::MidiBuffer midi;
+
+    REQUIRE(processUntil(processor, buffer, midi, [&]() {
+        return processor.getTransportUiState().hasServerTiming && processor.isRemoteSourceActiveForTesting("alice#0");
+    }));
+
+    processor.setMasterOutputGainDb(0.0f);
+    const auto unityMixedRms = captureAudibleRms(processor, buffer, midi, true);
+    REQUIRE(unityMixedRms > 1.0e-4f);
+
+    processor.setMasterOutputGainDb(-12.0f);
+    const auto attenuatedMixedRms = captureAudibleRms(processor, buffer, midi, true);
+    REQUIRE(attenuatedMixedRms > 1.0e-4f);
+    CHECK(attenuatedMixedRms < unityMixedRms * 0.4f);
+
+    REQUIRE(processor.setMixerStripMixState(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, 0.0f, 0.0f, true));
+    REQUIRE(processor.setMixerStripMixState("alice#0", 0.0f, 0.0f, true));
+
+    processor.setMasterOutputGainDb(0.0f);
+    const auto unityMetronomeRms = captureAudibleRms(processor, buffer, midi, false);
+    REQUIRE(unityMetronomeRms > 1.0e-6f);
+
+    processor.setMasterOutputGainDb(-12.0f);
+    const auto attenuatedMetronomeRms = captureAudibleRms(processor, buffer, midi, false);
+    REQUIRE(attenuatedMetronomeRms > 1.0e-6f);
+    CHECK(attenuatedMetronomeRms < unityMetronomeRms * 0.4f);
 }

@@ -259,6 +259,8 @@ public:
     bool submitRoomVote(RoomVoteKind kind, int value);
     [[nodiscard]] bool isMetronomeEnabled() const noexcept;
     void setMetronomeEnabled(bool enabled) noexcept;
+    [[nodiscard]] float getMasterOutputGainDb() const noexcept;
+    void setMasterOutputGainDb(float gainDb) noexcept;
     [[nodiscard]] std::vector<MixerStripSnapshot> getMixerStripSnapshots() const;
     [[nodiscard]] bool getMixerStripSnapshot(const std::string& sourceId, MixerStripSnapshot& snapshot) const;
     bool setMixerStripMixState(const std::string& sourceId, float gainDb, float pan, bool muted);
@@ -354,6 +356,7 @@ private:
     std::atomic<float> intervalProgressForUi_ { 0.0f };
     std::atomic<std::uint64_t> intervalIndexForUi_ { 0 };
     std::atomic<bool> metronomeEnabled_ { false };
+    std::atomic<float> masterOutputGainDb_ { 0.0f };
     std::atomic<bool> hostTransportAvailableForUi_ { false };
     std::atomic<bool> hostTransportPlayingForUi_ { false };
     std::atomic<bool> hostTransportHasTempoForUi_ { false };

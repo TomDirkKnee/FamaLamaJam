@@ -197,6 +197,8 @@ public:
     using RoomVoteHandler = std::function<bool(RoomVoteKind, int)>;
     using MixerStripsGetter = std::function<std::vector<MixerStripState>()>;
     using MixerStripSetter = std::function<bool(const std::string&, float, float, bool)>;
+    using FloatGetter = std::function<float()>;
+    using FloatSetter = std::function<void(float)>;
     using BoolGetter = std::function<bool()>;
     using BoolSetter = std::function<void(bool)>;
 
@@ -217,7 +219,9 @@ public:
                                     ServerDiscoveryRefreshHandler serverDiscoveryRefreshHandler = {},
                                     RoomUiGetter roomUiGetter = {},
                                     RoomMessageHandler roomMessageHandler = {},
-                                    RoomVoteHandler roomVoteHandler = {});
+                                    RoomVoteHandler roomVoteHandler = {},
+                                    FloatGetter masterOutputGainGetter = {},
+                                    FloatSetter masterOutputGainSetter = {});
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
                                     ApplyHandler applyHandler,
@@ -233,7 +237,9 @@ public:
                                     BoolSetter metronomeSetter,
                                     RoomUiGetter roomUiGetter,
                                     RoomMessageHandler roomMessageHandler,
-                                    RoomVoteHandler roomVoteHandler);
+                                    RoomVoteHandler roomVoteHandler,
+                                    FloatGetter masterOutputGainGetter = {},
+                                    FloatSetter masterOutputGainSetter = {});
 
     void resized() override;
 
@@ -337,11 +343,14 @@ private:
     RoomUiGetter roomUiGetter_;
     RoomMessageHandler roomMessageHandler_;
     RoomVoteHandler roomVoteHandler_;
+    FloatGetter masterOutputGainGetter_;
+    FloatSetter masterOutputGainSetter_;
 
     juce::Label titleLabel_;
     juce::Label hostLabel_;
     juce::Label portLabel_;
     juce::Label usernameLabel_;
+    juce::Label passwordLabel_;
     juce::Label gainLabel_;
     juce::Label panLabel_;
     juce::Label serverPickerLabel_;
@@ -352,12 +361,14 @@ private:
     juce::TextEditor hostEditor_;
     juce::TextEditor portEditor_;
     juce::TextEditor usernameEditor_;
+    juce::TextEditor passwordEditor_;
     juce::Slider gainSlider_;
     juce::Slider panSlider_;
     juce::ToggleButton muteToggle_;
     juce::ToggleButton metronomeToggle_;
     juce::TextButton connectButton_;
     juce::TextButton disconnectButton_;
+    juce::Label authStatusLabel_;
     juce::Label transportLabel_;
     juce::Label hostSyncAssistTargetLabel_;
     juce::TextButton hostSyncAssistButton_;
@@ -387,6 +398,8 @@ private:
     juce::Label mixerSectionLabel_;
     juce::Viewport mixerViewport_;
     juce::Component mixerContent_;
+    juce::Label masterOutputLabel_;
+    juce::Slider masterOutputSlider_;
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;
     std::vector<std::string> visibleMixerStripOrder_;
     std::string selectedServerDiscoveryEndpointKey_;

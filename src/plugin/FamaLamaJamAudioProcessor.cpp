@@ -19,6 +19,7 @@ const juce::Identifier kPluginStateType("famalamajam.plugin.state");
 const juce::Identifier kPluginStateSchemaVersion("schemaVersion");
 const juce::Identifier kPluginStateLastErrorContext("lastErrorContext");
 const juce::Identifier kPluginStateMetronomeEnabled("metronomeEnabled");
+const juce::Identifier kPluginStateMasterOutputGainDb("masterOutputGainDb");
 const juce::Identifier kPluginStateMixerState("mixerState");
 const juce::Identifier kPluginStateMixerStrip("mixerStrip");
 const juce::Identifier kPluginStateMixerStripKind("kind");
@@ -491,6 +492,16 @@ void discardLatePendingIntervals(
     return mix;
 }
 
+[[nodiscard]] float normalizeMasterOutputGainDb(float gainDb)
+{
+    return juce::jlimit(kMinMixerGainDb, kMaxMixerGainDb, gainDb);
+}
+
+[[nodiscard]] FamaLamaJamAudioProcessor::MixerStripMixState makeUnityMixerStripMixState()
+{
+    return FamaLamaJamAudioProcessor::MixerStripMixState {};
+}
+
 void computePanGains(float pan, float& left, float& right, float& other)
 {
     const auto clampedPan = juce::jlimit(-1.0f, 1.0f, pan);
@@ -667,6 +678,14 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         localStrip.lastSeenIntervalIndex = authoritativeTiming_.intervalIndex;
     };
 
+    auto applyMasterOutputToBuffer = [this, &buffer]() {
+        const auto gainDb = masterOutputGainDb_.load(std::memory_order_relaxed);
+        if (juce::approximatelyEqual(gainDb, 0.0f))
+            return;
+
+        buffer.applyGain(juce::Decibels::decibelsToGain(gainDb));
+    };
+
     const auto hostTransport = captureHostTransportSnapshot(getPlayHead());
 
     auto storeHostTransportSnapshot = [this](const HostTransportSnapshot& snapshot) {
@@ -705,6 +724,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     if (! isSessionConnected() || currentSampleRate_ <= 0.0)
     {
         applyLocalMonitorToOutput();
+        applyMasterOutputToBuffer();
         clearTransportUi();
         updateHostSyncAssistEligibility();
         finishProcessBlock();
@@ -718,6 +738,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             .reason = "transport disconnected",
         });
         applyLocalMonitorToOutput();
+        applyMasterOutputToBuffer();
         clearTransportUi();
         updateHostSyncAssistEligibility();
         finishProcessBlock();
@@ -894,6 +915,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             hostSyncAssistFailed_.store(true, std::memory_order_relaxed);
             hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::MissingHostMusicalPosition,
                                                std::memory_order_relaxed);
+            applyMasterOutputToBuffer();
             finishProcessBlock();
             return;
         }
@@ -916,6 +938,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             intervalIndexForUi_.store(authoritativeTiming_.intervalIndex, std::memory_order_relaxed);
         }
 
+        applyMasterOutputToBuffer();
         finishProcessBlock();
         return;
     }
@@ -1063,6 +1086,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     {
         clearTransportUi();
     }
+
+    applyMasterOutputToBuffer();
 
     finishProcessBlock();
 }
@@ -1228,6 +1253,8 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
     };
     auto metronomeGetter = [this]() { return isMetronomeEnabled(); };
     auto metronomeSetter = [this](bool enabled) { setMetronomeEnabled(enabled); };
+    auto masterOutputGainGetter = [this]() { return getMasterOutputGainDb(); };
+    auto masterOutputGainSetter = [this](float gainDb) { setMasterOutputGainDb(gainDb); };
 
     return new FamaLamaJamAudioProcessorEditor(*this,
                                                std::move(settingsGetter),
@@ -1246,7 +1273,9 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(serverDiscoveryRefreshHandler),
                                                std::move(roomUiGetter),
                                                std::move(roomMessageHandler),
-                                               std::move(roomVoteHandler));
+                                               std::move(roomVoteHandler),
+                                               std::move(masterOutputGainGetter),
+                                               std::move(masterOutputGainSetter));
 }
 
 void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -1279,6 +1308,9 @@ void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         stateTree.setProperty(kPluginStateLastErrorContext, juce::String(lastErrorContext), nullptr);
 
     stateTree.setProperty(kPluginStateMetronomeEnabled, metronomeEnabled_.load(std::memory_order_relaxed), nullptr);
+    stateTree.setProperty(kPluginStateMasterOutputGainDb,
+                          masterOutputGainDb_.load(std::memory_order_relaxed),
+                          nullptr);
 
     juce::ValueTree mixerStateTree(kPluginStateMixerState);
     for (const auto& [sourceId, runtimeState] : mixerStripsBySourceId_)
@@ -1311,6 +1343,7 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     juce::MemoryBlock settingsPayload;
     std::string restoredLastErrorContext;
     bool restoredMetronomeEnabled = false;
+    float restoredMasterOutputGainDb = 0.0f;
     std::vector<MixerStripSnapshot> restoredMixerStrips;
     std::vector<app::session::RememberedServerEntry> restoredRememberedServers;
 
@@ -1334,6 +1367,8 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
         restoredLastErrorContext = shortenLastErrorContext(
             stateTree.getProperty(kPluginStateLastErrorContext, juce::String()).toString().toStdString());
         restoredMetronomeEnabled = static_cast<bool>(stateTree.getProperty(kPluginStateMetronomeEnabled, false));
+        restoredMasterOutputGainDb
+            = normalizeMasterOutputGainDb(static_cast<float>(stateTree.getProperty(kPluginStateMasterOutputGainDb, 0.0f)));
 
         if (const auto rememberedServerHistoryTree = stateTree.getChildWithName(kPluginStateRememberedServerHistory);
             rememberedServerHistoryTree.isValid())
@@ -1413,6 +1448,7 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     settingsStore_.applyCandidate(restored, &validation);
 
     metronomeEnabled_.store(restoredMetronomeEnabled, std::memory_order_relaxed);
+    masterOutputGainDb_.store(restoredMasterOutputGainDb, std::memory_order_relaxed);
 
     closeLiveSocket();
     applyLifecycleTransition(lifecycleController_.resetToIdle());
@@ -1805,6 +1841,16 @@ void FamaLamaJamAudioProcessor::setMetronomeEnabled(bool enabled) noexcept
     metronomeEnabled_.store(enabled, std::memory_order_relaxed);
 }
 
+float FamaLamaJamAudioProcessor::getMasterOutputGainDb() const noexcept
+{
+    return masterOutputGainDb_.load(std::memory_order_relaxed);
+}
+
+void FamaLamaJamAudioProcessor::setMasterOutputGainDb(float gainDb) noexcept
+{
+    masterOutputGainDb_.store(normalizeMasterOutputGainDb(gainDb), std::memory_order_relaxed);
+}
+
 std::vector<FamaLamaJamAudioProcessor::MixerStripSnapshot> FamaLamaJamAudioProcessor::getMixerStripSnapshots() const
 {
     std::vector<MixerStripSnapshot> snapshots;
@@ -2185,7 +2231,6 @@ void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
     auto it = mixerStripsBySourceId_.find(kLocalMonitorSourceId);
     if (it == mixerStripsBySourceId_.end())
     {
-        const auto defaults = settingsStore_.getActiveSettings();
         MixerStripSnapshot snapshot;
         snapshot.descriptor.kind = MixerStripKind::LocalMonitor;
         snapshot.descriptor.sourceId = kLocalMonitorSourceId;
@@ -2195,11 +2240,7 @@ void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
         snapshot.descriptor.displayName = "Local Monitor";
         snapshot.descriptor.active = true;
         snapshot.descriptor.visible = true;
-        snapshot.mix = normalizeMixState(MixerStripMixState {
-            .gainDb = defaults.defaultChannelGainDb,
-            .pan = defaults.defaultChannelPan,
-            .muted = defaults.defaultChannelMuted,
-        });
+        snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
 
         it = mixerStripsBySourceId_.emplace(kLocalMonitorSourceId,
                                             MixerStripRuntimeState {
@@ -2228,7 +2269,6 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
     auto it = mixerStripsBySourceId_.find(sourceInfo.sourceId);
     if (it == mixerStripsBySourceId_.end())
     {
-        const auto defaults = settingsStore_.getActiveSettings();
         MixerStripSnapshot snapshot;
         snapshot.descriptor.kind = MixerStripKind::RemoteDelayed;
         snapshot.descriptor.sourceId = sourceInfo.sourceId;
@@ -2239,11 +2279,7 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
         snapshot.descriptor.channelIndex = static_cast<int>(sourceInfo.channelIndex);
         snapshot.descriptor.active = true;
         snapshot.descriptor.visible = true;
-        snapshot.mix = normalizeMixState(MixerStripMixState {
-            .gainDb = defaults.defaultChannelGainDb,
-            .pan = defaults.defaultChannelPan,
-            .muted = defaults.defaultChannelMuted,
-        });
+        snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
 
         it = mixerStripsBySourceId_.emplace(sourceInfo.sourceId,
                                             MixerStripRuntimeState {
