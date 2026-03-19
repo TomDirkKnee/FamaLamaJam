@@ -34,6 +34,17 @@ void setPassword(famalamajam::app::session::SessionSettings& settings, std::stri
     setPasswordImpl(settings, std::move(password));
 }
 
+MiniNinjamServer::AuthRules makePrivateRoomRules(std::string expectedUsername, std::string expectedPassword)
+{
+    return MiniNinjamServer::AuthRules {
+        .validateUsername = true,
+        .expectedUsername = std::move(expectedUsername),
+        .validatePassword = true,
+        .expectedPassword = std::move(expectedPassword),
+        .failureText = "Wrong room password",
+    };
+}
+
 bool waitForLifecycleState(famalamajam::plugin::FamaLamaJamAudioProcessor& processor,
                            famalamajam::app::session::ConnectionState expectedState,
                            int attempts = 200)
@@ -190,11 +201,7 @@ TEST_CASE("plugin experimental transport authenticates private-room passwords", 
 {
     MiniNinjamServer server;
     server.setInitialTiming(400, 1);
-    server.setAuthRules(MiniNinjamServer::AuthRules {
-        .validatePassword = true,
-        .expectedPassword = "secret-room",
-        .failureText = "Wrong room password",
-    });
+    server.setAuthRules(makePrivateRoomRules("guest", "secret-room"));
     REQUIRE(server.startServer());
 
     famalamajam::plugin::FamaLamaJamAudioProcessor processor(true, true);
@@ -210,6 +217,7 @@ TEST_CASE("plugin experimental transport authenticates private-room passwords", 
     REQUIRE(processor.requestConnect());
 
     REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Active));
+    CHECK(server.getLastAuthUsername() == "guest");
     CHECK(processor.getLifecycleSnapshot().statusMessage.find("NINJAM auth ok") != std::string::npos);
 
     REQUIRE(processor.requestDisconnect());
@@ -221,11 +229,7 @@ TEST_CASE("plugin experimental transport surfaces explicit wrong-password failur
 {
     MiniNinjamServer server;
     server.setInitialTiming(400, 1);
-    server.setAuthRules(MiniNinjamServer::AuthRules {
-        .validatePassword = true,
-        .expectedPassword = "secret-room",
-        .failureText = "Wrong room password",
-    });
+    server.setAuthRules(makePrivateRoomRules("guest", "secret-room"));
     REQUIRE(server.startServer());
 
     famalamajam::plugin::FamaLamaJamAudioProcessor processor(true, true);
@@ -241,9 +245,43 @@ TEST_CASE("plugin experimental transport surfaces explicit wrong-password failur
     REQUIRE(processor.requestConnect());
 
     REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Error));
+    CHECK(server.getLastAuthUsername() == "guest");
     CHECK(processor.getLifecycleSnapshot().lastError == "Wrong room password");
     CHECK(processor.getLastStatusMessage().find("Wrong room password") != std::string::npos);
 
+    processor.releaseResources();
+    server.stopServer();
+}
+
+TEST_CASE("plugin experimental transport uses the latest applied username for password auth",
+          "[plugin_experimental_transport]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    server.setAuthRules(makePrivateRoomRules("Dirk", "secret-room"));
+    REQUIRE(server.startServer());
+
+    famalamajam::plugin::FamaLamaJamAudioProcessor processor(true, true);
+
+    auto settings = processor.getActiveSettings();
+    settings.serverHost = "127.0.0.1";
+    settings.serverPort = static_cast<std::uint16_t>(server.port());
+    settings.username = "stale-user";
+    setPassword(settings, "old-room");
+    REQUIRE(processor.applySettingsFromUi(settings));
+
+    settings.username = "Dirk";
+    setPassword(settings, "secret-room");
+    REQUIRE(processor.applySettingsFromUi(settings));
+
+    processor.prepareToPlay(48000.0, 512);
+    REQUIRE(processor.requestConnect());
+
+    REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Active));
+    CHECK(processor.getActiveSettings().username == "Dirk");
+    CHECK(server.getLastAuthUsername() == "Dirk");
+
+    REQUIRE(processor.requestDisconnect());
     processor.releaseResources();
     server.stopServer();
 }

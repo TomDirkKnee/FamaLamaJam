@@ -9,6 +9,7 @@
 #include "app/session/SessionSettingsController.h"
 #include "plugin/FamaLamaJamAudioProcessor.h"
 #include "plugin/FamaLamaJamAudioProcessorEditor.h"
+#include "support/MiniNinjamServer.h"
 
 namespace
 {
@@ -18,6 +19,7 @@ using famalamajam::app::session::SessionSettings;
 using famalamajam::app::session::SessionSettingsController;
 using famalamajam::plugin::FamaLamaJamAudioProcessor;
 using famalamajam::plugin::FamaLamaJamAudioProcessorEditor;
+using famalamajam::tests::integration::MiniNinjamServer;
 
 struct EditorHarness
 {
@@ -142,6 +144,19 @@ juce::TextEditor* findDirectTextEditorToRightOf(juce::Component& parent, const j
         return editor.getX() >= label.getRight()
             && editor.getBounds().getCentreY() == label.getBounds().getCentreY();
     });
+}
+
+bool waitForLifecycleState(FamaLamaJamAudioProcessor& processor, ConnectionState expectedState, int attempts = 200)
+{
+    for (int attempt = 0; attempt < attempts; ++attempt)
+    {
+        if (processor.getLifecycleSnapshot().state == expectedState)
+            return true;
+
+        juce::Thread::sleep(5);
+    }
+
+    return false;
 }
 } // namespace
 
@@ -426,6 +441,51 @@ TEST_CASE("plugin rehearsal ui flow applies the current draft when Connect is pr
     CHECK(harness.settings.serverPort == 2049);
     CHECK(harness.settings.username == "Dirk");
     CHECK(harness.settings.password == "secret-room");
+}
+
+TEST_CASE("plugin rehearsal ui flow applies the current draft to the live auth path when Connect is pressed",
+          "[plugin_rehearsal_ui_flow]")
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    server.setAuthRules(MiniNinjamServer::AuthRules {
+        .validateUsername = true,
+        .expectedUsername = "fresh-user",
+        .validatePassword = true,
+        .expectedPassword = "secret-room",
+        .failureText = "Wrong room password",
+    });
+    REQUIRE(server.startServer());
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    auto settings = processor.getActiveSettings();
+    settings.serverHost = "127.0.0.1";
+    settings.serverPort = static_cast<std::uint16_t>(server.port());
+    settings.username = "stale-user";
+    settings.password = "old-room";
+    REQUIRE(processor.applySettingsFromUi(settings));
+    processor.prepareToPlay(48000.0, 512);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editorOwner(processor.createEditor());
+    auto* editor = dynamic_cast<FamaLamaJamAudioProcessorEditor*>(editorOwner.get());
+    REQUIRE(editor != nullptr);
+
+    settings.username = "fresh-user";
+    settings.password = "secret-room";
+    editor->setSettingsDraftForTesting(settings);
+    editor->clickConnectForTesting();
+
+    REQUIRE(waitForLifecycleState(processor, ConnectionState::Active));
+    CHECK(processor.getActiveSettings().username == "fresh-user");
+    CHECK(processor.getActiveSettings().password == "secret-room");
+    CHECK(server.getLastAuthUsername() == "fresh-user");
+    CHECK(processor.getLifecycleSnapshot().statusMessage.find("NINJAM auth ok") != std::string::npos);
+
+    REQUIRE(processor.requestDisconnect());
+    processor.releaseResources();
+    server.stopServer();
 }
 
 TEST_CASE("plugin rehearsal ui flow does not connect when the current draft fails validation",

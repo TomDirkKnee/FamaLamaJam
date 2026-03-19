@@ -196,6 +196,8 @@ class MiniNinjamServer final : private juce::Thread
 public:
     struct AuthRules
     {
+        bool validateUsername { false };
+        std::string expectedUsername;
         bool validatePassword { false };
         std::string expectedPassword;
         std::string failureText;
@@ -239,6 +241,10 @@ public:
 
         port_ = listener_.getBoundPort();
         authEvent_.reset();
+        {
+            const juce::ScopedLock lock(clientLock_);
+            lastAuthUsername_.clear();
+        }
         startThread();
         return port_ > 0;
     }
@@ -366,6 +372,12 @@ public:
     bool waitForAuthentication(int timeoutMs) const
     {
         return authEvent_.wait(timeoutMs);
+    }
+
+    std::string getLastAuthUsername() const
+    {
+        const juce::ScopedLock lock(clientLock_);
+        return lastAuthUsername_;
     }
 
     bool waitForCapturedRoomMessage(int timeoutMs, RoomMessage& out)
@@ -715,9 +727,16 @@ private:
                     const char* username = reinterpret_cast<const char*>(payload + 20);
                     const auto usernameMax = message.payload.getSize() - 20;
                     const auto usernameLen = boundedStrnlen(username, usernameMax);
+                    const std::string capturedUsername =
+                        usernameLen < usernameMax ? std::string(username, usernameLen) : std::string();
 
-                    if (usernameLen > 0 && usernameLen < usernameMax)
-                        effectiveUsername.assign(username, usernameLen);
+                    {
+                        const juce::ScopedLock lock(clientLock_);
+                        lastAuthUsername_ = capturedUsername;
+                    }
+
+                    if (! capturedUsername.empty())
+                        effectiveUsername = capturedUsername;
 
                     AuthRules authRules;
                     std::uint16_t initialBpm = 120;
@@ -736,6 +755,13 @@ private:
                         : authRules.failureText;
 
                     if (authRules.forceFailure)
+                    {
+                        if (! sendAuthFailure(*socket, failureText))
+                            return;
+                        continue;
+                    }
+
+                    if (authRules.validateUsername && capturedUsername != authRules.expectedUsername)
                     {
                         if (! sendAuthFailure(*socket, failureText))
                             return;
@@ -885,6 +911,7 @@ private:
     std::vector<RoomMessage> pendingRoomMessages_;
     std::vector<RoomMessage> capturedRoomMessages_;
     std::vector<RemotePeer> remotePeers_ { RemotePeer {} };
+    std::string lastAuthUsername_;
     AuthRules authRules_;
     std::uint16_t initialBpm_ { 120 };
     std::uint16_t initialBpi_ { 16 };
