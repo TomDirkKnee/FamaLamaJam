@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 08.2-03-PLAN.md
-last_updated: "2026-03-19T14:31:03.541Z"
-last_activity: 2026-03-19 - Completed Phase 08.2 plan 03 for CPU diagnostics and editor refresh hardening.
+status: blocked
+stopped_at: Blocked after 08.2-04 manual verification - correct-password private-room auth failed and CPU repro was deferred
+last_updated: "2026-03-19T18:53:54.075Z"
+last_activity: 2026-03-19 - Completed Phase 08.2 plan 04 documentation, but Phase 08.2 remained blocked by manual private-room auth failure.
 progress:
   total_phases: 12
   completed_phases: 8
   total_plans: 30
-  completed_plans: 28
-  percent: 93
+  completed_plans: 29
+  percent: 97
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Plan and execute urgent pre-Phase-9 fixes for CPU spikes, UI usability, mixer cleanup, and auth coverage
+**Current focus:** Resolve the remaining Phase 08.2 blocker: the real-host private-room auth failure, then rerun the skipped wrong-password and CPU checks before Phase 9.
 
 ## Current Position
 
 Phase: 08.2 - Pre-Layout CPU, Mixer, UI, and Auth Hardening  
-Plan: 04 - Run the final hardening gate and capture manual Ableton/private-room validation.  
-Status: In progress  
-Last activity: 2026-03-19 - Completed Phase 08.2 plan 03 for CPU diagnostics and editor refresh hardening.
+Plan: 04 - Manual hardening outcome captured; follow-up auth investigation is required before phase closeout.  
+Status: Blocked  
+Last activity: 2026-03-19 - Completed Phase 08.2 plan 04 documentation, but the phase remained blocked by manual private-room auth failure.
 
-Progress: 93%
+Progress: 97%
 
 ## Accumulated Context
 
@@ -70,6 +70,8 @@ Progress: 93%
 - [Phase 08.2]: Diagnose periodic spike contributors with deterministic editor and processor work counters instead of wall-clock timing guesses.
 - [Phase 08.2]: Reduce unchanged room-feed and mixer timer work before touching server-authoritative timing or audio semantics.
 - [Phase 08.2]: Treat the remaining every-four-beat spike risk as mixed until final Ableton validation confirms how much residual behavior is machine-sensitive.
+- [Phase 08.2]: Treat a real-host correct-password private-room auth failure as a hard blocker even when the controlled automation path is green.
+- [Phase 08.2]: Leave the wrong-password inline error and every-four-beat CPU repro explicitly unverified when the manual pass stops early; do not infer them from automation.
 
 ### Roadmap Evolution
 
@@ -79,15 +81,17 @@ Progress: 93%
 ### Pending Todos
 
 - Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
-- Run the final Ableton repro on the same machine to judge how much every-four-beat spike risk remains after the editor-churn mitigation.
-- Run the final manual private-room auth and Ableton sidebar sanity checks during Phase 08.2 plan 04.
+- Investigate the manual private-room auth failure from Phase 08.2 plan 04; the user suspects the username may be arriving as `""` on the real host path.
+- Rerun the wrong-password inline auth error check after the correct-password private-room path works again.
+- Run the every-four-beat Ableton repro on the same machine to judge how much CPU risk remains after the editor-churn mitigation.
 
 ### Blockers/Concerns
 
 - Local Windows Ninja/CMake remains unreliable on this machine; use the verified `build-vs` path for now.
 - Phase 6 validated the healthy-path Ableton host-start workflow, but the timing-loss cancellation and failed-start re-arm paths were not manually exercised in Ableton.
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
-- Discovery correctness and the urgent sidebar/auth/mixer cleanup are no longer the blockers; the remaining Phase 08.2 concern is final manual validation of residual CPU-spike behavior and the private-room auth path.
+- Phase 08.2 remains blocked: the manual Ableton/private-room pass confirmed the fixed sidebar and mixer footer baseline, but the correct-password private-room auth attempt was declined on the real host path.
+- The wrong-password inline auth check and the original every-four-beat CPU repro were not exercised in the same manual pass, so P082-SC1 and P082-SC4 still lack complete host evidence.
 
 ### Performance Metrics
 
@@ -99,9 +103,10 @@ Progress: 93%
 - 2026-03-19: Completed Phase 08.2 plan 01 in 4 min across 2 task commits and 9 modified files.
 - 2026-03-19: Completed Phase 08.2 plan 02 in 14 min across 2 task commits and 8 modified files.
 - 2026-03-19: Completed Phase 08.2 plan 03 in 14 min across 2 task commits and 7 modified files.
+- 2026-03-19: Completed Phase 08.2 plan 04 in 22 min across 2 task commits and 5 modified files; the phase remained blocked by manual private-room auth failure and deferred CPU follow-up.
 
 ## Session Continuity
 
-Last session: 2026-03-19T14:31:03.541Z
-Stopped at: Completed 08.2-03-PLAN.md
+Last session: 2026-03-19T18:53:54.075Z
+Stopped at: Blocked after 08.2-04 manual verification - correct-password private-room auth failed and CPU repro was deferred
 Resume file: None

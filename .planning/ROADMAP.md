@@ -19,7 +19,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 7: Chat & Room Control Commands** - Add room chat plus BPM/BPI voting controls and feedback. (completed 2026-03-17)
 - [x] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history. (completed 2026-03-19)
 - [x] **Phase 08.1: Server Discovery Polish & JamTaba Parity Check** - Correct discovery-count fidelity, ordering, and picker stability before the larger layout work. (completed 2026-03-19)
-- [ ] **Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)** - Reduce periodic CPU spikes, restore usable mixer/chat layout, replace dead default-strip controls with master output control, and verify password/auth workflow before the broader layout overhaul.
+- [ ] **Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)** - Sidebar and mixer baseline checks passed manually, but the correct-password private-room auth path failed in Ableton and the CPU repro remains unexercised, so the phase stays blocked before the broader layout overhaul.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
@@ -183,11 +183,13 @@ Plans:
 4. Password/authentication workflow is visible in the UI and validated against a local or controlled test server path.
 **Plans**: 4 plans
 
+**Current status (2026-03-19):** Plan 08.2-04 recorded the real host outcome. Sidebar usability and the mixer footer master-output baseline passed in Ableton, but the correct-password private-room auth path failed, the wrong-password inline error was not exercised after that failure, and the original every-four-beat CPU repro was deferred. Phase 08.2 remains blocked and Phase 9 should not be treated as unblocked yet.
+
 Plans:
 - [x] 08.2-01-PLAN.md - Add password/auth and master-output state seams plus controlled Wave 0 coverage.
 - [x] 08.2-02-PLAN.md - Move the room workflow into a fixed right sidebar and finish mixer/auth UI cleanup.
 - [x] 08.2-03-PLAN.md - Diagnose and reduce periodic CPU spikes with measurement-first hardening.
-- [ ] 08.2-04-PLAN.md - Run the final hardening gate and capture manual Ableton/private-room validation.
+- [x] 08.2-04-PLAN.md - Captured the manual Ableton/private-room validation; the phase remains blocked by the failing correct-password auth path and deferred CPU follow-up.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
@@ -263,7 +265,7 @@ Plans:
 | 7. Chat & Room Control Commands | 3/3 | Complete    | 2026-03-17 |
 | 8. Server Discovery & History | 3/3 | Complete    | 2026-03-19 |
 | 8.1. Server Discovery Polish & JamTaba Parity Check | 3/3 | Complete    | 2026-03-19 |
-| 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 3/4 | In Progress | - |
+| 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 4/4 | Blocked | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
