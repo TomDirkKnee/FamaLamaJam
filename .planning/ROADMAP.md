@@ -185,7 +185,7 @@ Plans:
 
 Plans:
 - [x] 08.2-01-PLAN.md - Add password/auth and master-output state seams plus controlled Wave 0 coverage.
-- [ ] 08.2-02-PLAN.md - Move the room workflow into a fixed right sidebar and finish mixer/auth UI cleanup.
+- [x] 08.2-02-PLAN.md - Move the room workflow into a fixed right sidebar and finish mixer/auth UI cleanup.
 - [ ] 08.2-03-PLAN.md - Diagnose and reduce periodic CPU spikes with measurement-first hardening.
 - [ ] 08.2-04-PLAN.md - Run the final hardening gate and capture manual Ableton/private-room validation.
 
@@ -263,7 +263,7 @@ Plans:
 | 7. Chat & Room Control Commands | 3/3 | Complete    | 2026-03-17 |
 | 8. Server Discovery & History | 3/3 | Complete    | 2026-03-19 |
 | 8.1. Server Discovery Polish & JamTaba Parity Check | 3/3 | Complete    | 2026-03-19 |
-| 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 1/4 | In Progress | - |
+| 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 2/4 | In Progress | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 

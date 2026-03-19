@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08.2-01-PLAN.md
-last_updated: "2026-03-19T13:51:39.042Z"
-last_activity: 2026-03-19 - Completed Phase 08.2 plan 01 for password-bearing state persistence and controlled private-room auth coverage.
+stopped_at: Completed 08.2-02-PLAN.md
+last_updated: "2026-03-19T14:15:06.742Z"
+last_activity: 2026-03-19 - Completed Phase 08.2 plan 02 for the fixed right sidebar, inline auth UI, and master-output mixer footer.
 progress:
   total_phases: 12
   completed_phases: 8
   total_plans: 30
-  completed_plans: 26
-  percent: 87
+  completed_plans: 27
+  percent: 90
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 08.2 - Pre-Layout CPU, Mixer, UI, and Auth Hardening  
-Plan: 02 - Move the room workflow into a fixed right sidebar and finish mixer/auth UI cleanup.  
+Plan: 03 - Diagnose and reduce periodic CPU spikes with measurement-first hardening.  
 Status: In progress  
-Last activity: 2026-03-19 - Completed Phase 08.2 plan 01 for password-bearing state persistence and controlled private-room auth coverage.
+Last activity: 2026-03-19 - Completed Phase 08.2 plan 02 for the fixed right sidebar, inline auth UI, and master-output mixer footer.
 
-Progress: 87%
+Progress: 90%
 
 ## Accumulated Context
 
@@ -64,6 +64,9 @@ Progress: 87%
 - [Phase 08.1]: Restore discovery selection by endpoint key, not row index, so remembered insertion and reordering cannot scramble the picker label.
 - [Phase 08.2]: Keep password persistence inside SessionSettings serialization and default missing password fields to empty on restore.
 - [Phase 08.2]: Reuse MiniNinjamServer as the controlled auth harness for right-password and wrong-password outcomes.
+- [Phase 08.2]: Keep the interim layout deterministic with a fixed-width right sidebar instead of starting the broader Phase 9 redesign early.
+- [Phase 08.2]: Surface authentication failures in a dedicated inline connection label while preserving the broader lifecycle status copy.
+- [Phase 08.2]: Treat master output as processor-owned post-mix state and seed new strips from explicit unity defaults after removing the dead top-level controls.
 
 ### Roadmap Evolution
 
@@ -74,14 +77,14 @@ Progress: 87%
 
 - Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
 - Investigate why processor spikes cluster around every four beats and compare the hot path against JamTaba's lower-CPU behavior.
-- Verify the full password/authentication UI flow against a local or controlled Ninjam test server once the password field and inline error copy land.
+- Run the final manual private-room auth and Ableton sidebar sanity checks during Phase 08.2 plan 04.
 
 ### Blockers/Concerns
 
 - Local Windows Ninja/CMake remains unreliable on this machine; use the verified `build-vs` path for now.
 - Phase 6 validated the healthy-path Ableton host-start workflow, but the timing-loss cancellation and failed-start re-arm paths were not manually exercised in Ableton.
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
-- Discovery correctness is no longer the blocker; the current blockers are CPU spikes, current UI overlap, missing master-output behavior, and unfinished password UI or inline-error work.
+- Discovery correctness and the urgent sidebar/auth/mixer cleanup are no longer the blockers; the remaining Phase 08.2 concern is CPU-spike diagnosis plus the final manual validation pass.
 
 ### Performance Metrics
 
@@ -91,9 +94,10 @@ Progress: 87%
 - 2026-03-17: Completed Phase 07 plan 02 in 18 min across 3 task commits and 3 modified files.
 - 2026-03-17: Completed Phase 07 plan 03 in 177 min across 3 task commits and 6 modified files.
 - 2026-03-19: Completed Phase 08.2 plan 01 in 4 min across 2 task commits and 9 modified files.
+- 2026-03-19: Completed Phase 08.2 plan 02 in 14 min across 2 task commits and 8 modified files.
 
 ## Session Continuity
 
-Last session: 2026-03-19T13:51:34.143Z
-Stopped at: Completed 08.2-01-PLAN.md
+Last session: 2026-03-19T14:15:06.742Z
+Stopped at: Completed 08.2-02-PLAN.md
 Resume file: None
