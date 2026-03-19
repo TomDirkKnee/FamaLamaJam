@@ -207,6 +207,15 @@ public:
         std::uint64_t remoteFramesDecoded { 0 };
     };
 
+    struct LiveAuthAttemptSnapshot
+    {
+        std::string settingsUsername;
+        std::string protocolUsername;
+        std::string effectiveUsername;
+        std::string failureReason;
+        bool authenticated { false };
+    };
+
     explicit FamaLamaJamAudioProcessor(bool enableLiveTransport = false,
                                        bool enableExperimentalStreaming = false);
     ~FamaLamaJamAudioProcessor() override;
@@ -251,6 +260,7 @@ public:
     [[nodiscard]] std::size_t getLastCodecPayloadBytesForTesting() const noexcept;
     [[nodiscard]] int getLastDecodedSamplesForTesting() const noexcept;
     [[nodiscard]] bool isExperimentalStreamingEnabledForTesting() const noexcept;
+    [[nodiscard]] LiveAuthAttemptSnapshot getLastLiveAuthAttemptForTesting() const;
     [[nodiscard]] std::size_t getTransportSentFramesForTesting() const noexcept;
     [[nodiscard]] std::size_t getTransportReceivedFramesForTesting() const noexcept;
     [[nodiscard]] std::size_t getActiveRemoteSourceCountForTesting() const noexcept;
@@ -347,6 +357,8 @@ private:
     bool reconnectScheduled_ { false };
     int scheduledReconnectDelayMs_ { 0 };
     std::mutex liveSocketMutex_;
+    mutable std::mutex liveAuthAttemptMutex_;
+    LiveAuthAttemptSnapshot lastLiveAuthAttempt_;
     std::unique_ptr<juce::StreamingSocket> liveSocket_;
     net::FramedSocketTransport framedTransport_;
     double currentSampleRate_ { 48000.0 };

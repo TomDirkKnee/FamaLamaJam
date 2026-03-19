@@ -217,6 +217,11 @@ TEST_CASE("plugin experimental transport authenticates private-room passwords", 
     REQUIRE(processor.requestConnect());
 
     REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Active));
+    const auto authAttempt = processor.getLastLiveAuthAttemptForTesting();
+    CHECK(authAttempt.settingsUsername == "guest");
+    CHECK(authAttempt.protocolUsername == "guest");
+    CHECK(authAttempt.failureReason.empty());
+    CHECK(authAttempt.authenticated);
     CHECK(server.getLastAuthUsername() == "guest");
     CHECK(processor.getLifecycleSnapshot().statusMessage.find("NINJAM auth ok") != std::string::npos);
 
@@ -245,6 +250,11 @@ TEST_CASE("plugin experimental transport surfaces explicit wrong-password failur
     REQUIRE(processor.requestConnect());
 
     REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Error));
+    const auto authAttempt = processor.getLastLiveAuthAttemptForTesting();
+    CHECK(authAttempt.settingsUsername == "guest");
+    CHECK(authAttempt.protocolUsername == "guest");
+    CHECK(authAttempt.failureReason == "Wrong room password");
+    CHECK_FALSE(authAttempt.authenticated);
     CHECK(server.getLastAuthUsername() == "guest");
     CHECK(processor.getLifecycleSnapshot().lastError == "Wrong room password");
     CHECK(processor.getLastStatusMessage().find("Wrong room password") != std::string::npos);
@@ -278,6 +288,11 @@ TEST_CASE("plugin experimental transport uses the latest applied username for pa
     REQUIRE(processor.requestConnect());
 
     REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Active));
+    const auto authAttempt = processor.getLastLiveAuthAttemptForTesting();
+    CHECK(authAttempt.settingsUsername == "Dirk");
+    CHECK(authAttempt.protocolUsername == "Dirk");
+    CHECK(authAttempt.failureReason.empty());
+    CHECK(authAttempt.authenticated);
     CHECK(processor.getActiveSettings().username == "Dirk");
     CHECK(server.getLastAuthUsername() == "Dirk");
 

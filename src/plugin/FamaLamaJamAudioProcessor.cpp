@@ -76,8 +76,11 @@ constexpr std::size_t kMaxRememberedServers = 12;
     return stream.str();
 }
 
-[[nodiscard]] std::string makeProtocolUsername(const std::string& username)
+[[nodiscard]] std::string makeProtocolUsername(const std::string& username, const std::string& password)
 {
+    if (! password.empty())
+        return username;
+
     if (username.rfind("anonymous", 0) == 0)
         return username;
 
@@ -1604,6 +1607,13 @@ bool FamaLamaJamAudioProcessor::isExperimentalStreamingEnabledForTesting() const
     return experimentalStreamingEnabled_;
 }
 
+FamaLamaJamAudioProcessor::LiveAuthAttemptSnapshot
+FamaLamaJamAudioProcessor::getLastLiveAuthAttemptForTesting() const
+{
+    const std::scoped_lock lock(liveAuthAttemptMutex_);
+    return lastLiveAuthAttempt_;
+}
+
 std::size_t FamaLamaJamAudioProcessor::getTransportSentFramesForTesting() const noexcept
 {
     return framedTransport_.getSentFrameCount();
@@ -2418,9 +2428,23 @@ void FamaLamaJamAudioProcessor::resetMixerStripMeters() noexcept
 void FamaLamaJamAudioProcessor::attemptLiveConnect()
 {
     const auto settings = settingsStore_.getActiveSettings();
+    const auto protocolUsername = makeProtocolUsername(settings.username, settings.password);
+
+    {
+        const std::scoped_lock lock(liveAuthAttemptMutex_);
+        lastLiveAuthAttempt_ = LiveAuthAttemptSnapshot {
+            .settingsUsername = settings.username,
+            .protocolUsername = protocolUsername,
+            .effectiveUsername = {},
+            .failureReason = {},
+            .authenticated = false,
+        };
+    }
 
     if (settings.serverHost.empty() || settings.serverPort == 0)
     {
+        const std::scoped_lock lock(liveAuthAttemptMutex_);
+        lastLiveAuthAttempt_.failureReason = "invalid host/port";
         handleConnectionEvent(app::session::ConnectionEvent {
             .type = app::session::ConnectionEventType::ConnectionFailed,
             .reason = "invalid host/port",
@@ -2433,19 +2457,22 @@ void FamaLamaJamAudioProcessor::attemptLiveConnect()
 
     if (! connected)
     {
+        const auto failureReason = makeConnectionFailureReason(settings);
+        const std::scoped_lock lock(liveAuthAttemptMutex_);
+        lastLiveAuthAttempt_.failureReason = failureReason;
         handleConnectionEvent(app::session::ConnectionEvent {
             .type = app::session::ConnectionEventType::ConnectionFailed,
-            .reason = makeConnectionFailureReason(settings),
+            .reason = failureReason,
         });
         return;
     }
 
     if (experimentalStreamingEnabled_)
     {
-        const auto protocolUsername = makeProtocolUsername(settings.username);
-
         if (! framedTransport_.start(std::move(socket), protocolUsername, settings.password))
         {
+            const std::scoped_lock lock(liveAuthAttemptMutex_);
+            lastLiveAuthAttempt_.failureReason = "transport startup failed";
             handleConnectionEvent(app::session::ConnectionEvent {
                 .type = app::session::ConnectionEventType::ConnectionFailed,
                 .reason = "transport startup failed",
@@ -2461,6 +2488,8 @@ void FamaLamaJamAudioProcessor::attemptLiveConnect()
             if (authFailure.empty())
                 authFailure = "authorization timeout";
 
+            const std::scoped_lock lock(liveAuthAttemptMutex_);
+            lastLiveAuthAttempt_.failureReason = authFailure;
             handleConnectionEvent(app::session::ConnectionEvent {
                 .type = app::session::ConnectionEventType::ConnectionFailed,
                 .reason = authFailure,
@@ -2470,6 +2499,13 @@ void FamaLamaJamAudioProcessor::attemptLiveConnect()
 
         if (effectiveUser.empty())
             effectiveUser = protocolUsername;
+
+        {
+            const std::scoped_lock lock(liveAuthAttemptMutex_);
+            lastLiveAuthAttempt_.effectiveUsername = effectiveUser;
+            lastLiveAuthAttempt_.failureReason.clear();
+            lastLiveAuthAttempt_.authenticated = true;
+        }
 
         handleConnectionEvent(app::session::ConnectionEvent {
             .type = app::session::ConnectionEventType::Connected,

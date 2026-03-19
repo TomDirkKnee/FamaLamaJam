@@ -478,6 +478,11 @@ TEST_CASE("plugin rehearsal ui flow applies the current draft to the live auth p
     editor->clickConnectForTesting();
 
     REQUIRE(waitForLifecycleState(processor, ConnectionState::Active));
+    const auto authAttempt = processor.getLastLiveAuthAttemptForTesting();
+    CHECK(authAttempt.settingsUsername == "fresh-user");
+    CHECK(authAttempt.protocolUsername == "fresh-user");
+    CHECK(authAttempt.failureReason.empty());
+    CHECK(authAttempt.authenticated);
     CHECK(processor.getActiveSettings().username == "fresh-user");
     CHECK(processor.getActiveSettings().password == "secret-room");
     CHECK(server.getLastAuthUsername() == "fresh-user");
