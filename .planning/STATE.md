@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08.2-02-PLAN.md
-last_updated: "2026-03-19T14:15:06.742Z"
-last_activity: 2026-03-19 - Completed Phase 08.2 plan 02 for the fixed right sidebar, inline auth UI, and master-output mixer footer.
+stopped_at: Completed 08.2-03-PLAN.md
+last_updated: "2026-03-19T14:31:03.541Z"
+last_activity: 2026-03-19 - Completed Phase 08.2 plan 03 for CPU diagnostics and editor refresh hardening.
 progress:
   total_phases: 12
   completed_phases: 8
   total_plans: 30
-  completed_plans: 27
-  percent: 90
+  completed_plans: 28
+  percent: 93
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 08.2 - Pre-Layout CPU, Mixer, UI, and Auth Hardening  
-Plan: 03 - Diagnose and reduce periodic CPU spikes with measurement-first hardening.  
+Plan: 04 - Run the final hardening gate and capture manual Ableton/private-room validation.  
 Status: In progress  
-Last activity: 2026-03-19 - Completed Phase 08.2 plan 02 for the fixed right sidebar, inline auth UI, and master-output mixer footer.
+Last activity: 2026-03-19 - Completed Phase 08.2 plan 03 for CPU diagnostics and editor refresh hardening.
 
-Progress: 90%
+Progress: 93%
 
 ## Accumulated Context
 
@@ -67,6 +67,9 @@ Progress: 90%
 - [Phase 08.2]: Keep the interim layout deterministic with a fixed-width right sidebar instead of starting the broader Phase 9 redesign early.
 - [Phase 08.2]: Surface authentication failures in a dedicated inline connection label while preserving the broader lifecycle status copy.
 - [Phase 08.2]: Treat master output as processor-owned post-mix state and seed new strips from explicit unity defaults after removing the dead top-level controls.
+- [Phase 08.2]: Diagnose periodic spike contributors with deterministic editor and processor work counters instead of wall-clock timing guesses.
+- [Phase 08.2]: Reduce unchanged room-feed and mixer timer work before touching server-authoritative timing or audio semantics.
+- [Phase 08.2]: Treat the remaining every-four-beat spike risk as mixed until final Ableton validation confirms how much residual behavior is machine-sensitive.
 
 ### Roadmap Evolution
 
@@ -76,7 +79,7 @@ Progress: 90%
 ### Pending Todos
 
 - Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
-- Investigate why processor spikes cluster around every four beats and compare the hot path against JamTaba's lower-CPU behavior.
+- Run the final Ableton repro on the same machine to judge how much every-four-beat spike risk remains after the editor-churn mitigation.
 - Run the final manual private-room auth and Ableton sidebar sanity checks during Phase 08.2 plan 04.
 
 ### Blockers/Concerns
@@ -84,7 +87,7 @@ Progress: 90%
 - Local Windows Ninja/CMake remains unreliable on this machine; use the verified `build-vs` path for now.
 - Phase 6 validated the healthy-path Ableton host-start workflow, but the timing-loss cancellation and failed-start re-arm paths were not manually exercised in Ableton.
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
-- Discovery correctness and the urgent sidebar/auth/mixer cleanup are no longer the blockers; the remaining Phase 08.2 concern is CPU-spike diagnosis plus the final manual validation pass.
+- Discovery correctness and the urgent sidebar/auth/mixer cleanup are no longer the blockers; the remaining Phase 08.2 concern is final manual validation of residual CPU-spike behavior and the private-room auth path.
 
 ### Performance Metrics
 
@@ -95,9 +98,10 @@ Progress: 90%
 - 2026-03-17: Completed Phase 07 plan 03 in 177 min across 3 task commits and 6 modified files.
 - 2026-03-19: Completed Phase 08.2 plan 01 in 4 min across 2 task commits and 9 modified files.
 - 2026-03-19: Completed Phase 08.2 plan 02 in 14 min across 2 task commits and 8 modified files.
+- 2026-03-19: Completed Phase 08.2 plan 03 in 14 min across 2 task commits and 7 modified files.
 
 ## Session Continuity
 
-Last session: 2026-03-19T14:15:06.742Z
-Stopped at: Completed 08.2-02-PLAN.md
+Last session: 2026-03-19T14:31:03.541Z
+Stopped at: Completed 08.2-03-PLAN.md
 Resume file: None
