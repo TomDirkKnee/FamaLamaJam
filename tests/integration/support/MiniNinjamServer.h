@@ -60,6 +60,131 @@ inline std::size_t boundedStrnlen(const char* text, std::size_t maxLen)
     return length;
 }
 
+inline std::uint32_t rotateLeft(std::uint32_t value, std::uint32_t bits)
+{
+    return (value << bits) | (value >> (32u - bits));
+}
+
+inline std::array<std::uint8_t, 20> sha1Digest(const void* data, std::size_t size)
+{
+    const auto* inputBytes = static_cast<const std::uint8_t*>(data);
+
+    std::vector<std::uint8_t> buffer;
+    buffer.reserve(size + 72);
+    buffer.insert(buffer.end(), inputBytes, inputBytes + size);
+    buffer.push_back(0x80u);
+
+    while ((buffer.size() % 64u) != 56u)
+        buffer.push_back(0u);
+
+    const auto bitLength = static_cast<std::uint64_t>(size) * 8u;
+    for (int shift = 56; shift >= 0; shift -= 8)
+        buffer.push_back(static_cast<std::uint8_t>((bitLength >> static_cast<unsigned>(shift)) & 0xffu));
+
+    std::uint32_t h0 = 0x67452301u;
+    std::uint32_t h1 = 0xefcdab89u;
+    std::uint32_t h2 = 0x98badcfeu;
+    std::uint32_t h3 = 0x10325476u;
+    std::uint32_t h4 = 0xc3d2e1f0u;
+
+    std::array<std::uint32_t, 80> w {};
+
+    for (std::size_t chunk = 0; chunk < buffer.size(); chunk += 64)
+    {
+        for (int i = 0; i < 16; ++i)
+        {
+            const auto idx = chunk + static_cast<std::size_t>(i) * 4u;
+            w[static_cast<std::size_t>(i)] = (static_cast<std::uint32_t>(buffer[idx]) << 24)
+                                             | (static_cast<std::uint32_t>(buffer[idx + 1]) << 16)
+                                             | (static_cast<std::uint32_t>(buffer[idx + 2]) << 8)
+                                             | static_cast<std::uint32_t>(buffer[idx + 3]);
+        }
+
+        for (int i = 16; i < 80; ++i)
+        {
+            w[static_cast<std::size_t>(i)] = rotateLeft(w[static_cast<std::size_t>(i - 3)]
+                                                            ^ w[static_cast<std::size_t>(i - 8)]
+                                                            ^ w[static_cast<std::size_t>(i - 14)]
+                                                            ^ w[static_cast<std::size_t>(i - 16)],
+                                                        1u);
+        }
+
+        auto a = h0;
+        auto b = h1;
+        auto c = h2;
+        auto d = h3;
+        auto e = h4;
+
+        for (int i = 0; i < 80; ++i)
+        {
+            std::uint32_t f = 0;
+            std::uint32_t k = 0;
+
+            if (i < 20)
+            {
+                f = (b & c) | ((~ b) & d);
+                k = 0x5a827999u;
+            }
+            else if (i < 40)
+            {
+                f = b ^ c ^ d;
+                k = 0x6ed9eba1u;
+            }
+            else if (i < 60)
+            {
+                f = (b & c) | (b & d) | (c & d);
+                k = 0x8f1bbcdcu;
+            }
+            else
+            {
+                f = b ^ c ^ d;
+                k = 0xca62c1d6u;
+            }
+
+            const auto temp = rotateLeft(a, 5u) + f + e + k + w[static_cast<std::size_t>(i)];
+            e = d;
+            d = c;
+            c = rotateLeft(b, 30u);
+            b = a;
+            a = temp;
+        }
+
+        h0 += a;
+        h1 += b;
+        h2 += c;
+        h3 += d;
+        h4 += e;
+    }
+
+    std::array<std::uint8_t, 20> digest {};
+    const std::array<std::uint32_t, 5> words { h0, h1, h2, h3, h4 };
+    for (std::size_t i = 0; i < words.size(); ++i)
+    {
+        digest[i * 4] = static_cast<std::uint8_t>((words[i] >> 24) & 0xffu);
+        digest[i * 4 + 1] = static_cast<std::uint8_t>((words[i] >> 16) & 0xffu);
+        digest[i * 4 + 2] = static_cast<std::uint8_t>((words[i] >> 8) & 0xffu);
+        digest[i * 4 + 3] = static_cast<std::uint8_t>(words[i] & 0xffu);
+    }
+
+    return digest;
+}
+
+inline std::array<std::uint8_t, 20> buildAuthPassHash(const std::string& username,
+                                                      const std::string& password,
+                                                      const std::array<std::uint8_t, 8>& challenge)
+{
+    std::string passInput = username;
+    passInput += ':';
+    passInput += password;
+
+    const auto firstHash = sha1Digest(passInput.data(), passInput.size());
+
+    std::array<std::uint8_t, 28> secondInput {};
+    std::memcpy(secondInput.data(), firstHash.data(), firstHash.size());
+    std::memcpy(secondInput.data() + firstHash.size(), challenge.data(), challenge.size());
+    return sha1Digest(secondInput.data(), secondInput.size());
+}
+
 struct NetMessage
 {
     std::uint8_t type { 0 };
@@ -69,6 +194,14 @@ struct NetMessage
 class MiniNinjamServer final : private juce::Thread
 {
 public:
+    struct AuthRules
+    {
+        bool validatePassword { false };
+        std::string expectedPassword;
+        std::string failureText;
+        bool forceFailure { false };
+    };
+
     struct RoomMessage
     {
         std::array<std::string, 5> fields;
@@ -141,6 +274,12 @@ public:
     {
         const juce::ScopedLock lock(configLock_);
         keepAliveSeconds_ = seconds == 0 ? 3 : seconds;
+    }
+
+    void setAuthRules(AuthRules rules)
+    {
+        const juce::ScopedLock lock(configLock_);
+        authRules_ = std::move(rules);
     }
 
     void enqueueConfigChange(std::uint16_t bpm, std::uint16_t bpi)
@@ -347,8 +486,7 @@ private:
     bool sendChallenge(juce::StreamingSocket& socket)
     {
         std::array<std::uint8_t, 16> payload {};
-        for (int i = 0; i < 8; ++i)
-            payload[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(i + 1);
+        std::memcpy(payload.data(), kAuthChallengeBytes.data(), kAuthChallengeBytes.size());
 
         std::uint8_t keepAliveSeconds = 3;
         {
@@ -370,6 +508,15 @@ private:
         std::memcpy(payload.data() + 1, effectiveUsername.data(), effectiveUsername.size());
         payload[1 + effectiveUsername.size()] = 0;
         payload[1 + effectiveUsername.size() + 1] = 32;
+        return writeMessage(socket, kMessageServerAuthReply, payload.data(), payload.size());
+    }
+
+    bool sendAuthFailure(juce::StreamingSocket& socket, const std::string& failureText)
+    {
+        std::vector<std::uint8_t> payload(1 + failureText.size() + 1);
+        payload[0] = 0;
+        std::memcpy(payload.data() + 1, failureText.data(), failureText.size());
+        payload[1 + failureText.size()] = 0;
         return writeMessage(socket, kMessageServerAuthReply, payload.data(), payload.size());
     }
 
@@ -563,6 +710,8 @@ private:
                         return;
 
                     const auto* payload = static_cast<const std::uint8_t*>(message.payload.getData());
+                    std::array<std::uint8_t, 20> providedPassHash {};
+                    std::memcpy(providedPassHash.data(), payload, providedPassHash.size());
                     const char* username = reinterpret_cast<const char*>(payload + 20);
                     const auto usernameMax = message.payload.getSize() - 20;
                     const auto usernameLen = boundedStrnlen(username, usernameMax);
@@ -570,18 +719,44 @@ private:
                     if (usernameLen > 0 && usernameLen < usernameMax)
                         effectiveUsername.assign(username, usernameLen);
 
-                    if (! sendAuthReply(*socket, effectiveUsername))
-                        return;
-
+                    AuthRules authRules;
                     std::uint16_t initialBpm = 120;
                     std::uint16_t initialBpi = 16;
                     std::vector<RemotePeer> peers;
                     {
                         const juce::ScopedLock lock(configLock_);
+                        authRules = authRules_;
                         initialBpm = initialBpm_;
                         initialBpi = initialBpi_;
                         peers = remotePeers_;
                     }
+
+                    const auto failureText = authRules.failureText.empty()
+                        ? std::string("invalid login/password")
+                        : authRules.failureText;
+
+                    if (authRules.forceFailure)
+                    {
+                        if (! sendAuthFailure(*socket, failureText))
+                            return;
+                        continue;
+                    }
+
+                    if (authRules.validatePassword)
+                    {
+                        const auto expectedHash = buildAuthPassHash(effectiveUsername,
+                                                                    authRules.expectedPassword,
+                                                                    kAuthChallengeBytes);
+                        if (providedPassHash != expectedHash)
+                        {
+                            if (! sendAuthFailure(*socket, failureText))
+                                return;
+                            continue;
+                        }
+                    }
+
+                    if (! sendAuthReply(*socket, effectiveUsername))
+                        return;
 
                     if (! sendConfigChange(*socket, initialBpm, initialBpi))
                         return;
@@ -704,11 +879,13 @@ private:
     mutable juce::WaitableEvent roomMessageEvent_;
     juce::WaitableEvent wakeEvent_;
     mutable juce::CriticalSection configLock_;
+    static constexpr std::array<std::uint8_t, 8> kAuthChallengeBytes { 1, 2, 3, 4, 5, 6, 7, 8 };
     std::vector<std::pair<std::uint16_t, std::uint16_t>> pendingConfigChanges_;
     std::vector<UserInfoChange> pendingUserInfoChanges_;
     std::vector<RoomMessage> pendingRoomMessages_;
     std::vector<RoomMessage> capturedRoomMessages_;
     std::vector<RemotePeer> remotePeers_ { RemotePeer {} };
+    AuthRules authRules_;
     std::uint16_t initialBpm_ { 120 };
     std::uint16_t initialBpi_ { 16 };
     std::uint8_t keepAliveSeconds_ { 3 };

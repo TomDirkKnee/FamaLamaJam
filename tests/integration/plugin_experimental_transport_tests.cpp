@@ -1,5 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <type_traits>
+#include <utility>
+
+#include "app/session/ConnectionLifecycle.h"
 #include "plugin/FamaLamaJamAudioProcessor.h"
 #include "support/MiniNinjamServer.h"
 
@@ -7,6 +11,43 @@ namespace
 {
 using famalamajam::tests::integration::MiniNinjamServer;
 using famalamajam::tests::integration::fillRampBuffer;
+
+template <typename T, typename = void>
+constexpr bool hasPasswordField = false;
+
+template <typename T>
+constexpr bool hasPasswordField<T, std::void_t<decltype(std::declval<T&>().password)>> = true;
+
+template <typename T, std::enable_if_t<hasPasswordField<T>, int> = 0>
+void setPasswordImpl(T& settings, std::string password)
+{
+    settings.password = std::move(password);
+}
+
+template <typename T, std::enable_if_t<! hasPasswordField<T>, int> = 0>
+void setPasswordImpl(T&, std::string)
+{
+}
+
+void setPassword(famalamajam::app::session::SessionSettings& settings, std::string password)
+{
+    setPasswordImpl(settings, std::move(password));
+}
+
+bool waitForLifecycleState(famalamajam::plugin::FamaLamaJamAudioProcessor& processor,
+                           famalamajam::app::session::ConnectionState expectedState,
+                           int attempts = 200)
+{
+    for (int attempt = 0; attempt < attempts; ++attempt)
+    {
+        if (processor.getLifecycleSnapshot().state == expectedState)
+            return true;
+
+        juce::Thread::sleep(5);
+    }
+
+    return false;
+}
 
 void fillNoiseBuffer(juce::AudioBuffer<float>& buffer, juce::Random& random)
 {
@@ -141,6 +182,68 @@ TEST_CASE("plugin experimental transport keeps large interval uploads connected"
     CHECK(processor.getLifecycleSnapshot().state == famalamajam::app::session::ConnectionState::Active);
 
     REQUIRE(processor.requestDisconnect());
+    processor.releaseResources();
+    server.stopServer();
+}
+
+TEST_CASE("plugin experimental transport authenticates private-room passwords", "[plugin_experimental_transport]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    server.setAuthRules(MiniNinjamServer::AuthRules {
+        .validatePassword = true,
+        .expectedPassword = "secret-room",
+        .failureText = "Wrong room password",
+    });
+    REQUIRE(server.startServer());
+
+    famalamajam::plugin::FamaLamaJamAudioProcessor processor(true, true);
+
+    auto settings = processor.getActiveSettings();
+    settings.serverHost = "127.0.0.1";
+    settings.serverPort = static_cast<std::uint16_t>(server.port());
+    settings.username = "guest";
+    setPassword(settings, "secret-room");
+
+    REQUIRE(processor.applySettingsFromUi(settings));
+    processor.prepareToPlay(48000.0, 512);
+    REQUIRE(processor.requestConnect());
+
+    REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Active));
+    CHECK(processor.getLifecycleSnapshot().statusMessage.find("NINJAM auth ok") != std::string::npos);
+
+    REQUIRE(processor.requestDisconnect());
+    processor.releaseResources();
+    server.stopServer();
+}
+
+TEST_CASE("plugin experimental transport surfaces explicit wrong-password failures", "[plugin_experimental_transport]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    server.setAuthRules(MiniNinjamServer::AuthRules {
+        .validatePassword = true,
+        .expectedPassword = "secret-room",
+        .failureText = "Wrong room password",
+    });
+    REQUIRE(server.startServer());
+
+    famalamajam::plugin::FamaLamaJamAudioProcessor processor(true, true);
+
+    auto settings = processor.getActiveSettings();
+    settings.serverHost = "127.0.0.1";
+    settings.serverPort = static_cast<std::uint16_t>(server.port());
+    settings.username = "guest";
+    setPassword(settings, "not-the-room-password");
+
+    REQUIRE(processor.applySettingsFromUi(settings));
+    processor.prepareToPlay(48000.0, 512);
+    REQUIRE(processor.requestConnect());
+
+    REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Error));
+    CHECK(processor.getLifecycleSnapshot().lastError == "Wrong room password");
+    CHECK(processor.getLastStatusMessage().find("Wrong room password") != std::string::npos);
+
     processor.releaseResources();
     server.stopServer();
 }

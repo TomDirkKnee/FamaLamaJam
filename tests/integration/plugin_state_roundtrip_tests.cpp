@@ -3,6 +3,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <type_traits>
+#include <utility>
+
 #include "app/session/ConnectionLifecycle.h"
 #include "plugin/FamaLamaJamAudioProcessor.h"
 #include "support/MiniNinjamServer.h"
@@ -16,6 +19,45 @@ namespace
 {
 using famalamajam::tests::integration::MiniNinjamServer;
 using famalamajam::tests::integration::fillRampBuffer;
+
+template <typename T, typename = void>
+constexpr bool hasPasswordField = false;
+
+template <typename T>
+constexpr bool hasPasswordField<T, std::void_t<decltype(std::declval<T&>().password)>> = true;
+
+template <typename T, std::enable_if_t<hasPasswordField<T>, int> = 0>
+void setPasswordImpl(T& settings, std::string password)
+{
+    settings.password = std::move(password);
+}
+
+template <typename T, std::enable_if_t<! hasPasswordField<T>, int> = 0>
+void setPasswordImpl(T&, std::string)
+{
+}
+
+void setPassword(famalamajam::app::session::SessionSettings& settings, std::string password)
+{
+    setPasswordImpl(settings, std::move(password));
+}
+
+template <typename T, std::enable_if_t<hasPasswordField<T>, int> = 0>
+std::string readPasswordImpl(const T& settings)
+{
+    return settings.password;
+}
+
+template <typename T, std::enable_if_t<! hasPasswordField<T>, int> = 0>
+std::string readPasswordImpl(const T&)
+{
+    return {};
+}
+
+std::string readPassword(const famalamajam::app::session::SessionSettings& settings)
+{
+    return readPasswordImpl(settings);
+}
 
 void connectProcessor(FamaLamaJamAudioProcessor& processor, MiniNinjamServer& server, double sampleRate, int blockSize)
 {
@@ -55,7 +97,7 @@ TEST_CASE("plugin_state_roundtrip restores saved settings in fresh instance", "[
 {
     FamaLamaJamAudioProcessor source;
 
-    famalamajam::app::session::SessionSettings draft {
+    auto draft = famalamajam::app::session::SessionSettings {
         .serverHost = "ninjam.example.org",
         .serverPort = 2050,
         .username = "roundtrip_user",
@@ -63,6 +105,7 @@ TEST_CASE("plugin_state_roundtrip restores saved settings in fresh instance", "[
         .defaultChannelPan = 0.35f,
         .defaultChannelMuted = true,
     };
+    setPassword(draft, "secret-room");
 
     famalamajam::app::session::SessionSettingsValidationResult validation;
     REQUIRE(source.applySettingsFromUi(draft, &validation));
@@ -81,6 +124,8 @@ TEST_CASE("plugin_state_roundtrip restores saved settings in fresh instance", "[
     CHECK(active.defaultChannelGainDb == Catch::Approx(-4.0f));
     CHECK(active.defaultChannelPan == Catch::Approx(0.35f));
     CHECK(active.defaultChannelMuted == true);
+    CHECK(hasPasswordField<famalamajam::app::session::SessionSettings>);
+    CHECK(readPassword(active) == "secret-room");
     CHECK(restored.isMetronomeEnabled());
     CHECK(restored.getLifecycleSnapshot().state == ConnectionState::Idle);
     CHECK_FALSE(restored.isSessionConnected());
@@ -186,6 +231,9 @@ TEST_CASE("plugin_state_roundtrip restores saved mixer state without reviving li
     REQUIRE(source.setMixerStripMixState(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, -3.0f, 0.25f, true));
     REQUIRE(source.setMixerStripMixState("alice#0", -7.0f, -0.35f, true));
     source.setMetronomeEnabled(true);
+    auto settings = source.getActiveSettings();
+    setPassword(settings, "saved-room-password");
+    REQUIRE(source.applySettingsFromUi(settings));
 
     juce::MemoryBlock state;
     source.getStateInformation(state);
@@ -207,6 +255,7 @@ TEST_CASE("plugin_state_roundtrip restores saved mixer state without reviving li
     CHECK(restored.getPendingRemoteSourceCountForTesting() == 0);
     CHECK(restored.isMetronomeEnabled());
     CHECK(restored.getLastStatusMessage() == "Settings restored");
+    CHECK(readPassword(restored.getActiveSettings()) == "saved-room-password");
 
     CHECK(localSnapshot.mix.gainDb == Catch::Approx(-3.0f));
     CHECK(localSnapshot.mix.pan == Catch::Approx(0.25f));
