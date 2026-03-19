@@ -199,8 +199,8 @@ TEST_CASE("plugin pre layout cpu diagnostics keeps room feed rebuild work dirty-
 
     const auto snapshot = harness.editor->getCpuDiagnosticSnapshotForTesting();
     REQUIRE(snapshot.roomRefreshCalls == 6);
-    CHECK(snapshot.roomFeedRebuildCalls == 1);
-    CHECK(snapshot.resizedCalls <= 1);
+    CHECK(snapshot.roomFeedRebuildCalls == 0);
+    CHECK(snapshot.resizedCalls == 0);
 }
 
 TEST_CASE("plugin pre layout cpu diagnostics keeps unchanged mixer strips off the old unconditional refresh cadence",

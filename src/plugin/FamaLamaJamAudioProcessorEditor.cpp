@@ -369,6 +369,48 @@ namespace
 
     return "Authentication failed. Check username or password and press Connect.";
 }
+
+[[nodiscard]] bool roomFeedEntryMatches(const FamaLamaJamAudioProcessorEditor::RoomFeedEntry& lhs,
+                                        const FamaLamaJamAudioProcessorEditor::RoomFeedEntry& rhs)
+{
+    return lhs.kind == rhs.kind
+        && lhs.author == rhs.author
+        && lhs.text == rhs.text
+        && lhs.subdued == rhs.subdued;
+}
+
+[[nodiscard]] bool roomFeedMatches(const std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry>& lhs,
+                                   const std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry>& rhs)
+{
+    if (lhs.size() != rhs.size())
+        return false;
+
+    for (std::size_t index = 0; index < lhs.size(); ++index)
+    {
+        if (! roomFeedEntryMatches(lhs[index], rhs[index]))
+            return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool mixerStripStateMatches(const FamaLamaJamAudioProcessorEditor::MixerStripState& lhs,
+                                          const FamaLamaJamAudioProcessorEditor::MixerStripState& rhs)
+{
+    return lhs.kind == rhs.kind
+        && lhs.sourceId == rhs.sourceId
+        && lhs.groupId == rhs.groupId
+        && lhs.groupLabel == rhs.groupLabel
+        && lhs.displayName == rhs.displayName
+        && lhs.subtitle == rhs.subtitle
+        && juce::approximatelyEqual(lhs.gainDb, rhs.gainDb)
+        && juce::approximatelyEqual(lhs.pan, rhs.pan)
+        && lhs.muted == rhs.muted
+        && juce::approximatelyEqual(lhs.meterLeft, rhs.meterLeft)
+        && juce::approximatelyEqual(lhs.meterRight, rhs.meterRight)
+        && lhs.active == rhs.active
+        && lhs.visible == rhs.visible;
+}
 } // namespace
 
 FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
@@ -913,8 +955,12 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
 void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
 {
     ++cpuDiagnosticSnapshot_.roomRefreshCalls;
-    currentRoomUiState_ = roomUiGetter_();
-    rebuildRoomFeedWidgets(currentRoomUiState_.visibleFeed);
+    const auto nextRoomUiState = roomUiGetter_();
+    const bool feedChanged = ! roomFeedMatches(nextRoomUiState.visibleFeed, currentRoomUiState_.visibleFeed);
+    currentRoomUiState_ = nextRoomUiState;
+
+    if (feedChanged)
+        rebuildRoomFeedWidgets(currentRoomUiState_.visibleFeed);
 
     roomTopicValueLabel_.setText(currentRoomUiState_.topic.empty() ? "No topic set" : currentRoomUiState_.topic,
                                  juce::dontSendNotification);
@@ -1084,6 +1130,12 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
     {
         const auto& strip = visibleStrips[index];
         auto& widgets = *mixerStripWidgets_[index];
+
+        const bool stripChanged = index >= currentVisibleMixerStrips_.size()
+            || ! mixerStripStateMatches(strip, currentVisibleMixerStrips_[index]);
+        if (! stripChanged)
+            continue;
+
         ++cpuDiagnosticSnapshot_.mixerStripUpdateCalls;
 
         widgets.groupLabel.setText(strip.groupLabel, juce::dontSendNotification);
@@ -1102,6 +1154,8 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
 
     if (! masterOutputSlider_.isMouseButtonDown())
         masterOutputSlider_.setValue(masterOutputGainGetter_(), juce::dontSendNotification);
+
+    currentVisibleMixerStrips_ = visibleStrips;
 }
 
 void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips)
@@ -1110,6 +1164,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
     mixerContent_.removeAllChildren();
     mixerStripWidgets_.clear();
     visibleMixerStripOrder_.clear();
+    currentVisibleMixerStrips_.clear();
 
     std::string previousGroupId;
     for (const auto& strip : visibleStrips)
@@ -1168,7 +1223,6 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
     }
 
     resized();
-    refreshMixerStrips();
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getTransportStatusTextForTesting() const

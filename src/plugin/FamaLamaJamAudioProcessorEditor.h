@@ -416,6 +416,7 @@ private:
     juce::Slider masterOutputSlider_;
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;
     std::vector<std::string> visibleMixerStripOrder_;
+    std::vector<MixerStripState> currentVisibleMixerStrips_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::string selectedServerDiscoveryEndpointKey_;
     ServerDiscoveryUiState currentServerDiscoveryUiState_;
