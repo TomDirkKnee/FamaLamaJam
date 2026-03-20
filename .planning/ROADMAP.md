@@ -20,6 +20,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history. (completed 2026-03-19)
 - [x] **Phase 08.1: Server Discovery Polish & JamTaba Parity Check** - Correct discovery-count fidelity, ordering, and picker stability before the larger layout work. (completed 2026-03-19)
 - [ ] **Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)** - Sidebar, mixer, and private-room auth reruns now pass in Ableton, but the original same-machine every-four-beat CPU repro is still unexercised, so Phase 9 remains blocked on that narrow host-evidence gap.
+- [ ] **Phase 08.3: Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard (INSERTED)** - Add the remaining release-critical controls, persistence, and voice-mode safety handling before the larger JamTaba-style layout overhaul.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
@@ -193,9 +194,29 @@ Plans:
 - [x] 08.2-05-PLAN.md - Investigate and fix the live private-room auth handoff so the real plugin window matches the controlled auth harness.
 - [x] 08.2-06-PLAN.md - Rebuilt the host-validation artifact, recorded the Ableton auth rerun as passing, and kept Phase 08.2 blocked only on the still-unexercised CPU repro.
 
+### Phase 08.3: Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard (INSERTED)
+
+**Goal**: Finish the remaining release-critical controls and single-page session polish before the broader Phase 9 layout overhaul, including remembered private-room recall, explicit local transmit lifecycle, mixer usability refinements, and safe unsupported voice-mode handling.
+**Depends on:** Phase 08.2
+**Requirements**: P083-01, P083-02, P083-03, P083-04, P083-05, P083-06, P083-07, P083-08
+**Success Criteria** (what must be TRUE):
+1. User can recall a previously successful private-room connection from the combined picker with host, username, and reusable masked password restored without manual re-entry.
+2. The local strip exposes an explicit transmit control with red, amber, and green lifecycle feedback, and turning transmit off stops only local upload while the rest of the session keeps running.
+3. Mixer and session polish improve practical use in the current single-page editor: multi-solo works, diagnostics and server settings can collapse, host sync assist stays inline and explicit, the room feed wraps cleanly, and the interval bar stays fixed as a full-width footer.
+4. Remote channels flagged for unsupported voice mode are not mixed as interval audio and are surfaced clearly in normal mixer or session UI instead of failing silently.
+5. The phase closes with targeted automation plus a focused Ableton smoke pass, without starting the broader Phase 9 redesign or implementing full voice chat.
+**Plans:** 5 plans
+
+Plans:
+- [ ] 08.3-01-PLAN.md - Add Wave 0 transmit or voice-guard test scaffolds and shared strip-state contracts.
+- [ ] 08.3-02-PLAN.md - Implement remembered private-server credential persistence, picker recall, and masked password reuse.
+- [ ] 08.3-03-PLAN.md - Add the local-strip transmit lifecycle and upload-only gating.
+- [ ] 08.3-04-PLAN.md - Add multi-solo, unsupported voice-mode guard, and the remaining single-page session UX polish.
+- [ ] 08.3-05-PLAN.md - Run the focused phase gate, Ableton smoke pass, and close out Phase 08.3 evidence.
+
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
-**Depends on**: Phase 08.2
+**Depends on**: Phase 08.3
 **Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03
 **Success Criteria** (what must be TRUE):
 1. Mixer strips are presented horizontally with the local monitor clearly distinguished and visually anchored.
@@ -254,7 +275,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 9 -> 10
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 8.3 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -268,6 +289,7 @@ Plans:
 | 8. Server Discovery & History | 3/3 | Complete    | 2026-03-19 |
 | 8.1. Server Discovery Polish & JamTaba Parity Check | 3/3 | Complete    | 2026-03-19 |
 | 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 6/6 | Blocked | - |
+| 8.3. Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard | 0/TBD | Planned     | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
