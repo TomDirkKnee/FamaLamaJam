@@ -207,6 +207,17 @@ public:
         std::uint64_t remoteFramesDecoded { 0 };
     };
 
+    struct RemoteReceiveDiagnosticRuntime
+    {
+        std::size_t lastEncodedBytes { 0 };
+        int lastDecodedSamples { 0 };
+        double lastDecodedSampleRate { 0.0 };
+        std::uint8_t channelFlags { 0 };
+        int lastCopiedSamples { 0 };
+        std::uint64_t lastQueuedBoundary { 0 };
+        std::uint64_t lateDrops { 0 };
+    };
+
     struct LiveAuthAttemptSnapshot
     {
         std::string settingsUsername;
@@ -270,6 +281,7 @@ public:
     [[nodiscard]] std::size_t getPendingRemoteSourceCountForTesting() const noexcept;
     [[nodiscard]] std::uint64_t getLastRemoteActivationBoundaryForTesting(const std::string& sourceId) const noexcept;
     [[nodiscard]] float getActiveRemoteIntervalAverageForTesting(const std::string& sourceId) const noexcept;
+    [[nodiscard]] std::string getRemoteReceiveDiagnosticsText() const;
     void injectDecodedRemoteIntervalForTesting(const std::string& sourceId,
                                                const juce::AudioBuffer<float>& audio,
                                                double sampleRate);
@@ -364,12 +376,14 @@ private:
     audio::CodecStreamBridge codecStreamBridge_;
     juce::AudioBuffer<float> localUploadIntervalBuffer_;
     int localUploadIntervalWritePosition_ { 0 };
+    int transmitWarmupIntervalsRemaining_ { 0 };
     std::atomic<std::size_t> lastCodecPayloadBytes_ { 0 };
     std::atomic<int> lastDecodedSamples_ { 0 };
     std::unordered_map<std::string, std::deque<RemoteQueuedInterval>> remoteQueuedIntervalsBySource_;
     std::unordered_map<std::string, std::uint64_t> nextRemoteTargetBoundaryBySource_;
     std::unordered_map<std::string, juce::AudioBuffer<float>> remoteActiveIntervalBySource_;
     std::unordered_map<std::string, std::uint64_t> lastRemoteActivationBoundaryBySource_;
+    std::unordered_map<std::string, RemoteReceiveDiagnosticRuntime> remoteReceiveDiagnosticsBySource_;
     std::unordered_map<std::string, MixerStripRuntimeState> mixerStripsBySourceId_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::atomic<bool> hasServerTimingForUi_ { false };
@@ -408,6 +422,8 @@ private:
     std::string publicServerListStatusText_;
     std::unique_ptr<infra::net::PublicServerDiscoveryClient> publicServerDiscoveryClient_;
     AuthoritativeTimingState authoritativeTiming_;
+    std::uint64_t lastHandledIntervalBoundaryGeneration_ { 0 };
+    bool intervalPhaseAnchoredFromDownloadBegin_ { false };
     int metronomeClickRemainingSamples_ { 0 };
     float metronomeClickPhase_ { 0.0f };
     float metronomeClickPhaseIncrement_ { 0.0f };

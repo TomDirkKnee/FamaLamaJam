@@ -586,6 +586,7 @@ private:
 
     bool sendDownloadWrite(juce::StreamingSocket& socket,
                            const std::array<std::uint8_t, 16>& guid,
+                           bool isLastPart,
                            const std::uint8_t* audioData,
                            std::size_t audioBytes)
     {
@@ -594,7 +595,7 @@ private:
 
         auto* bytes = static_cast<std::uint8_t*>(payload.getData());
         std::memcpy(bytes, guid.data(), guid.size());
-        bytes[16] = 1;
+        bytes[16] = isLastPart ? 1 : 0;
 
         if (audioBytes > 0)
             std::memcpy(bytes + 17, audioData, audioBytes);
@@ -862,12 +863,13 @@ private:
                     if (incomingGuid != lastUploadGuid)
                         continue;
 
+                    const auto isLastPart = (payload[16] & 1u) != 0;
                     const auto audioData = payload + 17;
                     const auto audioBytes = message.payload.getSize() - 17;
 
                     for (const auto& transfer : activeTransfers)
                     {
-                        if (! sendDownloadWrite(*socket, transfer.guid, audioData, audioBytes))
+                        if (! sendDownloadWrite(*socket, transfer.guid, isLastPart, audioData, audioBytes))
                             return;
                     }
 

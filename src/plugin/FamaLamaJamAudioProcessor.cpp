@@ -100,6 +100,7 @@ constexpr std::size_t kMaxRememberedServers = 12;
 }
 
 constexpr std::size_t kMaxQueuedIntervalsPerSource = 8;
+constexpr int kPreparedTransmitIntervals = 2;
 constexpr int kMinBpm = 20;
 constexpr int kMaxBpm = 400;
 constexpr int kMinBpi = 1;
@@ -377,6 +378,7 @@ void queueCompletedRemoteInterval(
 void queueDecodedRemoteInterval(
     std::unordered_map<std::string, std::deque<FamaLamaJamAudioProcessor::RemoteQueuedInterval>>& queuedBySource,
     std::unordered_map<std::string, std::uint64_t>& nextTargetBoundaryBySource,
+    std::unordered_map<std::string, FamaLamaJamAudioProcessor::RemoteReceiveDiagnosticRuntime>& diagnosticsBySource,
     const FamaLamaJamAudioProcessor::AuthoritativeTimingState& timing,
     const std::string& sourceId,
     const juce::AudioBuffer<float>& decoded)
@@ -396,11 +398,15 @@ void queueDecodedRemoteInterval(
 
     const auto earliestPlayableBoundary = timing.intervalIndex + 1;
     auto& nextTargetBoundary = nextTargetBoundaryBySource[sourceId];
+    auto& diagnostics = diagnosticsBySource[sourceId];
 
     if (nextTargetBoundary < earliestPlayableBoundary)
     {
         if (nextTargetBoundary != 0)
         {
+            ++diagnostics.lateDrops;
+            diagnostics.lastCopiedSamples = copiedSamples;
+            diagnostics.lastQueuedBoundary = earliestPlayableBoundary;
             nextTargetBoundary = earliestPlayableBoundary;
             return;
         }
@@ -408,6 +414,8 @@ void queueDecodedRemoteInterval(
         nextTargetBoundary = earliestPlayableBoundary;
     }
 
+    diagnostics.lastCopiedSamples = copiedSamples;
+    diagnostics.lastQueuedBoundary = nextTargetBoundary;
     queueCompletedRemoteInterval(queuedBySource, sourceId, std::move(normalized), nextTargetBoundary);
     ++nextTargetBoundary;
 }
@@ -575,6 +583,7 @@ void FamaLamaJamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
         nextRemoteTargetBoundaryBySource_.clear();
         remoteActiveIntervalBySource_.clear();
         lastRemoteActivationBoundaryBySource_.clear();
+        remoteReceiveDiagnosticsBySource_.clear();
         clearAuthoritativeTiming();
         resetMixerStripMeters();
         updateRemoteMixerStripActivity();
@@ -601,6 +610,7 @@ void FamaLamaJamAudioProcessor::releaseResources()
     nextRemoteTargetBoundaryBySource_.clear();
     remoteActiveIntervalBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
+    remoteReceiveDiagnosticsBySource_.clear();
     clearAuthoritativeTiming();
     clearRoomUiState(false);
     resetMixerStripMeters();
@@ -736,6 +746,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                                          serverIntervalSamples,
                                          serverBeatSamples);
                     authoritativeTiming_.samplesIntoInterval = 0;
+                    transmitWarmupIntervalsRemaining_ = experimentalStreamingEnabled_ ? kPreparedTransmitIntervals : 0;
                 }
                 else if (! matchesActive && ! matchesPending)
                 {
@@ -747,50 +758,63 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 }
             }
         }
+
     }
 
     if (experimentalStreamingEnabled_)
     {
         if (authoritativeTiming_.hasTiming && authoritativeTiming_.activeIntervalSamples > 0)
         {
-            if (localUploadIntervalBuffer_.getNumChannels() != buffer.getNumChannels()
-                || localUploadIntervalBuffer_.getNumSamples() != authoritativeTiming_.activeIntervalSamples)
+            if (transmitWarmupIntervalsRemaining_ > 0)
             {
-                localUploadIntervalBuffer_.setSize(buffer.getNumChannels(),
-                                                   authoritativeTiming_.activeIntervalSamples,
-                                                   false,
-                                                   true,
-                                                   true);
-                localUploadIntervalBuffer_.clear();
+                localUploadIntervalBuffer_.setSize(0, 0);
                 localUploadIntervalWritePosition_ = 0;
             }
-
-            int sourceOffset = 0;
-            while (sourceOffset < buffer.getNumSamples())
+            else
             {
-                const auto writableSamples = juce::jmin(buffer.getNumSamples() - sourceOffset,
-                                                        authoritativeTiming_.activeIntervalSamples
-                                                            - localUploadIntervalWritePosition_);
-
-                for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                if (localUploadIntervalBuffer_.getNumChannels() != buffer.getNumChannels()
+                    || localUploadIntervalBuffer_.getNumSamples() != authoritativeTiming_.activeIntervalSamples)
                 {
-                    localUploadIntervalBuffer_.copyFrom(channel,
-                                                        localUploadIntervalWritePosition_,
-                                                        buffer,
-                                                        channel,
-                                                        sourceOffset,
-                                                        writableSamples);
-                }
-
-                localUploadIntervalWritePosition_ += writableSamples;
-                sourceOffset += writableSamples;
-
-                if (localUploadIntervalWritePosition_ >= authoritativeTiming_.activeIntervalSamples)
-                {
-                    codecStreamBridge_.submitInput(localUploadIntervalBuffer_, currentSampleRate_);
+                    localUploadIntervalBuffer_.setSize(buffer.getNumChannels(),
+                                                       authoritativeTiming_.activeIntervalSamples,
+                                                       false,
+                                                       true,
+                                                       true);
                     localUploadIntervalBuffer_.clear();
-                    localUploadIntervalWritePosition_ = 0;
                 }
+
+                auto intervalWritePosition = juce::jlimit(0,
+                                                          authoritativeTiming_.activeIntervalSamples - 1,
+                                                          authoritativeTiming_.samplesIntoInterval);
+                int sourceOffset = 0;
+                while (sourceOffset < buffer.getNumSamples())
+                {
+                    const auto writableSamples = juce::jmin(buffer.getNumSamples() - sourceOffset,
+                                                            authoritativeTiming_.activeIntervalSamples
+                                                                - intervalWritePosition);
+
+                    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                    {
+                        localUploadIntervalBuffer_.copyFrom(channel,
+                                                            intervalWritePosition,
+                                                            buffer,
+                                                            channel,
+                                                            sourceOffset,
+                                                            writableSamples);
+                    }
+
+                    intervalWritePosition += writableSamples;
+                    sourceOffset += writableSamples;
+
+                    if (intervalWritePosition >= authoritativeTiming_.activeIntervalSamples)
+                    {
+                        codecStreamBridge_.submitInput(localUploadIntervalBuffer_, currentSampleRate_);
+                        localUploadIntervalBuffer_.clear();
+                        intervalWritePosition = 0;
+                    }
+                }
+
+                localUploadIntervalWritePosition_ = intervalWritePosition;
             }
         }
     }
@@ -831,6 +855,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         while (framesConsumed < 8 && framedTransport_.popInboundFrame(inboundFrame))
         {
             syncRemoteMixerStrip(inboundFrame.sourceInfo);
+            const auto sourceId = inboundFrame.sourceId.empty() ? std::string("unknown") : inboundFrame.sourceId;
+            remoteReceiveDiagnosticsBySource_[sourceId].lastEncodedBytes = inboundFrame.payload.getSize();
             codecStreamBridge_.submitInboundEncoded(inboundFrame.sourceId,
                                                     inboundFrame.payload.getData(),
                                                     inboundFrame.payload.getSize());
@@ -850,8 +876,12 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         lastDecodedSamples_.store(decodedAtHostRate.getNumSamples(), std::memory_order_relaxed);
 
         const auto sourceId = decodedFrame.sourceId.empty() ? std::string("unknown") : decodedFrame.sourceId;
+        auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
+        diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
+        diagnostics.lastDecodedSampleRate = decodedFrame.sampleRate;
         queueDecodedRemoteInterval(remoteQueuedIntervalsBySource_,
                                    nextRemoteTargetBoundaryBySource_,
+                                   remoteReceiveDiagnosticsBySource_,
                                    authoritativeTiming_,
                                    sourceId,
                                    decodedAtHostRate);
@@ -1012,6 +1042,13 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 ++authoritativeTiming_.intervalIndex;
                 intervalIndexForUi_.store(authoritativeTiming_.intervalIndex, std::memory_order_relaxed);
 
+                if (transmitWarmupIntervalsRemaining_ > 0)
+                {
+                    --transmitWarmupIntervalsRemaining_;
+                    localUploadIntervalBuffer_.setSize(0, 0);
+                    localUploadIntervalWritePosition_ = 0;
+                }
+
                 if (authoritativeTiming_.hasPendingTiming)
                 {
                     activateTimingConfig(authoritativeTiming_,
@@ -1025,6 +1062,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                     nextRemoteTargetBoundaryBySource_.clear();
                     remoteActiveIntervalBySource_.clear();
                     lastRemoteActivationBoundaryBySource_.clear();
+                    remoteReceiveDiagnosticsBySource_.clear();
                     
                 }
 
@@ -1220,6 +1258,7 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
     };
     auto metronomeGetter = [this]() { return isMetronomeEnabled(); };
     auto metronomeSetter = [this](bool enabled) { setMetronomeEnabled(enabled); };
+    auto diagnosticsTextGetter = [this]() { return getRemoteReceiveDiagnosticsText(); };
     auto masterOutputGainGetter = [this]() { return getMasterOutputGainDb(); };
     auto masterOutputGainSetter = [this](float gainDb) { setMasterOutputGainDb(gainDb); };
 
@@ -1241,6 +1280,7 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(roomUiGetter),
                                                std::move(roomMessageHandler),
                                                std::move(roomVoteHandler),
+                                               std::move(diagnosticsTextGetter),
                                                std::move(masterOutputGainGetter),
                                                std::move(masterOutputGainSetter));
 }
@@ -1639,6 +1679,100 @@ float FamaLamaJamAudioProcessor::getActiveRemoteIntervalAverageForTesting(const 
     return static_cast<float>(sum / static_cast<double>(buffer.getNumSamples()));
 }
 
+std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
+{
+    std::ostringstream stream;
+    stream << "Recv Debug";
+
+    if (! authoritativeTiming_.hasTiming || authoritativeTiming_.activeIntervalSamples <= 0)
+    {
+        stream << "\nwaiting for timing";
+        return stream.str();
+    }
+
+    stream << "\ninterval=" << authoritativeTiming_.intervalIndex
+           << " pos=" << authoritativeTiming_.samplesIntoInterval
+           << "/" << authoritativeTiming_.activeIntervalSamples
+           << " bpm=" << authoritativeTiming_.activeBpm
+           << " bpi=" << authoritativeTiming_.activeBpi
+           << " sr=" << juce::roundToInt(currentSampleRate_)
+           << " anchor=" << (intervalPhaseAnchoredFromDownloadBegin_ ? "dl" : "cfg")
+           << " txWarm=" << transmitWarmupIntervalsRemaining_
+           << " upl=" << localUploadIntervalWritePosition_
+           << "/" << authoritativeTiming_.activeIntervalSamples
+           << " encLast=" << codecStreamBridge_.getLastEncodedPayloadBytes()
+           << " rx=" << framedTransport_.getReceivedFrameCount()
+           << " tx=" << framedTransport_.getSentFrameCount();
+
+    if (remoteReceiveDiagnosticsBySource_.empty()
+        && remoteQueuedIntervalsBySource_.empty()
+        && remoteActiveIntervalBySource_.empty())
+    {
+        stream << "\nno remote sources";
+        return stream.str();
+    }
+
+    std::vector<std::string> sourceIds;
+    sourceIds.reserve(remoteReceiveDiagnosticsBySource_.size()
+                      + remoteQueuedIntervalsBySource_.size()
+                      + remoteActiveIntervalBySource_.size());
+
+    for (const auto& [sourceId, runtime] : remoteReceiveDiagnosticsBySource_)
+    {
+        (void) runtime;
+        sourceIds.push_back(sourceId);
+    }
+    for (const auto& [sourceId, queued] : remoteQueuedIntervalsBySource_)
+    {
+        (void) queued;
+        if (std::find(sourceIds.begin(), sourceIds.end(), sourceId) == sourceIds.end())
+            sourceIds.push_back(sourceId);
+    }
+    for (const auto& [sourceId, active] : remoteActiveIntervalBySource_)
+    {
+        (void) active;
+        if (std::find(sourceIds.begin(), sourceIds.end(), sourceId) == sourceIds.end())
+            sourceIds.push_back(sourceId);
+    }
+
+    std::sort(sourceIds.begin(), sourceIds.end());
+
+    for (const auto& sourceId : sourceIds)
+    {
+        const auto diagnosticsIt = remoteReceiveDiagnosticsBySource_.find(sourceId);
+        const auto queuedIt = remoteQueuedIntervalsBySource_.find(sourceId);
+        const auto activeIt = remoteActiveIntervalBySource_.find(sourceId);
+        const auto nextIt = nextRemoteTargetBoundaryBySource_.find(sourceId);
+        const auto lastIt = lastRemoteActivationBoundaryBySource_.find(sourceId);
+
+        const auto decodedSamples = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSamples : 0;
+        const auto decodedRate = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSampleRate : 0.0;
+        const auto channelFlags = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.channelFlags : 0u;
+        const auto encodedBytes = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastEncodedBytes : 0u;
+        const auto copiedSamples = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastCopiedSamples : 0;
+        const auto queuedBoundary = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastQueuedBoundary : 0u;
+        const auto lateDrops = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lateDrops : 0u;
+        const auto queuedCount = queuedIt != remoteQueuedIntervalsBySource_.end() ? queuedIt->second.size() : 0u;
+        const auto activeSamples = activeIt != remoteActiveIntervalBySource_.end() ? activeIt->second.getNumSamples() : 0;
+        const auto nextBoundary = nextIt != nextRemoteTargetBoundaryBySource_.end() ? nextIt->second : 0u;
+        const auto lastBoundary = lastIt != lastRemoteActivationBoundaryBySource_.end() ? lastIt->second : 0u;
+
+        stream << "\n" << sourceId
+               << " mode=" << (channelFlags == 2u ? "voice" : (channelFlags == 0u ? "interval" : ("flags" + std::to_string(channelFlags))))
+               << " enc=" << encodedBytes
+               << " dec=" << decodedSamples << "@" << juce::roundToInt(decodedRate)
+               << " copy=" << copiedSamples
+               << " active=" << activeSamples
+               << " queued=" << queuedCount
+               << " queuedAt=" << queuedBoundary
+               << " next=" << nextBoundary
+               << " last=" << lastBoundary
+               << " drops=" << lateDrops;
+    }
+
+    return stream.str();
+}
+
 void FamaLamaJamAudioProcessor::injectDecodedRemoteIntervalForTesting(const std::string& sourceId,
                                                                       const juce::AudioBuffer<float>& audio,
                                                                       double sampleRate)
@@ -1654,8 +1788,13 @@ void FamaLamaJamAudioProcessor::injectDecodedRemoteIntervalForTesting(const std:
     syncRemoteMixerStrip(sourceInfo);
 
     const auto decodedAtHostRate = audio::resampleAudioBuffer(audio, sampleRate, currentSampleRate_);
+    auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
+    diagnostics.lastEncodedBytes = 0;
+    diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
+    diagnostics.lastDecodedSampleRate = sampleRate;
     queueDecodedRemoteInterval(remoteQueuedIntervalsBySource_,
                                nextRemoteTargetBoundaryBySource_,
+                               remoteReceiveDiagnosticsBySource_,
                                authoritativeTiming_,
                                sourceId,
                                decodedAtHostRate);
@@ -1990,6 +2129,7 @@ void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::Con
         nextRemoteTargetBoundaryBySource_.clear();
         remoteActiveIntervalBySource_.clear();
         lastRemoteActivationBoundaryBySource_.clear();
+        remoteReceiveDiagnosticsBySource_.clear();
         clearAuthoritativeTiming();
         clearRoomUiState(false);
         hideAllRemoteMixerStrips();
@@ -2039,10 +2179,14 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     const bool wasWaitingForHost = hostSyncAssistWaitingForHost_.load(std::memory_order_relaxed);
 
     authoritativeTiming_ = {};
+    lastHandledIntervalBoundaryGeneration_ = 0;
+    intervalPhaseAnchoredFromDownloadBegin_ = false;
     localUploadIntervalBuffer_.setSize(0, 0);
     localUploadIntervalWritePosition_ = 0;
+    transmitWarmupIntervalsRemaining_ = 0;
     nextRemoteTargetBoundaryBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
+    remoteReceiveDiagnosticsBySource_.clear();
     hasServerTimingForUi_.store(false, std::memory_order_relaxed);
     serverBpmForUi_.store(0, std::memory_order_relaxed);
     beatsPerIntervalForUi_.store(0, std::memory_order_relaxed);
@@ -2301,6 +2445,8 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
     if (sourceInfo.sourceId.empty())
         return;
 
+    remoteReceiveDiagnosticsBySource_[sourceInfo.sourceId].channelFlags = sourceInfo.channelFlags;
+
     auto it = mixerStripsBySourceId_.find(sourceInfo.sourceId);
     if (it == mixerStripsBySourceId_.end())
     {
@@ -2347,6 +2493,7 @@ void FamaLamaJamAudioProcessor::markRemoteMixerStripInactive(const std::string& 
     nextRemoteTargetBoundaryBySource_.erase(sourceId);
     remoteActiveIntervalBySource_.erase(sourceId);
     lastRemoteActivationBoundaryBySource_.erase(sourceId);
+    remoteReceiveDiagnosticsBySource_.erase(sourceId);
 
     if (auto it = mixerStripsBySourceId_.find(sourceId); it != mixerStripsBySourceId_.end())
     {

@@ -116,6 +116,37 @@ void StereoMeterComponent::paint(juce::Graphics& graphics)
 
 namespace
 {
+[[nodiscard]] bool serverDiscoveryEntryMatches(const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& lhs,
+                                               const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& rhs)
+{
+    return lhs.source == rhs.source
+        && lhs.label == rhs.label
+        && lhs.host == rhs.host
+        && lhs.port == rhs.port
+        && lhs.connectedUsers == rhs.connectedUsers
+        && lhs.stale == rhs.stale;
+}
+
+[[nodiscard]] bool serverDiscoveryStateMatches(const FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState& lhs,
+                                               const FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState& rhs)
+{
+    if (lhs.fetchInProgress != rhs.fetchInProgress
+        || lhs.hasStalePublicData != rhs.hasStalePublicData
+        || lhs.statusText != rhs.statusText
+        || lhs.combinedEntries.size() != rhs.combinedEntries.size())
+    {
+        return false;
+    }
+
+    for (std::size_t index = 0; index < lhs.combinedEntries.size(); ++index)
+    {
+        if (! serverDiscoveryEntryMatches(lhs.combinedEntries[index], rhs.combinedEntries[index]))
+            return false;
+    }
+
+    return true;
+}
+
 [[nodiscard]] std::string makeServerDiscoveryEndpointKey(std::string_view host, std::uint16_t port)
 {
     return juce::String(host.data()).trim().toLowerCase().toStdString() + ":" + std::to_string(port);
@@ -431,6 +462,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  RoomUiGetter roomUiGetter,
                                                                  RoomMessageHandler roomMessageHandler,
                                                                  RoomVoteHandler roomVoteHandler,
+                                                                 DiagnosticsTextGetter diagnosticsTextGetter,
                                                                  FloatGetter masterOutputGainGetter,
                                                                  FloatSetter masterOutputGainSetter)
     : juce::AudioProcessorEditor(processor)
@@ -453,6 +485,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , roomUiGetter_(roomUiGetter ? std::move(roomUiGetter) : []() { return RoomUiState {}; })
     , roomMessageHandler_(roomMessageHandler ? std::move(roomMessageHandler) : [](std::string) { return false; })
     , roomVoteHandler_(roomVoteHandler ? std::move(roomVoteHandler) : [](RoomVoteKind, int) { return false; })
+    , diagnosticsTextGetter_(diagnosticsTextGetter ? std::move(diagnosticsTextGetter) : []() { return std::string {}; })
     , masterOutputGainGetter_(masterOutputGainGetter ? std::move(masterOutputGainGetter) : []() { return 0.0f; })
     , masterOutputGainSetter_(masterOutputGainSetter ? std::move(masterOutputGainSetter) : [](float) {})
 {
@@ -474,6 +507,9 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 
     serverPickerCombo_.setTextWhenNothingSelected("No servers listed yet");
     serverPickerCombo_.onChange = [this]() {
+        if (refreshingServerDiscoveryUi_)
+            return;
+
         const auto index = serverPickerCombo_.getSelectedItemIndex();
         if (index < 0 || index >= static_cast<int>(currentServerDiscoveryUiState_.combinedEntries.size()))
         {
@@ -617,6 +653,18 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     roomFeedViewport_.setScrollBarsShown(true, false);
     addAndMakeVisible(roomFeedViewport_);
 
+    diagnosticsLabel_.setText("Receive Diagnostics", juce::dontSendNotification);
+    diagnosticsLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(diagnosticsLabel_);
+
+    diagnosticsEditor_.setMultiLine(true);
+    diagnosticsEditor_.setReadOnly(true);
+    diagnosticsEditor_.setScrollbarsShown(true);
+    diagnosticsEditor_.setCaretVisible(false);
+    diagnosticsEditor_.setPopupMenuEnabled(false);
+    diagnosticsEditor_.setFont(juce::Font(juce::FontOptions(13.0f)));
+    addAndMakeVisible(diagnosticsEditor_);
+
     mixerSectionLabel_.setText("Mixer", juce::dontSendNotification);
     mixerSectionLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(mixerSectionLabel_);
@@ -645,9 +693,38 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     refreshTransportStatus();
     refreshServerDiscoveryUi();
     refreshRoomUi();
+    refreshDiagnosticsUi();
     refreshMixerStrips();
     startTimerHz(20);
     setSize(1080, 760);
+}
+
+FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
+{
+    stopTimer();
+
+    serverPickerCombo_.onChange = {};
+    refreshServersButton_.onClick = {};
+    metronomeToggle_.onClick = {};
+    connectButton_.onClick = {};
+    disconnectButton_.onClick = {};
+    hostSyncAssistButton_.onClick = {};
+    roomSendButton_.onClick = {};
+    roomBpmVoteButton_.onClick = {};
+    roomBpiVoteButton_.onClick = {};
+    roomComposerEditor_.onReturnKey = {};
+    roomComposerEditor_.onEscapeKey = {};
+    roomComposerEditor_.onFocusLost = {};
+    roomBpmEditor_.onReturnKey = {};
+    roomBpiEditor_.onReturnKey = {};
+    masterOutputSlider_.onValueChange = {};
+
+    for (auto& widgets : mixerStripWidgets_)
+    {
+        widgets->gainSlider.onValueChange = {};
+        widgets->panSlider.onValueChange = {};
+        widgets->muteToggle.onClick = {};
+    }
 }
 
 FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
@@ -666,6 +743,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  RoomUiGetter roomUiGetter,
                                                                  RoomMessageHandler roomMessageHandler,
                                                                  RoomVoteHandler roomVoteHandler,
+                                                                 DiagnosticsTextGetter diagnosticsTextGetter,
                                                                  FloatGetter masterOutputGainGetter,
                                                                  FloatSetter masterOutputGainSetter)
     : FamaLamaJamAudioProcessorEditor(processor,
@@ -686,6 +764,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                       std::move(roomUiGetter),
                                       std::move(roomMessageHandler),
                                       std::move(roomVoteHandler),
+                                      std::move(diagnosticsTextGetter),
                                       std::move(masterOutputGainGetter),
                                       std::move(masterOutputGainSetter))
 {
@@ -794,6 +873,13 @@ void FamaLamaJamAudioProcessorEditor::resized()
     composerRow.removeFromRight(6);
     roomComposerEditor_.setBounds(composerRow);
     sidebar.removeFromBottom(6);
+
+    auto diagnosticsArea = sidebar.removeFromBottom(180);
+    diagnosticsLabel_.setBounds(diagnosticsArea.removeFromTop(22));
+    diagnosticsArea.removeFromTop(4);
+    diagnosticsEditor_.setBounds(diagnosticsArea);
+    sidebar.removeFromBottom(6);
+
     roomFeedViewport_.setBounds(sidebar);
 
     int y = 0;
@@ -843,6 +929,7 @@ void FamaLamaJamAudioProcessorEditor::timerCallback()
     refreshTransportStatus();
     refreshServerDiscoveryUi();
     refreshRoomUi();
+    refreshDiagnosticsUi();
     refreshMixerStrips();
 }
 
@@ -912,6 +999,16 @@ void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
 
 void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
 {
+    const auto nextServerDiscoveryUiState = serverDiscoveryUiGetter_();
+    if (serverDiscoveryStateMatches(nextServerDiscoveryUiState, currentServerDiscoveryUiState_))
+    {
+        serverDiscoveryStatusLabel_.setText(formatServerDiscoveryStatus(currentServerDiscoveryUiState_),
+                                            juce::dontSendNotification);
+        refreshServersButton_.setEnabled(! currentServerDiscoveryUiState_.fetchInProgress);
+        return;
+    }
+
+    refreshingServerDiscoveryUi_ = true;
     const auto previousSelection = serverPickerCombo_.getSelectedItemIndex();
     auto selectedEndpointKey = selectedServerDiscoveryEndpointKey_;
     if (selectedEndpointKey.empty()
@@ -922,7 +1019,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
         selectedEndpointKey = makeServerDiscoveryEndpointKey(previousEntry.host, previousEntry.port);
     }
 
-    currentServerDiscoveryUiState_ = serverDiscoveryUiGetter_();
+    currentServerDiscoveryUiState_ = nextServerDiscoveryUiState;
     serverPickerCombo_.clear(juce::dontSendNotification);
 
     int itemId = 1;
@@ -950,6 +1047,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
     serverDiscoveryStatusLabel_.setText(formatServerDiscoveryStatus(currentServerDiscoveryUiState_),
                                         juce::dontSendNotification);
     refreshServersButton_.setEnabled(! currentServerDiscoveryUiState_.fetchInProgress);
+    refreshingServerDiscoveryUi_ = false;
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
@@ -1023,10 +1121,14 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
     applyVoteFeedback(RoomVoteKind::Bpi, currentRoomUiState_.bpiVote, roomBpiFeedbackState_, roomBpiStatusLabel_);
 }
 
+void FamaLamaJamAudioProcessorEditor::refreshDiagnosticsUi()
+{
+    diagnosticsEditor_.setText(juce::String(diagnosticsTextGetter_()), juce::dontSendNotification);
+}
+
 void FamaLamaJamAudioProcessorEditor::rebuildRoomFeedWidgets(const std::vector<RoomFeedEntry>& entries)
 {
     ++cpuDiagnosticSnapshot_.roomFeedRebuildCalls;
-    roomFeedContent_.removeAllChildren();
     roomFeedWidgets_.clear();
 
     if (entries.empty())
@@ -1161,7 +1263,14 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
 void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips)
 {
     cpuDiagnosticSnapshot_.mixerStripWidgetBuildCount += visibleStrips.size();
-    mixerContent_.removeAllChildren();
+
+    for (auto& widgets : mixerStripWidgets_)
+    {
+        widgets->gainSlider.onValueChange = {};
+        widgets->panSlider.onValueChange = {};
+        widgets->muteToggle.onClick = {};
+    }
+
     mixerStripWidgets_.clear();
     visibleMixerStripOrder_.clear();
     currentVisibleMixerStrips_.clear();
@@ -1446,6 +1555,11 @@ void FamaLamaJamAudioProcessorEditor::resetCpuDiagnosticSnapshotForTesting() noe
     cpuDiagnosticSnapshot_ = {};
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsTextForTesting() const
+{
+    return diagnosticsEditor_.getText();
+}
+
 void FamaLamaJamAudioProcessorEditor::setSettingsDraftForTesting(const app::session::SessionSettings& settings)
 {
     loadFromSettings(settings);
@@ -1469,6 +1583,7 @@ void FamaLamaJamAudioProcessorEditor::refreshForTesting()
     refreshTransportStatus();
     refreshServerDiscoveryUi();
     refreshRoomUi();
+    refreshDiagnosticsUi();
     refreshMixerStrips();
 }
 } // namespace famalamajam::plugin

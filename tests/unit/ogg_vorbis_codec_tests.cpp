@@ -50,7 +50,7 @@ TEST_CASE("ogg vorbis codec encodes and decodes audio", "[ogg_vorbis_codec]")
     CHECK(decodeError.empty());
     CHECK(decodedSampleRate == Catch::Approx(kSampleRate).epsilon(0.001));
     CHECK(decoded.getNumChannels() == kChannels);
-    CHECK(decoded.getNumSamples() > 0);
+    CHECK(decoded.getNumSamples() == kSamples);
 
     const auto window = juce::jmin(decoded.getNumSamples(), input.getNumSamples());
     CHECK(decoded.getRMSLevel(0, 0, window) > 0.01f);
@@ -71,4 +71,35 @@ TEST_CASE("ogg vorbis codec rejects invalid payload", "[ogg_vorbis_codec]")
                                                             sampleRate,
                                                             &error));
     CHECK_FALSE(error.empty());
+}
+
+TEST_CASE("ogg vorbis codec decodes concatenated payloads as full audio", "[ogg_vorbis_codec]")
+{
+    auto first = makeTestTone();
+    auto second = makeTestTone();
+    second.applyGain(0.35f);
+
+    juce::MemoryBlock firstEncoded;
+    juce::MemoryBlock secondEncoded;
+    REQUIRE(famalamajam::audio::OggVorbisCodec::encode(first, kSampleRate, firstEncoded));
+    REQUIRE(famalamajam::audio::OggVorbisCodec::encode(second, kSampleRate, secondEncoded));
+
+    juce::MemoryBlock concatenated;
+    concatenated.append(firstEncoded.getData(), firstEncoded.getSize());
+    concatenated.append(secondEncoded.getData(), secondEncoded.getSize());
+
+    juce::AudioBuffer<float> decoded;
+    double decodedSampleRate = 0.0;
+    std::string decodeError;
+
+    REQUIRE(famalamajam::audio::OggVorbisCodec::decode(concatenated.getData(),
+                                                       concatenated.getSize(),
+                                                       decoded,
+                                                       decodedSampleRate,
+                                                       &decodeError));
+
+    CHECK(decodeError.empty());
+    CHECK(decodedSampleRate == Catch::Approx(kSampleRate).epsilon(0.001));
+    CHECK(decoded.getNumChannels() == kChannels);
+    CHECK(decoded.getNumSamples() == (kSamples * 2));
 }

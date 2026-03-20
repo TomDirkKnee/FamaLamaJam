@@ -29,6 +29,7 @@ public:
         std::string channelName;
         std::string displayName;
         std::uint8_t channelIndex { 0 };
+        std::uint8_t channelFlags { 0 };
     };
 
     struct InboundFrame
@@ -60,6 +61,12 @@ public:
         std::string text;
     };
 
+    struct IntervalBoundaryEvent
+    {
+        std::uint64_t generation { 0 };
+        double receivedMs { 0.0 };
+    };
+
     explicit FramedSocketTransport(std::size_t maxFrameBytes = 1u << 20);
     ~FramedSocketTransport() override;
 
@@ -77,6 +84,7 @@ public:
     bool popRemoteSourceActivityUpdate(RemoteSourceActivityUpdate& update);
     bool popRoomEvent(RoomEvent& event);
     bool getServerTimingConfig(ServerTimingConfig& config) const;
+    bool getLatestIntervalBoundaryEvent(IntervalBoundaryEvent& event) const;
 
     [[nodiscard]] std::size_t getSentFrameCount() const;
     [[nodiscard]] std::size_t getReceivedFrameCount() const;
@@ -105,7 +113,8 @@ private:
     [[nodiscard]] std::string makeDownloadSourceId(const juce::MemoryBlock& payload) const;
     [[nodiscard]] RemoteSourceInfo makeRemoteSourceInfo(std::string username,
                                                         std::uint8_t channelIndex,
-                                                        std::string channelName) const;
+                                                        std::string channelName,
+                                                        std::uint8_t channelFlags = 0) const;
     [[nodiscard]] RemoteSourceInfo makeDownloadSourceInfo(const juce::MemoryBlock& payload) const;
 
     struct InboundTransferState
@@ -149,6 +158,7 @@ private:
     ServerTimingConfig serverTimingConfig_;
     bool hasServerTimingConfig_ { false };
     std::unordered_map<std::string, RemoteSourceInfo> knownRemoteSourcesById_;
+    IntervalBoundaryEvent latestIntervalBoundaryEvent_;
 
     int keepAliveSeconds_ { 3 };
     juce::int64 lastSendMs_ { 0 };

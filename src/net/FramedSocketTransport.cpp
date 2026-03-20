@@ -37,6 +37,7 @@ constexpr std::uint32_t kClientCapsHasVersion = 1u << 1;
 constexpr std::size_t kMaxQueuedFrames = 32;
 constexpr std::size_t kNetMessageMaxSize = 16384;
 constexpr std::size_t kMaxUploadChunkBytes = 8192;
+constexpr double kBoundaryEventCoalesceMs = 250.0;
 constexpr std::uint32_t kUploadFourCcOggv = static_cast<std::uint32_t>('O')
                                           | (static_cast<std::uint32_t>('G') << 8)
                                           | (static_cast<std::uint32_t>('G') << 16)
@@ -293,6 +294,7 @@ bool FramedSocketTransport::start(std::unique_ptr<juce::StreamingSocket> socket,
         receivedFrameCount_ = 0;
         serverTimingConfig_ = {};
         hasServerTimingConfig_ = false;
+        latestIntervalBoundaryEvent_ = {};
 
         lastSendMs_ = nowMs;
         lastReceiveMs_ = nowMs;
@@ -382,6 +384,7 @@ void FramedSocketTransport::stop()
         authFailureReason_.clear();
         serverTimingConfig_ = {};
         hasServerTimingConfig_ = false;
+        latestIntervalBoundaryEvent_ = {};
 
         lastSendMs_ = 0;
         lastReceiveMs_ = 0;
@@ -491,6 +494,17 @@ bool FramedSocketTransport::getServerTimingConfig(ServerTimingConfig& config) co
     config = serverTimingConfig_;
     return true;
 }
+
+bool FramedSocketTransport::getLatestIntervalBoundaryEvent(IntervalBoundaryEvent& event) const
+{
+    const juce::ScopedLock lock(stateLock_);
+    if (latestIntervalBoundaryEvent_.generation == 0)
+        return false;
+
+    event = latestIntervalBoundaryEvent_;
+    return true;
+}
+
 std::size_t FramedSocketTransport::getSentFrameCount() const
 {
     const juce::ScopedLock lock(stateLock_);
@@ -1014,7 +1028,7 @@ void FramedSocketTransport::handleUserInfo(const juce::MemoryBlock& payload)
         const auto channel = bytes[offset++];
         offset += 2;
         offset += 1;
-        offset += 1;
+        const auto channelFlags = bytes[offset++];
 
         const char* username = reinterpret_cast<const char*>(bytes + offset);
         const auto usernameAvail = payload.getSize() - offset;
@@ -1041,7 +1055,7 @@ void FramedSocketTransport::handleUserInfo(const juce::MemoryBlock& payload)
         if (remoteUser.empty() || normalizeUserIdentity(remoteUser) == ownIdentity)
             continue;
 
-        const auto sourceInfo = makeRemoteSourceInfo(remoteUser, channel, channelLabel);
+        const auto sourceInfo = makeRemoteSourceInfo(remoteUser, channel, channelLabel, channelFlags);
         {
             const juce::ScopedLock lock(stateLock_);
             if (isActive)
@@ -1152,6 +1166,17 @@ void FramedSocketTransport::handleDownloadBegin(const juce::MemoryBlock& payload
     }
 
     const juce::ScopedLock lock(stateLock_);
+    if (fourcc == kUploadFourCcOggv)
+    {
+        const auto nowMs = juce::Time::getMillisecondCounterHiRes();
+        if (latestIntervalBoundaryEvent_.generation == 0
+            || (nowMs - latestIntervalBoundaryEvent_.receivedMs) > kBoundaryEventCoalesceMs)
+        {
+            ++latestIntervalBoundaryEvent_.generation;
+            latestIntervalBoundaryEvent_.receivedMs = nowMs;
+        }
+    }
+
     auto& transfer = inboundTransfers_[key];
     transfer.payload.reset();
     transfer.sourceId = sourceInfo.sourceId;
@@ -1307,12 +1332,14 @@ std::string FramedSocketTransport::makeDownloadSourceId(const juce::MemoryBlock&
 
 FramedSocketTransport::RemoteSourceInfo FramedSocketTransport::makeRemoteSourceInfo(std::string username,
                                                                                    std::uint8_t channelIndex,
-                                                                                   std::string channelName) const
+                                                                                   std::string channelName,
+                                                                                   std::uint8_t channelFlags) const
 {
     RemoteSourceInfo info;
     info.userName = std::move(username);
     info.channelName = std::move(channelName);
     info.channelIndex = channelIndex;
+    info.channelFlags = channelFlags;
     info.groupId = normalizeUserIdentity(info.userName);
     info.sourceId = info.groupId + "#" + std::to_string(static_cast<unsigned>(channelIndex));
     info.displayName = makeRemoteChannelLabel(info.userName, info.channelName, channelIndex);

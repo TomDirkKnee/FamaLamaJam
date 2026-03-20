@@ -209,6 +209,7 @@ public:
     using RoomVoteHandler = std::function<bool(RoomVoteKind, int)>;
     using MixerStripsGetter = std::function<std::vector<MixerStripState>()>;
     using MixerStripSetter = std::function<bool(const std::string&, float, float, bool)>;
+    using DiagnosticsTextGetter = std::function<std::string()>;
     using FloatGetter = std::function<float()>;
     using FloatSetter = std::function<void(float)>;
     using BoolGetter = std::function<bool()>;
@@ -232,6 +233,7 @@ public:
                                     RoomUiGetter roomUiGetter = {},
                                     RoomMessageHandler roomMessageHandler = {},
                                     RoomVoteHandler roomVoteHandler = {},
+                                    DiagnosticsTextGetter diagnosticsTextGetter = {},
                                     FloatGetter masterOutputGainGetter = {},
                                     FloatSetter masterOutputGainSetter = {});
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
@@ -250,8 +252,10 @@ public:
                                     RoomUiGetter roomUiGetter,
                                     RoomMessageHandler roomMessageHandler,
                                     RoomVoteHandler roomVoteHandler,
+                                    DiagnosticsTextGetter diagnosticsTextGetter = {},
                                     FloatGetter masterOutputGainGetter = {},
                                     FloatSetter masterOutputGainSetter = {});
+    ~FamaLamaJamAudioProcessorEditor() override;
 
     void resized() override;
 
@@ -291,6 +295,7 @@ public:
     bool setMixerStripControlStateForTesting(const juce::String& sourceId, double gain, double pan, bool muted);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
+    [[nodiscard]] juce::String getDiagnosticsTextForTesting() const;
     void setSettingsDraftForTesting(const app::session::SessionSettings& settings);
     void clickConnectForTesting();
     void clickHostSyncAssistForTesting();
@@ -334,6 +339,7 @@ private:
     void refreshHostSyncAssistStatus();
     void refreshServerDiscoveryUi();
     void refreshRoomUi();
+    void refreshDiagnosticsUi();
     void rebuildRoomFeedWidgets(const std::vector<RoomFeedEntry>& entries);
     bool submitRoomComposerMessage();
     bool submitRoomVote(RoomVoteKind kind);
@@ -357,6 +363,7 @@ private:
     RoomUiGetter roomUiGetter_;
     RoomMessageHandler roomMessageHandler_;
     RoomVoteHandler roomVoteHandler_;
+    DiagnosticsTextGetter diagnosticsTextGetter_;
     FloatGetter masterOutputGainGetter_;
     FloatSetter masterOutputGainSetter_;
 
@@ -384,6 +391,8 @@ private:
     juce::TextButton disconnectButton_;
     juce::Label authStatusLabel_;
     juce::Label transportLabel_;
+    juce::Label diagnosticsLabel_;
+    juce::TextEditor diagnosticsEditor_;
     juce::Label hostSyncAssistTargetLabel_;
     juce::TextButton hostSyncAssistButton_;
     juce::Label hostSyncAssistStatusLabel_;
@@ -420,6 +429,7 @@ private:
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::string selectedServerDiscoveryEndpointKey_;
     ServerDiscoveryUiState currentServerDiscoveryUiState_;
+    bool refreshingServerDiscoveryUi_ { false };
     RoomUiState currentRoomUiState_;
     juce::Label statusLabel_;
     bool hostSyncAssistLastActionWasCancel_ { false };
