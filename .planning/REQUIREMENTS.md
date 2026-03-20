@@ -117,10 +117,10 @@
 | ROOM-01 | Phase 7 - Chat & Room Control Commands | Complete |
 | ROOM-02 | Phase 7 - Chat & Room Control Commands | Complete |
 | DISC-01 | Phase 8 / Phase 08.1 - Server Discovery & History / Server Discovery Polish & JamTaba Parity Check | Planned |
-| DISC-02 | Phase 8 / Phase 08.1 - Server Discovery & History / Server Discovery Polish & JamTaba Parity Check | Planned |
+| DISC-02 | Phase 8 / Phase 08.1 / Phase 08.3 - Server Discovery & History / Server Discovery Polish & JamTaba Parity Check / Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard | Planned |
 | LAYOUT-01 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
-| LAYOUT-02 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
-| LAYOUT-03 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
+| LAYOUT-02 | Phase 08.3 / Phase 9 - Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / JamTaba-Inspired Layout & Mixer Parity | Planned |
+| LAYOUT-03 | Phase 08.2 / Phase 08.3 / Phase 9 - Pre-Layout CPU, Mixer, UI, and Auth Hardening / Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / JamTaba-Inspired Layout & Mixer Parity | Planned |
 | PAR-01 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 | PAR-02 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 

@@ -259,10 +259,10 @@ Plans:
 | ROOM-01 | Phase 7 |
 | ROOM-02 | Phase 7 |
 | DISC-01 | Phase 8 |
-| DISC-02 | Phase 8 |
+| DISC-02 | Phase 8 / Phase 08.1 / Phase 08.3 |
 | LAYOUT-01 | Phase 9 |
-| LAYOUT-02 | Phase 9 |
-| LAYOUT-03 | Phase 9 |
+| LAYOUT-02 | Phase 08.3 / Phase 9 |
+| LAYOUT-03 | Phase 08.2 / Phase 08.3 / Phase 9 |
 | PAR-01 | Phase 10 |
 | PAR-02 | Phase 10 |
 
