@@ -19,7 +19,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 7: Chat & Room Control Commands** - Add room chat plus BPM/BPI voting controls and feedback. (completed 2026-03-17)
 - [x] **Phase 8: Server Discovery & History** - Add public server discovery plus remembered private server history. (completed 2026-03-19)
 - [x] **Phase 08.1: Server Discovery Polish & JamTaba Parity Check** - Correct discovery-count fidelity, ordering, and picker stability before the larger layout work. (completed 2026-03-19)
-- [ ] **Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)** - Sidebar and mixer baseline checks passed manually, and plan 05 fixed the password-auth username rewrite in automation, but the corrected Ableton private-room path and CPU repro still need the final rerun before the broader layout overhaul.
+- [ ] **Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)** - Sidebar, mixer, and private-room auth reruns now pass in Ableton, but the original same-machine every-four-beat CPU repro is still unexercised, so Phase 9 remains blocked on that narrow host-evidence gap.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
@@ -183,7 +183,7 @@ Plans:
 4. Password/authentication workflow is visible in the UI and validated against a local or controlled test server path.
 **Plans**: 6 plans
 
-**Current status (2026-03-19):** Plan 08.2-04 recorded the blocked real-host outcome, and plan 08.2-05 closed the unexplained auth mismatch by proving passworded auth had been rewriting usernames to anonymous-mode values in automation. The final Ableton rerun in plan 08.2-06 still needs to confirm the corrected private-room path, the wrong-password inline copy, and the deferred every-four-beat CPU repro before Phase 9 can be treated as unblocked.
+**Current status (2026-03-20):** Plan 08.2-04 recorded the blocked real-host outcome, plan 08.2-05 closed the unexplained auth mismatch in automation, and plan 08.2-06 confirmed the corrected private-room auth rerun plus wrong-password inline behavior in Ableton. Phase 08.2 remains blocked only because the original every-four-beat CPU repro is still unexercised on the same machine, so Phase 9 is not yet unblocked.
 
 Plans:
 - [x] 08.2-01-PLAN.md - Add password/auth and master-output state seams plus controlled Wave 0 coverage.
@@ -191,7 +191,7 @@ Plans:
 - [x] 08.2-03-PLAN.md - Diagnose and reduce periodic CPU spikes with measurement-first hardening.
 - [x] 08.2-04-PLAN.md - Captured the manual Ableton/private-room validation; the phase remains blocked by the failing correct-password auth path and deferred CPU follow-up.
 - [x] 08.2-05-PLAN.md - Investigate and fix the live private-room auth handoff so the real plugin window matches the controlled auth harness.
-- [ ] 08.2-06-PLAN.md - Rebuild the host-validation artifact, rerun the blocked Ableton auth/CPU checks, and close 08.2 honestly from the recorded outcome.
+- [x] 08.2-06-PLAN.md - Rebuilt the host-validation artifact, recorded the Ableton auth rerun as passing, and kept Phase 08.2 blocked only on the still-unexercised CPU repro.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
@@ -267,7 +267,7 @@ Plans:
 | 7. Chat & Room Control Commands | 3/3 | Complete    | 2026-03-17 |
 | 8. Server Discovery & History | 3/3 | Complete    | 2026-03-19 |
 | 8.1. Server Discovery Polish & JamTaba Parity Check | 3/3 | Complete    | 2026-03-19 |
-| 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 5/6 | Blocked | - |
+| 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 6/6 | Blocked | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
