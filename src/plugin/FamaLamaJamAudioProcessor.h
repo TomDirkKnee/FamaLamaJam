@@ -268,6 +268,11 @@ public:
     [[nodiscard]] std::vector<std::string> getActiveRemoteSourceIdsForTesting() const;
     [[nodiscard]] std::size_t getQueuedRemoteSourceCountForTesting() const noexcept;
     [[nodiscard]] std::size_t getPendingRemoteSourceCountForTesting() const noexcept;
+    [[nodiscard]] std::uint64_t getLastRemoteActivationBoundaryForTesting(const std::string& sourceId) const noexcept;
+    [[nodiscard]] float getActiveRemoteIntervalAverageForTesting(const std::string& sourceId) const noexcept;
+    void injectDecodedRemoteIntervalForTesting(const std::string& sourceId,
+                                               const juce::AudioBuffer<float>& audio,
+                                               double sampleRate);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] TransportUiState getTransportUiState() const noexcept;
@@ -307,13 +312,6 @@ public:
     struct RemoteQueuedInterval
     {
         juce::AudioBuffer<float> audio;
-        std::uint64_t targetIntervalIndex { 0 };
-    };
-
-    struct RemotePendingInterval
-    {
-        juce::AudioBuffer<float> audio;
-        int writePosition { 0 };
         std::uint64_t targetIntervalIndex { 0 };
     };
 
@@ -369,8 +367,9 @@ private:
     std::atomic<std::size_t> lastCodecPayloadBytes_ { 0 };
     std::atomic<int> lastDecodedSamples_ { 0 };
     std::unordered_map<std::string, std::deque<RemoteQueuedInterval>> remoteQueuedIntervalsBySource_;
+    std::unordered_map<std::string, std::uint64_t> nextRemoteTargetBoundaryBySource_;
     std::unordered_map<std::string, juce::AudioBuffer<float>> remoteActiveIntervalBySource_;
-    std::unordered_map<std::string, RemotePendingInterval> remotePendingIntervalsBySource_;
+    std::unordered_map<std::string, std::uint64_t> lastRemoteActivationBoundaryBySource_;
     std::unordered_map<std::string, MixerStripRuntimeState> mixerStripsBySourceId_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::atomic<bool> hasServerTimingForUi_ { false };
