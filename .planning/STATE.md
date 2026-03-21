@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Blocked
-stopped_at: Completed 08.2-06-PLAN.md
-last_updated: "2026-03-20T12:11:16.800Z"
-last_activity: 2026-03-20 - Completed Phase 08.2 plan 06 closeout docs; Ableton auth rerun passed, and the phase remains blocked only by the still-unexercised CPU repro.
+status: In Progress
+stopped_at: Completed 08.3-07-PLAN.md
+last_updated: "2026-03-21T21:15:00.000Z"
+last_activity: "2026-03-21 - Completed Phase 08.3 plan 07: the focused 08.3 gate reran on build-vs-2026, the brand-new-instance private-room recall checkpoint passed in Ableton, and Phase 08.3 is now closed."
 progress:
-  total_phases: 12
-  completed_phases: 8
-  total_plans: 32
-  completed_plans: 31
-  percent: 97
+  total_phases: 13
+  completed_phases: 10
+  total_plans: 39
+  completed_plans: 39
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Capture the remaining same-machine Ableton CPU repro evidence for Phase 08.2, then close or carry forward that single host-performance blocker honestly before Phase 9.
+**Current focus:** Phase 08.3 is closed. The remaining carry-forward concern before Phase 9 is the still-unexercised same-machine CPU repro from Phase 08.2.
 
 ## Current Position
 
-Phase: 08.2 - Pre-Layout CPU, Mixer, UI, and Auth Hardening  
-Plan: 06 - Final closeout docs recorded the Ableton auth rerun as passing; only the same-machine CPU follow-up still blocks phase closeout.  
-Status: Blocked  
-Last activity: 2026-03-20 - Completed Phase 08.2 plan 06 closeout docs; Ableton auth rerun passed, and the phase remains blocked only by the still-unexercised CPU repro.
+Phase: 08.3 - Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard  
+Plan: Complete - Focused gate rerun and real-host brand-new-instance recall are both validated.  
+Status: Complete  
+Last activity: 2026-03-21 - Closed Phase 08.3 after the brand-new-instance private-room recall rerun passed in Ableton.
 
-Progress: 97%
+Progress: 100%
 
 ## Accumulated Context
 
@@ -75,24 +75,28 @@ Progress: 97%
 - [Phase 08.2]: Keep passworded auth on the applied username instead of forcing anonymous-mode protocol usernames.
 - [Phase 08.2]: Expose processor-owned live auth attempt snapshots so integration tests can distinguish rewritten usernames from real credential failures.
 - [Phase 08.2]: Treat the 2026-03-20 Ableton rerun as enough to close `P082-SC4`, but do not close the phase until `P8.2-CPU-05` is exercised on the original repro machine.
+- [Phase 08.3]: Keep remembered private-room persistence as a narrow processor-owned app-data store that merges wrapped project history instead of introducing a separate credential-management UX.
+- [Phase 08.3]: Use the existing build-vs-2026 Visual Studio generator for verification when the local build-vs NMake tree blocks on U1076 name-too-long failures.
+- [Phase 08.3]: Preserve the four previously passing manual rows as carried-forward evidence during the gap-close rerun unless the focused checkpoint reports a new regression.
 
 ### Roadmap Evolution
 
 - Phase 08.1 inserted after Phase 8: Server Discovery Polish & JamTaba Parity Check (URGENT)
 - Phase 08.2 inserted after Phase 8: Pre-Layout CPU, Mixer, UI, and Auth Hardening (URGENT)
+- Phase 08.3 inserted after Phase 08.2: Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard (URGENT)
 
 ### Pending Todos
 
-- Keep using the verified `build-vs` validation path until local Ninja reliability is revisited.
+- Keep using the verified `build-vs-2026` validation path until the local `build-vs` NMake tree stops failing with `U1076 name too long`.
 - Run the every-four-beat Ableton repro on the same machine to judge how much CPU risk remains after the editor-churn mitigation.
 
 ### Blockers/Concerns
 
-- Local Windows Ninja/CMake remains unreliable on this machine; use the verified `build-vs` path for now.
+- Local Windows Ninja/CMake remains unreliable on this machine, and the `build-vs` NMake tree now also fails with `U1076 name too long`; use the verified `build-vs-2026` path for now.
 - Phase 6 validated the healthy-path Ableton host-start workflow, but the timing-loss cancellation and failed-start re-arm paths were not manually exercised in Ableton.
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
-- Phase 08.2 remains blocked only by host CPU evidence: the 2026-03-20 Ableton rerun closed the real-host auth gap, but `P8.2-CPU-05` is still `not exercised`.
-- `P082-SC1` still lacks same-machine host evidence for whether the original every-four-beat CPU spike is materially reduced or still disruptive after the editor-churn mitigation.
+- Phase 08.2 still carries forward unresolved same-machine CPU evidence, but it is now treated as a documented carry-forward concern rather than the active execution step.
+- Phase 08.3 is closed, but the local `build-vs` NMake tree still fails with `U1076 name too long`; continue using `build-vs-2026` until that environment issue is resolved.
 
 ### Performance Metrics
 
@@ -107,9 +111,13 @@ Progress: 97%
 - 2026-03-19: Completed Phase 08.2 plan 04 in 22 min across 2 task commits and 5 modified files; the phase remained blocked by manual private-room auth failure and deferred CPU follow-up.
 - 2026-03-19: Completed Phase 08.2 plan 05 in 23 min across 2 task commits and 5 modified files; automated coverage now proves passworded auth preserves the applied username, but the final Ableton rerun is still pending.
 - 2026-03-20: Completed Phase 08.2 plan 06 across 2 sessions (~10 min active) with 2 task commits and 5 modified files; the Ableton auth rerun passed, but the phase remains blocked by the unexercised same-machine CPU repro.
+- 2026-03-21: Completed Phase 08.3 plans 01-04 plus automated plan 05 work, including the VS18 test gate (`52` test cases / `595` assertions) and a rebuilt Debug VST3 for manual smoke validation.
+- 2026-03-21: Recorded the Phase 08.3 manual smoke pass; four checks passed, but `P8.3-RECALL-01` failed because remembered private-room recall is not yet global across new plugin instances.
+- 2026-03-21: Completed Phase 08.3 plan 06 in 13 min with 1 clean task commit plus verified working-tree integration changes; app-data remembered-server persistence, cross-instance recall, and wrapped/global merge automation now pass in the `build-vs-2026` validation tree.
+- 2026-03-21: Completed Phase 08.3 plan 07 by rerunning the focused 08.3 gate on `build-vs-2026` (`54` test cases / `626` assertions), rebuilding the Debug VST3, and recording the approved brand-new-instance private-room recall rerun in Ableton.
 
 ## Session Continuity
 
-Last session: 2026-03-20T12:11:16.797Z
-Stopped at: Completed 08.2-06-PLAN.md
+Last session: 2026-03-21T19:54:13.985Z
+Stopped at: Completed 08.3-07-PLAN.md
 Resume file: None
