@@ -204,27 +204,23 @@ TEST_CASE("plugin room controls ui exposes one mixed room section in the current
                           });
 
     auto* roomLabel = findLabelWithText(*harness.editor, "Room");
-    auto* topicLabel = findLabelWithText(*harness.editor, "Current Topic");
     auto* composerLabel = findLabelWithText(*harness.editor, "Message");
     auto* sendButton = findButtonWithText(*harness.editor, "Send");
     auto* bpmButton = findButtonWithText(*harness.editor, "Vote BPM");
     auto* bpiButton = findButtonWithText(*harness.editor, "Vote BPI");
 
     REQUIRE(roomLabel != nullptr);
-    REQUIRE(topicLabel != nullptr);
     REQUIRE(composerLabel != nullptr);
     REQUIRE(sendButton != nullptr);
     REQUIRE(bpmButton != nullptr);
     REQUIRE(bpiButton != nullptr);
 
     CHECK(roomLabel->isVisible());
-    CHECK(topicLabel->isVisible());
     CHECK(composerLabel->isVisible());
     CHECK(sendButton->isVisible());
     CHECK(bpmButton->isVisible());
     CHECK(bpiButton->isVisible());
     CHECK(harness.editor->hasRoomFeedViewportForTesting());
-    CHECK(harness.editor->getRoomTopicTextForTesting() == "Tonight: lock the groove before the chorus.");
     REQUIRE(harness.editor->getVisibleRoomFeedForTesting().size() == 4);
     CHECK(harness.editor->getVisibleRoomFeedForTesting()[0].kind
           == FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Topic);
@@ -271,12 +267,9 @@ TEST_CASE("plugin room controls ui keeps the right-hand room sidebar visible whi
     auto* connectedBpiButton = findButtonWithText(*connectedHarness.editor, "Vote BPI");
     auto* disconnectedHostLabel = findLabelWithText(*disconnectedHarness.editor, "Host");
     auto* disconnectedRoomLabel = findLabelWithText(*disconnectedHarness.editor, "Room");
-    auto* disconnectedTopicLabel = findLabelWithText(*disconnectedHarness.editor, "Current Topic");
     auto* disconnectedComposerLabel = findLabelWithText(*disconnectedHarness.editor, "Message");
     auto* disconnectedBpmButton = findButtonWithText(*disconnectedHarness.editor, "Vote BPM");
     auto* disconnectedBpiButton = findButtonWithText(*disconnectedHarness.editor, "Vote BPI");
-    auto* disconnectedRoomStatus =
-        findLabelWithText(*disconnectedHarness.editor, "Connect to a room to chat and vote.");
 
     REQUIRE(connectedHostLabel != nullptr);
     REQUIRE(connectedRoomLabel != nullptr);
@@ -286,11 +279,9 @@ TEST_CASE("plugin room controls ui keeps the right-hand room sidebar visible whi
     REQUIRE(connectedBpiButton != nullptr);
     REQUIRE(disconnectedHostLabel != nullptr);
     REQUIRE(disconnectedRoomLabel != nullptr);
-    REQUIRE(disconnectedTopicLabel != nullptr);
     REQUIRE(disconnectedComposerLabel != nullptr);
     REQUIRE(disconnectedBpmButton != nullptr);
     REQUIRE(disconnectedBpiButton != nullptr);
-    REQUIRE(disconnectedRoomStatus != nullptr);
 
     CHECK(connectedRoomLabel->getX() > connectedHostLabel->getRight());
     CHECK(connectedComposerLabel->isVisible());
@@ -298,17 +289,15 @@ TEST_CASE("plugin room controls ui keeps the right-hand room sidebar visible whi
     CHECK(connectedBpmButton->isVisible());
     CHECK(connectedBpiButton->isVisible());
     CHECK(disconnectedRoomLabel->isVisible());
-    CHECK(disconnectedTopicLabel->isVisible());
     CHECK(disconnectedComposerLabel->isVisible());
     CHECK(disconnectedBpmButton->isVisible());
     CHECK(disconnectedBpiButton->isVisible());
     CHECK(disconnectedRoomLabel->getX() > disconnectedHostLabel->getRight());
-    CHECK(disconnectedRoomStatus->isVisible());
     CHECK(connectedHarness.editor->isRoomComposerEnabledForTesting());
     CHECK_FALSE(disconnectedHarness.editor->isRoomComposerEnabledForTesting());
     CHECK_FALSE(disconnectedHarness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm));
     CHECK_FALSE(disconnectedHarness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
-    CHECK(disconnectedHarness.editor->getRoomStatusTextForTesting() == "Connect to a room to chat and vote.");
+    CHECK(disconnectedHarness.editor->getRoomStatusTextForTesting().isEmpty());
     CHECK(disconnectedHarness.editor->hasRoomFeedViewportForTesting());
 
     connectedHarness.editor->setRoomComposerTextForTesting("Keep the bridge tight.");
@@ -344,16 +333,14 @@ TEST_CASE("plugin room controls ui keeps compact vote controls near the top of t
 
     auto* hostLabel = findLabelWithText(*harness.editor, "Host");
     auto* roomLabel = findLabelWithText(*harness.editor, "Room");
-    auto* topicLabel = findLabelWithText(*harness.editor, "Current Topic");
     auto* bpmButton = findButtonWithText(*harness.editor, "Vote BPM");
     auto* bpiButton = findButtonWithText(*harness.editor, "Vote BPI");
-    auto* roomStatusLabel = findLabelContainingText(*harness.editor, "Connected room activity");
+    auto* roomStatusLabel = findLabelContainingText(*harness.editor, "Room activity");
     auto* pendingLabel = findLabelWithText(*harness.editor, "BPM vote pending");
     auto* failureLabel = findLabelWithText(*harness.editor, "BPI vote failed");
 
     REQUIRE(hostLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
-    REQUIRE(topicLabel != nullptr);
     REQUIRE(bpmButton != nullptr);
     REQUIRE(bpiButton != nullptr);
     REQUIRE(roomStatusLabel != nullptr);
@@ -361,7 +348,6 @@ TEST_CASE("plugin room controls ui keeps compact vote controls near the top of t
     REQUIRE(failureLabel != nullptr);
 
     CHECK(roomLabel->getX() > hostLabel->getRight());
-    CHECK(topicLabel->getX() == roomLabel->getX());
     CHECK(bpmButton->getX() > hostLabel->getRight());
     CHECK(bpiButton->getX() > hostLabel->getRight());
     CHECK(bpmButton->getY() < roomStatusLabel->getY());

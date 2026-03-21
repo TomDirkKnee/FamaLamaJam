@@ -116,6 +116,8 @@ void StereoMeterComponent::paint(juce::Graphics& graphics)
 
 namespace
 {
+constexpr auto kRememberedPasswordMask = "********";
+
 [[nodiscard]] bool serverDiscoveryEntryMatches(const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& lhs,
                                                const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& rhs)
 {
@@ -123,6 +125,8 @@ namespace
         && lhs.label == rhs.label
         && lhs.host == rhs.host
         && lhs.port == rhs.port
+        && lhs.username == rhs.username
+        && lhs.password == rhs.password
         && lhs.connectedUsers == rhs.connectedUsers
         && lhs.stale == rhs.stale;
 }
@@ -376,13 +380,13 @@ namespace
 [[nodiscard]] juce::String formatServerDiscoveryStatus(
     const FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState& state)
 {
-    if (! state.statusText.empty())
-        return state.statusText;
-
     if (state.fetchInProgress)
         return "Refreshing public server list...";
 
-    return "Pick a public or remembered server, or type Host and Port manually.";
+    if (! state.statusText.empty())
+        return state.statusText;
+
+    return {};
 }
 
 [[nodiscard]] juce::String formatInlineAuthStatus(const app::session::ConnectionLifecycleSnapshot& snapshot)
@@ -437,8 +441,12 @@ namespace
         && juce::approximatelyEqual(lhs.gainDb, rhs.gainDb)
         && juce::approximatelyEqual(lhs.pan, rhs.pan)
         && lhs.muted == rhs.muted
+        && lhs.soloed == rhs.soloed
         && juce::approximatelyEqual(lhs.meterLeft, rhs.meterLeft)
         && juce::approximatelyEqual(lhs.meterRight, rhs.meterRight)
+        && lhs.transmitState == rhs.transmitState
+        && lhs.unsupportedVoiceMode == rhs.unsupportedVoiceMode
+        && lhs.statusText == rhs.statusText
         && lhs.active == rhs.active
         && lhs.visible == rhs.visible;
 }
@@ -464,7 +472,11 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  RoomVoteHandler roomVoteHandler,
                                                                  DiagnosticsTextGetter diagnosticsTextGetter,
                                                                  FloatGetter masterOutputGainGetter,
-                                                                 FloatSetter masterOutputGainSetter)
+                                                                 FloatSetter masterOutputGainSetter,
+                                                                 FloatGetter metronomeGainGetter,
+                                                                 FloatSetter metronomeGainSetter,
+                                                                 CommandHandler transmitToggleHandler,
+                                                                 MixerStripSoloSetter mixerStripSoloSetter)
     : juce::AudioProcessorEditor(processor)
     , settingsGetter_(std::move(settingsGetter))
     , applyHandler_(std::move(applyHandler))
@@ -476,6 +488,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , hostSyncAssistToggleHandler_(std::move(hostSyncAssistToggleHandler))
     , mixerStripsGetter_(std::move(mixerStripsGetter))
     , mixerStripSetter_(std::move(mixerStripSetter))
+    , mixerStripSoloSetter_(mixerStripSoloSetter ? std::move(mixerStripSoloSetter) : [](const std::string&, bool) { return false; })
     , metronomeGetter_(std::move(metronomeGetter))
     , metronomeSetter_(std::move(metronomeSetter))
     , serverDiscoveryUiGetter_(serverDiscoveryUiGetter ? std::move(serverDiscoveryUiGetter)
@@ -488,10 +501,24 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , diagnosticsTextGetter_(diagnosticsTextGetter ? std::move(diagnosticsTextGetter) : []() { return std::string {}; })
     , masterOutputGainGetter_(masterOutputGainGetter ? std::move(masterOutputGainGetter) : []() { return 0.0f; })
     , masterOutputGainSetter_(masterOutputGainSetter ? std::move(masterOutputGainSetter) : [](float) {})
+    , metronomeGainGetter_(metronomeGainGetter ? std::move(metronomeGainGetter) : []() { return 0.0f; })
+    , metronomeGainSetter_(metronomeGainSetter ? std::move(metronomeGainSetter) : [](float) {})
+    , transmitToggleHandler_(transmitToggleHandler ? std::move(transmitToggleHandler) : []() { return false; })
 {
     titleLabel_.setText("FamaLamaJam Session Settings", juce::dontSendNotification);
     titleLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(titleLabel_);
+
+    serverSettingsToggle_.setButtonText(getServerSettingsToggleText());
+    serverSettingsToggle_.onClick = [this]() {
+        serverSettingsExpanded_ = ! serverSettingsExpanded_;
+        serverSettingsToggle_.setButtonText(getServerSettingsToggleText());
+        resized();
+    };
+    addAndMakeVisible(serverSettingsToggle_);
+
+    serverSettingsSummaryLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(serverSettingsSummaryLabel_);
 
     hostLabel_.setText("Host", juce::dontSendNotification);
     portLabel_.setText("Port", juce::dontSendNotification);
@@ -519,8 +546,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 
         const auto& entry = currentServerDiscoveryUiState_.combinedEntries[static_cast<std::size_t>(index)];
         selectedServerDiscoveryEndpointKey_ = makeServerDiscoveryEndpointKey(entry.host, entry.port);
-        hostEditor_.setText(entry.host, juce::dontSendNotification);
-        portEditor_.setText(juce::String(static_cast<int>(entry.port)), juce::dontSendNotification);
+        applyServerDiscoveryEntrySelection(entry);
     };
     addAndMakeVisible(serverPickerCombo_);
 
@@ -539,11 +565,27 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     addAndMakeVisible(portEditor_);
     addAndMakeVisible(usernameEditor_);
     passwordEditor_.setPasswordCharacter('*');
+    passwordEditor_.onTextChange = [this]() {
+        if (updatingPasswordEditor_)
+            return;
+
+        showingRememberedPasswordMask_ = false;
+        recalledPassword_.clear();
+    };
     addAndMakeVisible(passwordEditor_);
 
     metronomeToggle_.setButtonText("Metronome");
     metronomeToggle_.onClick = [this]() { metronomeSetter_(metronomeToggle_.getToggleState()); };
     addAndMakeVisible(metronomeToggle_);
+
+    metronomeVolumeSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    metronomeVolumeSlider_.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 48, 16);
+    metronomeVolumeSlider_.setRange(-60.0, 12.0, 0.1);
+    metronomeVolumeSlider_.setSkewFactorFromMidPoint(-12.0);
+    metronomeVolumeSlider_.onValueChange = [this]() {
+        metronomeGainSetter_(static_cast<float>(metronomeVolumeSlider_.getValue()));
+    };
+    addAndMakeVisible(metronomeVolumeSlider_);
 
     connectButton_.setButtonText("Connect");
     connectButton_.onClick = [this]() {
@@ -581,7 +623,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     addAndMakeVisible(intervalProgressBar_);
 
     hostSyncAssistTargetLabel_.setJustificationType(juce::Justification::centredLeft);
-    addAndMakeVisible(hostSyncAssistTargetLabel_);
+    hostSyncAssistTargetLabel_.setVisible(false);
+    addChildComponent(hostSyncAssistTargetLabel_);
 
     hostSyncAssistButton_.setButtonText("Arm Sync to Ableton Play");
     hostSyncAssistButton_.onClick = [this]() {
@@ -607,11 +650,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     roomSectionLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(roomSectionLabel_);
 
-    roomTopicLabel_.setText("Current Topic", juce::dontSendNotification);
-    addAndMakeVisible(roomTopicLabel_);
-
-    roomTopicValueLabel_.setJustificationType(juce::Justification::centredLeft);
-    addAndMakeVisible(roomTopicValueLabel_);
+    roomTopicLabel_.setVisible(false);
+    roomTopicValueLabel_.setVisible(false);
 
     roomStatusLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(roomStatusLabel_);
@@ -653,9 +693,13 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     roomFeedViewport_.setScrollBarsShown(true, false);
     addAndMakeVisible(roomFeedViewport_);
 
-    diagnosticsLabel_.setText("Receive Diagnostics", juce::dontSendNotification);
-    diagnosticsLabel_.setJustificationType(juce::Justification::centredLeft);
-    addAndMakeVisible(diagnosticsLabel_);
+    diagnosticsToggle_.setButtonText(getDiagnosticsToggleText());
+    diagnosticsToggle_.onClick = [this]() {
+        diagnosticsExpanded_ = ! diagnosticsExpanded_;
+        diagnosticsToggle_.setButtonText(getDiagnosticsToggleText());
+        resized();
+    };
+    addAndMakeVisible(diagnosticsToggle_);
 
     diagnosticsEditor_.setMultiLine(true);
     diagnosticsEditor_.setReadOnly(true);
@@ -688,6 +732,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 
     loadFromSettings(settingsGetter_());
     metronomeToggle_.setToggleState(metronomeGetter_(), juce::dontSendNotification);
+    metronomeVolumeSlider_.setValue(metronomeGainGetter_(), juce::dontSendNotification);
     (void) serverDiscoveryRefreshHandler_(false);
     refreshLifecycleStatus();
     refreshTransportStatus();
@@ -703,12 +748,15 @@ FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
 {
     stopTimer();
 
+    serverSettingsToggle_.onClick = {};
     serverPickerCombo_.onChange = {};
     refreshServersButton_.onClick = {};
     metronomeToggle_.onClick = {};
+    metronomeVolumeSlider_.onValueChange = {};
     connectButton_.onClick = {};
     disconnectButton_.onClick = {};
     hostSyncAssistButton_.onClick = {};
+    diagnosticsToggle_.onClick = {};
     roomSendButton_.onClick = {};
     roomBpmVoteButton_.onClick = {};
     roomBpiVoteButton_.onClick = {};
@@ -721,9 +769,11 @@ FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
 
     for (auto& widgets : mixerStripWidgets_)
     {
+        widgets->soloToggle.onClick = {};
         widgets->gainSlider.onValueChange = {};
         widgets->panSlider.onValueChange = {};
         widgets->muteToggle.onClick = {};
+        widgets->transmitButton.onClick = {};
     }
 }
 
@@ -745,7 +795,11 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  RoomVoteHandler roomVoteHandler,
                                                                  DiagnosticsTextGetter diagnosticsTextGetter,
                                                                  FloatGetter masterOutputGainGetter,
-                                                                 FloatSetter masterOutputGainSetter)
+                                                                 FloatSetter masterOutputGainSetter,
+                                                                 FloatGetter metronomeGainGetter,
+                                                                 FloatSetter metronomeGainSetter,
+                                                                 CommandHandler transmitToggleHandler,
+                                                                 MixerStripSoloSetter mixerStripSoloSetter)
     : FamaLamaJamAudioProcessorEditor(processor,
                                       std::move(settingsGetter),
                                       std::move(applyHandler),
@@ -766,7 +820,11 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                       std::move(roomVoteHandler),
                                       std::move(diagnosticsTextGetter),
                                       std::move(masterOutputGainGetter),
-                                      std::move(masterOutputGainSetter))
+                                      std::move(masterOutputGainSetter),
+                                      std::move(metronomeGainGetter),
+                                      std::move(metronomeGainSetter),
+                                      std::move(transmitToggleHandler),
+                                      std::move(mixerStripSoloSetter))
 {
 }
 
@@ -775,58 +833,87 @@ void FamaLamaJamAudioProcessorEditor::resized()
     ++cpuDiagnosticSnapshot_.resizedCalls;
     auto area = getLocalBounds().reduced(12);
 
+    auto footer = area.removeFromBottom(22);
+    intervalProgressBar_.setBounds(footer);
+    area.removeFromBottom(8);
+
     titleLabel_.setBounds(area.removeFromTop(28));
     area.removeFromTop(8);
 
-    constexpr int kSidebarWidth = 280;
+    constexpr int kSidebarWidth = 320;
     auto sidebar = area.removeFromRight(juce::jmin(kSidebarWidth, juce::jmax(220, area.getWidth() / 3)));
     area.removeFromRight(12);
     auto left = area;
 
-    auto connectionRow = [&](juce::Label& label, juce::Component& editor) {
+    auto settingsRow = [&](juce::Label& label, juce::Component& editor) {
         auto current = left.removeFromTop(28);
         label.setBounds(current.removeFromLeft(96));
         editor.setBounds(current);
         left.removeFromTop(4);
     };
 
-    auto serverRow = left.removeFromTop(28);
-    serverPickerLabel_.setBounds(serverRow.removeFromLeft(96));
-    refreshServersButton_.setBounds(serverRow.removeFromRight(90));
-    serverRow.removeFromRight(8);
-    serverPickerCombo_.setBounds(serverRow);
-    left.removeFromTop(4);
-    serverDiscoveryStatusLabel_.setBounds(left.removeFromTop(22));
+    serverSettingsToggle_.setBounds(left.removeFromTop(28));
+    left.removeFromTop(2);
+    serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
+    serverSettingsSummaryLabel_.setBounds(left.removeFromTop(22));
     left.removeFromTop(6);
 
-    connectionRow(hostLabel_, hostEditor_);
-    connectionRow(portLabel_, portEditor_);
-    connectionRow(usernameLabel_, usernameEditor_);
-    connectionRow(passwordLabel_, passwordEditor_);
+    serverPickerLabel_.setVisible(serverSettingsExpanded_);
+    serverPickerCombo_.setVisible(serverSettingsExpanded_);
+    refreshServersButton_.setVisible(serverSettingsExpanded_);
+    hostLabel_.setVisible(serverSettingsExpanded_);
+    hostEditor_.setVisible(serverSettingsExpanded_);
+    portLabel_.setVisible(serverSettingsExpanded_);
+    portEditor_.setVisible(serverSettingsExpanded_);
+    usernameLabel_.setVisible(serverSettingsExpanded_);
+    usernameEditor_.setVisible(serverSettingsExpanded_);
+    passwordLabel_.setVisible(serverSettingsExpanded_);
+    passwordEditor_.setVisible(serverSettingsExpanded_);
 
-    authStatusLabel_.setBounds(left.removeFromTop(22));
-    left.removeFromTop(6);
+    const auto discoveryStatusText = serverDiscoveryStatusLabel_.getText().trim();
+    const bool showDiscoveryStatus = serverSettingsExpanded_ && discoveryStatusText.isNotEmpty();
+    serverDiscoveryStatusLabel_.setVisible(showDiscoveryStatus);
 
-    auto controls = left.removeFromTop(30);
+    if (serverSettingsExpanded_)
+    {
+        auto serverRow = left.removeFromTop(28);
+        serverPickerLabel_.setBounds(serverRow.removeFromLeft(96));
+        refreshServersButton_.setBounds(serverRow.removeFromRight(90));
+        serverRow.removeFromRight(8);
+        serverPickerCombo_.setBounds(serverRow);
+        left.removeFromTop(4);
+
+        if (showDiscoveryStatus)
+        {
+            serverDiscoveryStatusLabel_.setBounds(left.removeFromTop(22));
+            left.removeFromTop(6);
+        }
+
+        settingsRow(hostLabel_, hostEditor_);
+        settingsRow(portLabel_, portEditor_);
+        settingsRow(usernameLabel_, usernameEditor_);
+        settingsRow(passwordLabel_, passwordEditor_);
+        left.removeFromTop(2);
+    }
+
+    auto controls = left.removeFromTop(34);
     connectButton_.setBounds(controls.removeFromLeft(110));
     controls.removeFromLeft(8);
     disconnectButton_.setBounds(controls.removeFromLeft(120));
-    controls.removeFromLeft(16);
-    metronomeToggle_.setBounds(controls.removeFromLeft(160));
+    controls.removeFromLeft(8);
+    hostSyncAssistButton_.setBounds(controls.removeFromLeft(220));
+    controls.removeFromLeft(12);
+    metronomeToggle_.setBounds(controls.removeFromLeft(110));
+    controls.removeFromLeft(6);
+    metronomeVolumeSlider_.setBounds(controls.removeFromLeft(64).reduced(0, -4));
     left.removeFromTop(6);
 
+    authStatusLabel_.setBounds(left.removeFromTop(22));
+    left.removeFromTop(4);
     statusLabel_.setBounds(left.removeFromTop(28));
-    left.removeFromTop(6);
+    left.removeFromTop(4);
     transportLabel_.setBounds(left.removeFromTop(22));
-    left.removeFromTop(4);
-    intervalProgressBar_.setBounds(left.removeFromTop(20));
     left.removeFromTop(8);
-
-    auto syncAssistRow = left.removeFromTop(28);
-    hostSyncAssistTargetLabel_.setBounds(syncAssistRow.removeFromLeft(360));
-    syncAssistRow.removeFromLeft(12);
-    hostSyncAssistButton_.setBounds(syncAssistRow.removeFromLeft(220));
-    left.removeFromTop(4);
     hostSyncAssistStatusLabel_.setBounds(left.removeFromTop(32));
     left.removeFromTop(10);
 
@@ -840,11 +927,6 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
     roomSectionLabel_.setBounds(sidebar.removeFromTop(24));
     sidebar.removeFromTop(4);
-
-    auto roomTopicRow = sidebar.removeFromTop(24);
-    roomTopicLabel_.setBounds(roomTopicRow.removeFromLeft(96));
-    roomTopicValueLabel_.setBounds(roomTopicRow);
-    sidebar.removeFromTop(6);
 
     auto bpmRow = sidebar.removeFromTop(24);
     roomBpmLabel_.setBounds(bpmRow.removeFromLeft(32));
@@ -864,7 +946,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
     roomBpiStatusLabel_.setBounds(sidebar.removeFromTop(20));
     sidebar.removeFromTop(6);
 
-    roomStatusLabel_.setBounds(sidebar.removeFromTop(22));
+    roomStatusLabel_.setBounds(sidebar.removeFromTop(18));
     sidebar.removeFromTop(6);
 
     auto composerRow = sidebar.removeFromBottom(28);
@@ -874,11 +956,15 @@ void FamaLamaJamAudioProcessorEditor::resized()
     roomComposerEditor_.setBounds(composerRow);
     sidebar.removeFromBottom(6);
 
-    auto diagnosticsArea = sidebar.removeFromBottom(180);
-    diagnosticsLabel_.setBounds(diagnosticsArea.removeFromTop(22));
-    diagnosticsArea.removeFromTop(4);
-    diagnosticsEditor_.setBounds(diagnosticsArea);
+    diagnosticsToggle_.setBounds(sidebar.removeFromBottom(26));
     sidebar.removeFromBottom(6);
+    diagnosticsEditor_.setVisible(diagnosticsExpanded_);
+    if (diagnosticsExpanded_)
+    {
+        auto diagnosticsArea = sidebar.removeFromBottom(180);
+        diagnosticsEditor_.setBounds(diagnosticsArea);
+        sidebar.removeFromBottom(6);
+    }
 
     roomFeedViewport_.setBounds(sidebar);
 
@@ -886,8 +972,13 @@ void FamaLamaJamAudioProcessorEditor::resized()
     const auto roomFeedWidth = juce::jmax(140, roomFeedViewport_.getWidth() - 18);
     for (auto& widget : roomFeedWidgets_)
     {
-        widget->label.setBounds(0, y, roomFeedWidth, 24);
-        y += 26;
+        juce::AttributedString text;
+        text.append(widget->editor.getText(), widget->editor.getFont(), juce::Colours::white);
+        juce::TextLayout layout;
+        layout.createLayout(text, static_cast<float>(roomFeedWidth - 8));
+        const auto height = juce::jmax(28, juce::roundToInt(layout.getHeight()) + 10);
+        widget->editor.setBounds(0, y, roomFeedWidth, height);
+        y += height + 6;
     }
 
     roomFeedContent_.setSize(roomFeedWidth, juce::jmax(96, y));
@@ -906,16 +997,45 @@ void FamaLamaJamAudioProcessorEditor::resized()
         widget->subtitleLabel.setBounds((mixerContentWidth / 2) + 8, y, mixerContentWidth / 2 - 8, 22);
         y += 24;
 
+        widget->statusLabel.setVisible(widget->statusLabel.getText().isNotEmpty());
+        if (widget->statusLabel.isVisible())
+        {
+            widget->statusLabel.setBounds(0, y, mixerContentWidth, 20);
+            y += 22;
+        }
+
         auto controlRow = juce::Rectangle<int>(0, y, mixerContentWidth, 42);
         const auto muteWidth = 76;
+        const auto soloWidth = 70;
+        const auto transmitWidth = 150;
         const auto meterWidth = juce::jlimit(120, 220, mixerContentWidth / 3);
         widget->meter.setBounds(controlRow.removeFromLeft(meterWidth));
         controlRow.removeFromLeft(8);
-        widget->gainSlider.setBounds(controlRow.removeFromLeft(juce::jmax(120, (controlRow.getWidth() - muteWidth - 8) / 2)));
+        widget->gainSlider.setBounds(
+            controlRow.removeFromLeft(juce::jmax(120,
+                                                 (controlRow.getWidth()
+                                                  - muteWidth
+                                                  - soloWidth
+                                                  - (widget->hasTransmitControl ? transmitWidth : 0)
+                                                  - 24)
+                                                     / 2)));
         controlRow.removeFromLeft(8);
-        widget->panSlider.setBounds(controlRow.removeFromLeft(juce::jmax(100, controlRow.getWidth() - muteWidth)));
+        widget->panSlider.setBounds(
+            controlRow.removeFromLeft(juce::jmax(100,
+                                                 controlRow.getWidth()
+                                                     - muteWidth
+                                                     - soloWidth
+                                                     - (widget->hasTransmitControl ? transmitWidth : 0)
+                                                     - 16)));
+        controlRow.removeFromLeft(8);
+        widget->soloToggle.setBounds(controlRow.removeFromLeft(soloWidth));
         controlRow.removeFromLeft(8);
         widget->muteToggle.setBounds(controlRow.removeFromLeft(muteWidth));
+        if (widget->hasTransmitControl)
+        {
+            controlRow.removeFromLeft(8);
+            widget->transmitButton.setBounds(controlRow.removeFromLeft(transmitWidth));
+        }
         y += 50;
     }
 
@@ -939,7 +1059,16 @@ app::session::SessionSettings FamaLamaJamAudioProcessorEditor::makeDraftFromUi()
     draft.serverHost = hostEditor_.getText().toStdString();
     draft.serverPort = static_cast<std::uint16_t>(portEditor_.getText().getIntValue());
     draft.username = usernameEditor_.getText().toStdString();
-    draft.password = passwordEditor_.getText().toStdString();
+    if (showingRememberedPasswordMask_
+        && passwordEditor_.getText() == juce::String(kRememberedPasswordMask))
+    {
+        draft.password = recalledPassword_;
+    }
+    else
+    {
+        draft.password = passwordEditor_.getText().toStdString();
+    }
+
     return draft;
 }
 
@@ -948,7 +1077,112 @@ void FamaLamaJamAudioProcessorEditor::loadFromSettings(const app::session::Sessi
     hostEditor_.setText(settings.serverHost, juce::dontSendNotification);
     portEditor_.setText(juce::String(static_cast<int>(settings.serverPort)), juce::dontSendNotification);
     usernameEditor_.setText(settings.username, juce::dontSendNotification);
-    passwordEditor_.setText(settings.password, juce::dontSendNotification);
+
+    if (! settings.password.empty())
+        applyRememberedPassword(settings.password);
+    else
+        clearRememberedPassword();
+}
+
+void FamaLamaJamAudioProcessorEditor::applyServerDiscoveryEntrySelection(const ServerDiscoveryEntry& entry)
+{
+    hostEditor_.setText(entry.host, juce::dontSendNotification);
+    portEditor_.setText(juce::String(static_cast<int>(entry.port)), juce::dontSendNotification);
+    usernameEditor_.setText(entry.username, juce::dontSendNotification);
+
+    if (! entry.password.empty())
+        applyRememberedPassword(entry.password);
+    else
+        clearRememberedPassword();
+}
+
+void FamaLamaJamAudioProcessorEditor::applyRememberedPassword(const std::string& password)
+{
+    updatingPasswordEditor_ = true;
+    recalledPassword_ = password;
+    showingRememberedPasswordMask_ = ! password.empty();
+    passwordEditor_.setText(showingRememberedPasswordMask_ ? juce::String(kRememberedPasswordMask) : juce::String(),
+                            juce::dontSendNotification);
+    updatingPasswordEditor_ = false;
+}
+
+void FamaLamaJamAudioProcessorEditor::clearRememberedPassword()
+{
+    updatingPasswordEditor_ = true;
+    recalledPassword_.clear();
+    showingRememberedPasswordMask_ = false;
+    passwordEditor_.setText({}, juce::dontSendNotification);
+    updatingPasswordEditor_ = false;
+}
+
+void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripWidgets& widgets,
+                                                                     const MixerStripState& strip)
+{
+    if (! widgets.hasTransmitControl)
+        return;
+
+    juce::Colour colour = juce::Colour::fromRGB(168, 72, 72);
+    juce::String text = "Not transmitting";
+
+    switch (strip.transmitState)
+    {
+        case TransmitState::Disabled:
+            break;
+        case TransmitState::WarmingUp:
+            colour = juce::Colour::fromRGB(196, 152, 72);
+            text = "Getting ready";
+            break;
+        case TransmitState::Active:
+            colour = juce::Colour::fromRGB(88, 168, 102);
+            text = "Transmitting";
+            break;
+    }
+
+    widgets.transmitButton.setButtonText(text);
+    widgets.transmitButton.setColour(juce::TextButton::buttonColourId, colour);
+    widgets.transmitButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getCollapsedServerSummary() const
+{
+    const auto lifecycle = lifecycleGetter_();
+
+    juce::String summary = lifecycle.state == app::session::ConnectionState::Active ? "Connected" : "Disconnected";
+
+    const auto host = hostEditor_.getText().trim();
+    const auto port = portEditor_.getText().trim();
+    if (host.isNotEmpty() && port.isNotEmpty())
+        summary << " • " << host << ":" << port;
+    else if (host.isNotEmpty())
+        summary << " • " << host;
+
+    return summary;
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getCollapsedServerSummaryAscii() const
+{
+    const auto lifecycle = lifecycleGetter_();
+
+    juce::String summary = lifecycle.state == app::session::ConnectionState::Active ? "Connected" : "Disconnected";
+
+    const auto host = hostEditor_.getText().trim();
+    const auto port = portEditor_.getText().trim();
+    if (host.isNotEmpty() && port.isNotEmpty())
+        summary << " | " << host << ":" << port;
+    else if (host.isNotEmpty())
+        summary << " | " << host;
+
+    return summary;
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsToggleText() const
+{
+    return diagnosticsExpanded_ ? "Hide Diagnostics" : "Show Diagnostics";
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getServerSettingsToggleText() const
+{
+    return serverSettingsExpanded_ ? "Server Settings (Hide)" : "Server Settings (Show)";
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshLifecycleStatus()
@@ -958,6 +1192,7 @@ void FamaLamaJamAudioProcessorEditor::refreshLifecycleStatus()
 
     statusLabel_.setText(juce::String(status), juce::dontSendNotification);
     authStatusLabel_.setText(formatInlineAuthStatus(snapshot), juce::dontSendNotification);
+    serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
     connectButton_.setEnabled(snapshot.canConnect());
     disconnectButton_.setEnabled(snapshot.canDisconnect());
 }
@@ -976,6 +1211,9 @@ void FamaLamaJamAudioProcessorEditor::refreshTransportStatus()
     metronomeToggle_.setToggleState(metronomeGetter_(), juce::dontSendNotification);
     metronomeToggle_.setEnabled(transport.metronomeAvailable);
     metronomeToggle_.setAlpha(transport.metronomeAvailable ? 1.0f : 0.65f);
+    metronomeVolumeSlider_.setValue(metronomeGainGetter_(), juce::dontSendNotification);
+    metronomeVolumeSlider_.setEnabled(transport.metronomeAvailable);
+    metronomeVolumeSlider_.setAlpha(transport.metronomeAvailable ? 1.0f : 0.65f);
     refreshHostSyncAssistStatus();
 }
 
@@ -985,7 +1223,6 @@ void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
     if (hostSyncAssist.armed || hostSyncAssist.waitingForHost || hostSyncAssist.blocked || hostSyncAssist.failed)
         hostSyncAssistLastActionWasCancel_ = false;
 
-    hostSyncAssistTargetLabel_.setText(formatHostSyncAssistTarget(hostSyncAssist), juce::dontSendNotification);
     hostSyncAssistStatusLabel_.setText(formatHostSyncAssistStatus(hostSyncAssist, hostSyncAssistLastActionWasCancel_),
                                        juce::dontSendNotification);
     hostSyncAssistButton_.setButtonText(hostSyncAssist.armed || hostSyncAssist.waitingForHost
@@ -1004,6 +1241,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
     {
         serverDiscoveryStatusLabel_.setText(formatServerDiscoveryStatus(currentServerDiscoveryUiState_),
                                             juce::dontSendNotification);
+        serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
         refreshServersButton_.setEnabled(! currentServerDiscoveryUiState_.fetchInProgress);
         return;
     }
@@ -1037,6 +1275,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
 
             serverPickerCombo_.setSelectedItemIndex(static_cast<int>(index), juce::dontSendNotification);
             selectedServerDiscoveryEndpointKey_ = selectedEndpointKey;
+            applyServerDiscoveryEntrySelection(entry);
             break;
         }
     }
@@ -1046,6 +1285,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
                                                       : "No servers listed yet");
     serverDiscoveryStatusLabel_.setText(formatServerDiscoveryStatus(currentServerDiscoveryUiState_),
                                         juce::dontSendNotification);
+    serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
     refreshServersButton_.setEnabled(! currentServerDiscoveryUiState_.fetchInProgress);
     refreshingServerDiscoveryUi_ = false;
 }
@@ -1060,9 +1300,7 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
     if (feedChanged)
         rebuildRoomFeedWidgets(currentRoomUiState_.visibleFeed);
 
-    roomTopicValueLabel_.setText(currentRoomUiState_.topic.empty() ? "No topic set" : currentRoomUiState_.topic,
-                                 juce::dontSendNotification);
-    roomStatusLabel_.setText(currentRoomUiState_.connected ? "Connected room activity" : "Connect to a room to chat and vote.",
+    roomStatusLabel_.setText(currentRoomUiState_.connected ? "Room activity" : juce::String {},
                              juce::dontSendNotification);
 
     const auto canInteract = currentRoomUiState_.connected;
@@ -1124,6 +1362,7 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
 void FamaLamaJamAudioProcessorEditor::refreshDiagnosticsUi()
 {
     diagnosticsEditor_.setText(juce::String(diagnosticsTextGetter_()), juce::dontSendNotification);
+    diagnosticsToggle_.setButtonText(getDiagnosticsToggleText());
 }
 
 void FamaLamaJamAudioProcessorEditor::rebuildRoomFeedWidgets(const std::vector<RoomFeedEntry>& entries)
@@ -1135,10 +1374,14 @@ void FamaLamaJamAudioProcessorEditor::rebuildRoomFeedWidgets(const std::vector<R
     {
         ++cpuDiagnosticSnapshot_.roomFeedEntryWidgetsBuilt;
         auto widgets = std::make_unique<RoomFeedEntryWidgets>();
-        widgets->label.setText("No room activity yet.", juce::dontSendNotification);
-        widgets->label.setJustificationType(juce::Justification::centredLeft);
-        widgets->label.setAlpha(0.75f);
-        roomFeedContent_.addAndMakeVisible(widgets->label);
+        widgets->editor.setMultiLine(true);
+        widgets->editor.setReadOnly(true);
+        widgets->editor.setScrollbarsShown(false);
+        widgets->editor.setCaretVisible(false);
+        widgets->editor.setPopupMenuEnabled(false);
+        widgets->editor.setText("No room activity yet.", juce::dontSendNotification);
+        widgets->editor.setAlpha(0.75f);
+        roomFeedContent_.addAndMakeVisible(widgets->editor);
         roomFeedWidgets_.push_back(std::move(widgets));
         resized();
         return;
@@ -1147,11 +1390,15 @@ void FamaLamaJamAudioProcessorEditor::rebuildRoomFeedWidgets(const std::vector<R
     for (const auto& entry : entries)
     {
         auto widgets = std::make_unique<RoomFeedEntryWidgets>();
-        widgets->label.setText(formatRoomFeedEntryText(entry), juce::dontSendNotification);
-        widgets->label.setJustificationType(juce::Justification::centredLeft);
-        widgets->label.setColour(juce::Label::textColourId, roomFeedEntryColour(entry));
-        widgets->label.setAlpha(entry.subdued ? 0.7f : 1.0f);
-        roomFeedContent_.addAndMakeVisible(widgets->label);
+        widgets->editor.setMultiLine(true);
+        widgets->editor.setReadOnly(true);
+        widgets->editor.setScrollbarsShown(false);
+        widgets->editor.setCaretVisible(false);
+        widgets->editor.setPopupMenuEnabled(false);
+        widgets->editor.setText(formatRoomFeedEntryText(entry), juce::dontSendNotification);
+        widgets->editor.setColour(juce::TextEditor::textColourId, roomFeedEntryColour(entry));
+        widgets->editor.setAlpha(entry.subdued ? 0.7f : 1.0f);
+        roomFeedContent_.addAndMakeVisible(widgets->editor);
         roomFeedWidgets_.push_back(std::move(widgets));
     }
 
@@ -1245,6 +1492,11 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         widgets.subtitleLabel.setText(strip.subtitle, juce::dontSendNotification);
         widgets.titleLabel.setColour(juce::Label::textColourId, stripAccentColour(strip.kind, strip.active));
         widgets.subtitleLabel.setAlpha(strip.active ? 1.0f : 0.7f);
+        widgets.statusLabel.setText(strip.statusText, juce::dontSendNotification);
+        widgets.statusLabel.setColour(juce::Label::textColourId,
+                                      strip.unsupportedVoiceMode ? juce::Colour::fromRGB(214, 141, 72)
+                                                                 : juce::Colour::fromRGB(188, 196, 210));
+        widgets.statusLabel.setAlpha(strip.statusText.empty() ? 0.0f : 1.0f);
         widgets.meter.setLevels(strip.meterLeft, strip.meterRight);
 
         if (! widgets.gainSlider.isMouseButtonDown())
@@ -1252,6 +1504,12 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         if (! widgets.panSlider.isMouseButtonDown())
             widgets.panSlider.setValue(strip.pan, juce::dontSendNotification);
         widgets.muteToggle.setToggleState(strip.muted, juce::dontSendNotification);
+        widgets.soloToggle.setToggleState(strip.soloed, juce::dontSendNotification);
+        widgets.soloToggle.setButtonText(strip.soloed ? "Soloed" : "Solo");
+        widgets.soloToggle.setAlpha(strip.active || strip.kind == MixerStripKind::LocalMonitor ? 1.0f : 0.7f);
+        widgets.hasTransmitControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets.transmitButton.setVisible(widgets.hasTransmitControl);
+        updateTransmitButtonAppearance(widgets, strip);
     }
 
     if (! masterOutputSlider_.isMouseButtonDown())
@@ -1266,9 +1524,11 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
 
     for (auto& widgets : mixerStripWidgets_)
     {
+        widgets->soloToggle.onClick = {};
         widgets->gainSlider.onValueChange = {};
         widgets->panSlider.onValueChange = {};
         widgets->muteToggle.onClick = {};
+        widgets->transmitButton.onClick = {};
     }
 
     mixerStripWidgets_.clear();
@@ -1295,6 +1555,10 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
 
         widgets->subtitleLabel.setJustificationType(juce::Justification::centredLeft);
         mixerContent_.addAndMakeVisible(widgets->subtitleLabel);
+
+        widgets->statusLabel.setJustificationType(juce::Justification::centredLeft);
+        widgets->statusLabel.setFont(juce::FontOptions(13.0f));
+        mixerContent_.addAndMakeVisible(widgets->statusLabel);
 
         mixerContent_.addAndMakeVisible(widgets->meter);
 
@@ -1326,6 +1590,23 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
                               raw->muteToggle.getToggleState());
         };
         mixerContent_.addAndMakeVisible(widgets->muteToggle);
+
+        widgets->soloToggle.setClickingTogglesState(true);
+        widgets->soloToggle.setButtonText("Solo");
+        widgets->soloToggle.onClick = [this, raw = widgets.get()] {
+            const auto targetState = raw->soloToggle.getToggleState();
+            if (! mixerStripSoloSetter_(raw->sourceId, targetState))
+                raw->soloToggle.setToggleState(! targetState, juce::dontSendNotification);
+        };
+        mixerContent_.addAndMakeVisible(widgets->soloToggle);
+
+        widgets->hasTransmitControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets->transmitButton.onClick = [this]() {
+            (void) transmitToggleHandler_();
+            refreshMixerStrips();
+        };
+        widgets->transmitButton.setVisible(widgets->hasTransmitControl);
+        mixerContent_.addAndMakeVisible(widgets->transmitButton);
 
         visibleMixerStripOrder_.push_back(strip.sourceId);
         mixerStripWidgets_.push_back(std::move(widgets));
@@ -1408,6 +1689,16 @@ juce::String FamaLamaJamAudioProcessorEditor::getHostTextForTesting() const
 juce::String FamaLamaJamAudioProcessorEditor::getPortTextForTesting() const
 {
     return portEditor_.getText();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getUsernameTextForTesting() const
+{
+    return usernameEditor_.getText();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getPasswordTextForTesting() const
+{
+    return passwordEditor_.getText();
 }
 
 std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry> FamaLamaJamAudioProcessorEditor::getVisibleRoomFeedForTesting() const
@@ -1513,6 +1804,42 @@ std::vector<juce::String> FamaLamaJamAudioProcessorEditor::getVisibleMixerStripL
     return labels;
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getMixerStripStatusTextForTesting(const juce::String& sourceId) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString())
+            return widgets->statusLabel.getText();
+    }
+
+    return {};
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getMixerStripTransmitButtonTextForTesting(const juce::String& sourceId) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString() && widgets->hasTransmitControl)
+            return widgets->transmitButton.getButtonText();
+    }
+
+    return {};
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMixerStripSoloStateForTesting(const juce::String& sourceId, bool& soloed) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString())
+        {
+            soloed = widgets->soloToggle.getToggleState();
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool FamaLamaJamAudioProcessorEditor::getMixerStripControlStateForTesting(const juce::String& sourceId,
                                                                           double& gain,
                                                                           double& pan,
@@ -1544,6 +1871,41 @@ bool FamaLamaJamAudioProcessorEditor::setMixerStripControlStateForTesting(const 
     return true;
 }
 
+bool FamaLamaJamAudioProcessorEditor::clickMixerStripTransmitForTesting(const juce::String& sourceId)
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString() && widgets->hasTransmitControl)
+        {
+            if (widgets->transmitButton.onClick == nullptr)
+                return false;
+
+            widgets->transmitButton.onClick();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessorEditor::setMixerStripSoloStateForTesting(const juce::String& sourceId, bool soloed)
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString())
+        {
+            widgets->soloToggle.setToggleState(soloed, juce::dontSendNotification);
+            if (widgets->soloToggle.onClick == nullptr)
+                return false;
+
+            widgets->soloToggle.onClick();
+            return true;
+        }
+    }
+
+    return false;
+}
+
 FamaLamaJamAudioProcessorEditor::CpuDiagnosticSnapshot
 FamaLamaJamAudioProcessorEditor::getCpuDiagnosticSnapshotForTesting() const noexcept
 {
@@ -1560,9 +1922,26 @@ juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsTextForTesting() con
     return diagnosticsEditor_.getText();
 }
 
+bool FamaLamaJamAudioProcessorEditor::isDiagnosticsExpandedForTesting() const noexcept
+{
+    return diagnosticsExpanded_;
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getServerSettingsSummaryForTesting() const
+{
+    return serverSettingsSummaryLabel_.getText();
+}
+
 void FamaLamaJamAudioProcessorEditor::setSettingsDraftForTesting(const app::session::SessionSettings& settings)
 {
     loadFromSettings(settings);
+}
+
+void FamaLamaJamAudioProcessorEditor::setPasswordTextForTesting(const juce::String& text)
+{
+    passwordEditor_.setText(text, juce::dontSendNotification);
+    if (passwordEditor_.onTextChange != nullptr)
+        passwordEditor_.onTextChange();
 }
 
 void FamaLamaJamAudioProcessorEditor::clickConnectForTesting()

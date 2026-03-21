@@ -29,6 +29,7 @@ struct EditorHarness
     ConnectionLifecycleSnapshot lifecycle;
     FamaLamaJamAudioProcessorEditor::TransportUiState transport;
     FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState hostSyncAssist;
+    FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState discovery;
     std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> mixerStrips;
     bool metronomeEnabled { false };
     int applyCallCount { 0 };
@@ -107,7 +108,7 @@ struct EditorHarness
             },
             [this]() { return metronomeEnabled; },
             [this](bool enabled) { metronomeEnabled = enabled; },
-            []() { return FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState {}; },
+            [this]() { return discovery; },
             [](bool) { return false; });
     }
 };
@@ -342,16 +343,12 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
                           });
 
     auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
-    auto* syncTargetLabel = findDirectLabelWithText(*harness.editor, "Room sync target: 120 BPM / 16 BPI");
     auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
 
     REQUIRE(syncButton != nullptr);
-    REQUIRE(syncTargetLabel != nullptr);
     REQUIRE(mixerSectionLabel != nullptr);
 
     CHECK(syncButton->isVisible());
-    CHECK(syncTargetLabel->isVisible());
-    CHECK(syncTargetLabel->getBottom() < mixerSectionLabel->getY());
     CHECK(syncButton->getBottom() < mixerSectionLabel->getY());
     CHECK(harness.editor->getHostSyncAssistStatusTextForTesting()
           == "Ready for 120 BPM / 16 BPI room timing. Arm sync when Ableton is stopped.");
@@ -491,6 +488,73 @@ TEST_CASE("plugin rehearsal ui flow applies the current draft to the live auth p
     REQUIRE(processor.requestDisconnect());
     processor.releaseResources();
     server.stopServer();
+}
+
+TEST_CASE("plugin rehearsal ui flow reuses a recalled remembered password when Connect is pressed",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Idle,
+                              .statusMessage = "Ready",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {});
+    harness.discovery = {
+        .combinedEntries = {
+            {
+                .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Remembered,
+                .label = "private.example.org:2050",
+                .host = "private.example.org",
+                .port = 2050,
+                .username = "remembered_user",
+                .password = "remembered-secret",
+            },
+        },
+    };
+    harness.editor->refreshForTesting();
+
+    REQUIRE(harness.editor->selectServerDiscoveryEntryForTesting(0));
+    CHECK(harness.editor->getPasswordTextForTesting() == "********");
+
+    harness.editor->clickConnectForTesting();
+
+    CHECK(harness.applyCallCount == 1);
+    CHECK(harness.connectCallCount == 1);
+    CHECK(harness.settings.serverHost == "private.example.org");
+    CHECK(harness.settings.serverPort == 2050);
+    CHECK(harness.settings.username == "remembered_user");
+    CHECK(harness.settings.password == "remembered-secret");
+}
+
+TEST_CASE("plugin rehearsal ui flow replaces remembered password provenance after the user edits the field",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Idle,
+                              .statusMessage = "Ready",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {});
+    harness.discovery = {
+        .combinedEntries = {
+            {
+                .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Remembered,
+                .label = "private.example.org:2050",
+                .host = "private.example.org",
+                .port = 2050,
+                .username = "remembered_user",
+                .password = "remembered-secret",
+            },
+        },
+    };
+    harness.editor->refreshForTesting();
+
+    REQUIRE(harness.editor->selectServerDiscoveryEntryForTesting(0));
+    harness.editor->setPasswordTextForTesting("replacement-secret");
+
+    harness.editor->clickConnectForTesting();
+
+    CHECK(harness.applyCallCount == 1);
+    CHECK(harness.connectCallCount == 1);
+    CHECK(harness.settings.password == "replacement-secret");
 }
 
 TEST_CASE("plugin rehearsal ui flow does not connect when the current draft fails validation",

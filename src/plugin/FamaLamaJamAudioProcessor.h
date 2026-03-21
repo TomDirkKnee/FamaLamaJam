@@ -20,6 +20,11 @@
 #include "infra/net/PublicServerDiscoveryClient.h"
 #include "net/FramedSocketTransport.h"
 
+namespace famalamajam::infra::state
+{
+class RememberedServerStore;
+}
+
 namespace famalamajam::plugin
 {
 class FamaLamaJamAudioProcessor final : public juce::AudioProcessor, private juce::Timer
@@ -145,6 +150,8 @@ public:
         std::string label;
         std::string host;
         std::uint16_t port { 0 };
+        std::string username;
+        std::string password;
         int connectedUsers { -1 };
         int maxUsers { -1 };
         bool stale { false };
@@ -164,11 +171,19 @@ public:
         RemoteDelayed,
     };
 
+    enum class TransmitState
+    {
+        Disabled,
+        WarmingUp,
+        Active,
+    };
+
     struct MixerStripMixState
     {
         float gainDb { 0.0f };
         float pan { 0.0f };
         bool muted { false };
+        bool soloed { false };
     };
 
     struct MixerStripMeter
@@ -196,6 +211,9 @@ public:
         MixerStripDescriptor descriptor;
         MixerStripMixState mix;
         MixerStripMeter meter;
+        TransmitState transmitState { TransmitState::Disabled };
+        bool unsupportedVoiceMode { false };
+        std::string statusText;
     };
 
     struct CpuDiagnosticSnapshot
@@ -229,6 +247,10 @@ public:
 
     explicit FamaLamaJamAudioProcessor(bool enableLiveTransport = false,
                                        bool enableExperimentalStreaming = false);
+    explicit FamaLamaJamAudioProcessor(
+        std::unique_ptr<famalamajam::infra::state::RememberedServerStore> rememberedServerStore,
+        bool enableLiveTransport = false,
+        bool enableExperimentalStreaming = false);
     ~FamaLamaJamAudioProcessor() override;
 
     const juce::String getName() const override;
@@ -259,6 +281,7 @@ public:
 
     bool requestConnect();
     bool requestDisconnect();
+    bool toggleTransmitEnabled();
     void handleConnectionEvent(const app::session::ConnectionEvent& event);
 
     bool triggerScheduledReconnectForTesting();
@@ -297,11 +320,15 @@ public:
     bool submitRoomVote(RoomVoteKind kind, int value);
     [[nodiscard]] bool isMetronomeEnabled() const noexcept;
     void setMetronomeEnabled(bool enabled) noexcept;
+    [[nodiscard]] float getMetronomeGainDb() const noexcept;
+    void setMetronomeGainDb(float gainDb) noexcept;
     [[nodiscard]] float getMasterOutputGainDb() const noexcept;
     void setMasterOutputGainDb(float gainDb) noexcept;
+    [[nodiscard]] TransmitState getTransmitState() const noexcept;
     [[nodiscard]] std::vector<MixerStripSnapshot> getMixerStripSnapshots() const;
     [[nodiscard]] bool getMixerStripSnapshot(const std::string& sourceId, MixerStripSnapshot& snapshot) const;
     bool setMixerStripMixState(const std::string& sourceId, float gainDb, float pan, bool muted);
+    bool setMixerStripSoloState(const std::string& sourceId, bool soloed);
     void setPublicServerDiscoveryClientForTesting(std::unique_ptr<infra::net::PublicServerDiscoveryClient> client);
     bool requestPublicServerDiscoveryRefreshForTesting(bool manual);
 
@@ -353,6 +380,8 @@ private:
     void clearHostSyncAssistState() noexcept;
     void drainRoomTransportEvents();
     void drainPublicServerDiscoveryResults();
+    void loadRememberedServersFromStore();
+    void persistRememberedServers();
     void applyRoomEvent(const net::FramedSocketTransport::RoomEvent& event);
     void clearRoomUiState(bool connected);
     void refreshPendingRoomVotesFromTiming();
@@ -393,6 +422,7 @@ private:
     std::atomic<float> intervalProgressForUi_ { 0.0f };
     std::atomic<std::uint64_t> intervalIndexForUi_ { 0 };
     std::atomic<bool> metronomeEnabled_ { false };
+    std::atomic<float> metronomeGainDb_ { 0.0f };
     std::atomic<float> masterOutputGainDb_ { 0.0f };
     std::atomic<bool> hostTransportAvailableForUi_ { false };
     std::atomic<bool> hostTransportPlayingForUi_ { false };
@@ -421,6 +451,7 @@ private:
     bool publicServerListStale_ { false };
     std::string publicServerListStatusText_;
     std::unique_ptr<infra::net::PublicServerDiscoveryClient> publicServerDiscoveryClient_;
+    std::unique_ptr<famalamajam::infra::state::RememberedServerStore> rememberedServerStore_;
     AuthoritativeTimingState authoritativeTiming_;
     std::uint64_t lastHandledIntervalBoundaryGeneration_ { 0 };
     bool intervalPhaseAnchoredFromDownloadBegin_ { false };
@@ -429,5 +460,6 @@ private:
     float metronomeClickPhaseIncrement_ { 0.0f };
     float metronomeClickGain_ { 0.0f };
     bool previousHostTransportPlaying_ { false };
+    bool transmitEnabled_ { true };
 };
 } // namespace famalamajam::plugin

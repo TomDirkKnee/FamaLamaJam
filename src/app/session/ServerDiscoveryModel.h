@@ -12,6 +12,8 @@ struct RememberedServerEntry
 {
     std::string host;
     std::uint16_t port { 0 };
+    std::string username;
+    std::string password;
 
     bool operator==(const RememberedServerEntry& other) const = default;
 };

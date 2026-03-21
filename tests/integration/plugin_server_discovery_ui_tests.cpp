@@ -44,6 +44,8 @@ struct EditorHarness
                 .label = "recent.example.org:2050",
                 .host = "recent.example.org",
                 .port = 2050,
+                .username = "remembered_user",
+                .password = "remembered-secret",
             },
             {
                 .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Public,
@@ -112,6 +114,19 @@ TEST_CASE("plugin server discovery ui selection fills host and port without auto
     harness.editor->setSettingsDraftForTesting(harness.settings);
     CHECK(harness.editor->getHostTextForTesting() == "typed.example.org");
     CHECK(harness.editor->getPortTextForTesting() == "2090");
+}
+
+TEST_CASE("plugin server discovery ui recalls remembered private credentials with a masked password placeholder",
+          "[plugin_server_discovery_ui]")
+{
+    EditorHarness harness;
+    REQUIRE(harness.editor->selectServerDiscoveryEntryForTesting(0));
+
+    CHECK(harness.editor->getHostTextForTesting() == "recent.example.org");
+    CHECK(harness.editor->getPortTextForTesting() == "2050");
+    CHECK(harness.editor->getUsernameTextForTesting() == "remembered_user");
+    CHECK(harness.editor->getPasswordTextForTesting() == "********");
+    CHECK(harness.connectCallCount == 0);
 }
 
 TEST_CASE("plugin server discovery ui exposes stale failure state and manual refresh action",
@@ -188,12 +203,16 @@ TEST_CASE("plugin server discovery ui preserves selected endpoint after connect-
             .label = "public.example.org:2051",
             .host = "public.example.org",
             .port = 2051,
+            .username = "public_user",
+            .password = "public-secret",
         },
         {
             .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Remembered,
             .label = "recent.example.org:2050",
             .host = "recent.example.org",
             .port = 2050,
+            .username = "remembered_user",
+            .password = "remembered-secret",
         },
         {
             .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Public,
@@ -209,4 +228,6 @@ TEST_CASE("plugin server discovery ui preserves selected endpoint after connect-
     CHECK(harness.editor->getSelectedServerDiscoveryLabelForTesting() == "public.example.org:2051");
     CHECK(harness.editor->getHostTextForTesting() == "public.example.org");
     CHECK(harness.editor->getPortTextForTesting() == "2051");
+    CHECK(harness.editor->getUsernameTextForTesting() == "public_user");
+    CHECK(harness.editor->getPasswordTextForTesting() == "********");
 }

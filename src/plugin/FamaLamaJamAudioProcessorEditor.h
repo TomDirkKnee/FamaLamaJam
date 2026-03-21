@@ -149,6 +149,8 @@ public:
         std::string label;
         std::string host;
         std::uint16_t port { 0 };
+        std::string username;
+        std::string password;
         int connectedUsers { -1 };
         bool stale { false };
     };
@@ -167,6 +169,13 @@ public:
         RemoteDelayed,
     };
 
+    enum class TransmitState
+    {
+        Disabled,
+        WarmingUp,
+        Active,
+    };
+
     struct MixerStripState
     {
         MixerStripKind kind { MixerStripKind::RemoteDelayed };
@@ -178,8 +187,12 @@ public:
         float gainDb { 0.0f };
         float pan { 0.0f };
         bool muted { false };
+        bool soloed { false };
         float meterLeft { 0.0f };
         float meterRight { 0.0f };
+        TransmitState transmitState { TransmitState::Disabled };
+        bool unsupportedVoiceMode { false };
+        std::string statusText;
         bool active { false };
         bool visible { false };
     };
@@ -209,6 +222,7 @@ public:
     using RoomVoteHandler = std::function<bool(RoomVoteKind, int)>;
     using MixerStripsGetter = std::function<std::vector<MixerStripState>()>;
     using MixerStripSetter = std::function<bool(const std::string&, float, float, bool)>;
+    using MixerStripSoloSetter = std::function<bool(const std::string&, bool)>;
     using DiagnosticsTextGetter = std::function<std::string()>;
     using FloatGetter = std::function<float()>;
     using FloatSetter = std::function<void(float)>;
@@ -235,7 +249,11 @@ public:
                                     RoomVoteHandler roomVoteHandler = {},
                                     DiagnosticsTextGetter diagnosticsTextGetter = {},
                                     FloatGetter masterOutputGainGetter = {},
-                                    FloatSetter masterOutputGainSetter = {});
+                                    FloatSetter masterOutputGainSetter = {},
+                                    FloatGetter metronomeGainGetter = {},
+                                    FloatSetter metronomeGainSetter = {},
+                                    CommandHandler transmitToggleHandler = {},
+                                    MixerStripSoloSetter mixerStripSoloSetter = {});
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
                                     ApplyHandler applyHandler,
@@ -254,7 +272,11 @@ public:
                                     RoomVoteHandler roomVoteHandler,
                                     DiagnosticsTextGetter diagnosticsTextGetter = {},
                                     FloatGetter masterOutputGainGetter = {},
-                                    FloatSetter masterOutputGainSetter = {});
+                                    FloatSetter masterOutputGainSetter = {},
+                                    FloatGetter metronomeGainGetter = {},
+                                    FloatSetter metronomeGainSetter = {},
+                                    CommandHandler transmitToggleHandler = {},
+                                    MixerStripSoloSetter mixerStripSoloSetter = {});
     ~FamaLamaJamAudioProcessorEditor() override;
 
     void resized() override;
@@ -273,6 +295,8 @@ public:
     [[nodiscard]] juce::String getSelectedServerDiscoveryLabelForTesting() const;
     [[nodiscard]] juce::String getHostTextForTesting() const;
     [[nodiscard]] juce::String getPortTextForTesting() const;
+    [[nodiscard]] juce::String getUsernameTextForTesting() const;
+    [[nodiscard]] juce::String getPasswordTextForTesting() const;
     [[nodiscard]] std::vector<RoomFeedEntry> getVisibleRoomFeedForTesting() const;
     [[nodiscard]] juce::String getRoomVoteStatusTextForTesting(RoomVoteKind kind) const;
     [[nodiscard]] bool isRoomComposerEnabledForTesting() const noexcept;
@@ -288,15 +312,23 @@ public:
     bool submitRoomVoteForTesting(RoomVoteKind kind);
     [[nodiscard]] std::vector<juce::String> getVisibleMixerGroupLabelsForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerStripLabelsForTesting() const;
+    [[nodiscard]] juce::String getMixerStripStatusTextForTesting(const juce::String& sourceId) const;
+    [[nodiscard]] juce::String getMixerStripTransmitButtonTextForTesting(const juce::String& sourceId) const;
+    [[nodiscard]] bool getMixerStripSoloStateForTesting(const juce::String& sourceId, bool& soloed) const;
     [[nodiscard]] bool getMixerStripControlStateForTesting(const juce::String& sourceId,
                                                            double& gain,
                                                            double& pan,
                                                            bool& muted) const;
     bool setMixerStripControlStateForTesting(const juce::String& sourceId, double gain, double pan, bool muted);
+    bool clickMixerStripTransmitForTesting(const juce::String& sourceId);
+    bool setMixerStripSoloStateForTesting(const juce::String& sourceId, bool soloed);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] juce::String getDiagnosticsTextForTesting() const;
+    [[nodiscard]] bool isDiagnosticsExpandedForTesting() const noexcept;
+    [[nodiscard]] juce::String getServerSettingsSummaryForTesting() const;
     void setSettingsDraftForTesting(const app::session::SessionSettings& settings);
+    void setPasswordTextForTesting(const juce::String& text);
     void clickConnectForTesting();
     void clickHostSyncAssistForTesting();
     void refreshForTesting();
@@ -304,7 +336,7 @@ public:
 private:
     struct RoomFeedEntryWidgets
     {
-        juce::Label label;
+        juce::TextEditor editor;
     };
 
     struct RoomVoteFeedbackState
@@ -324,16 +356,23 @@ private:
         juce::Label groupLabel;
         juce::Label titleLabel;
         juce::Label subtitleLabel;
+        juce::Label statusLabel;
         StereoMeterComponent meter;
         juce::Slider gainSlider;
         juce::Slider panSlider;
+        juce::ToggleButton soloToggle;
         juce::ToggleButton muteToggle;
+        juce::TextButton transmitButton;
+        bool hasTransmitControl { false };
         bool showsGroupLabel { false };
     };
 
     void timerCallback() override;
     app::session::SessionSettings makeDraftFromUi() const;
     void loadFromSettings(const app::session::SessionSettings& settings);
+    void applyServerDiscoveryEntrySelection(const ServerDiscoveryEntry& entry);
+    void applyRememberedPassword(const std::string& password);
+    void clearRememberedPassword();
     void refreshLifecycleStatus();
     void refreshTransportStatus();
     void refreshHostSyncAssistStatus();
@@ -345,6 +384,11 @@ private:
     bool submitRoomVote(RoomVoteKind kind);
     void refreshMixerStrips();
     void rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips);
+    void updateTransmitButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
+    [[nodiscard]] juce::String getCollapsedServerSummary() const;
+    [[nodiscard]] juce::String getCollapsedServerSummaryAscii() const;
+    [[nodiscard]] juce::String getDiagnosticsToggleText() const;
+    [[nodiscard]] juce::String getServerSettingsToggleText() const;
 
     SettingsGetter settingsGetter_;
     ApplyHandler applyHandler_;
@@ -356,6 +400,7 @@ private:
     CommandHandler hostSyncAssistToggleHandler_;
     MixerStripsGetter mixerStripsGetter_;
     MixerStripSetter mixerStripSetter_;
+    MixerStripSoloSetter mixerStripSoloSetter_;
     BoolGetter metronomeGetter_;
     BoolSetter metronomeSetter_;
     ServerDiscoveryUiGetter serverDiscoveryUiGetter_;
@@ -366,8 +411,13 @@ private:
     DiagnosticsTextGetter diagnosticsTextGetter_;
     FloatGetter masterOutputGainGetter_;
     FloatSetter masterOutputGainSetter_;
+    FloatGetter metronomeGainGetter_;
+    FloatSetter metronomeGainSetter_;
+    CommandHandler transmitToggleHandler_;
 
     juce::Label titleLabel_;
+    juce::TextButton serverSettingsToggle_;
+    juce::Label serverSettingsSummaryLabel_;
     juce::Label hostLabel_;
     juce::Label portLabel_;
     juce::Label usernameLabel_;
@@ -387,11 +437,12 @@ private:
     juce::Slider panSlider_;
     juce::ToggleButton muteToggle_;
     juce::ToggleButton metronomeToggle_;
+    juce::Slider metronomeVolumeSlider_;
     juce::TextButton connectButton_;
     juce::TextButton disconnectButton_;
     juce::Label authStatusLabel_;
     juce::Label transportLabel_;
-    juce::Label diagnosticsLabel_;
+    juce::TextButton diagnosticsToggle_;
     juce::TextEditor diagnosticsEditor_;
     juce::Label hostSyncAssistTargetLabel_;
     juce::TextButton hostSyncAssistButton_;
@@ -428,10 +479,15 @@ private:
     std::vector<MixerStripState> currentVisibleMixerStrips_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::string selectedServerDiscoveryEndpointKey_;
+    std::string recalledPassword_;
+    bool showingRememberedPasswordMask_ { false };
+    bool updatingPasswordEditor_ { false };
     ServerDiscoveryUiState currentServerDiscoveryUiState_;
     bool refreshingServerDiscoveryUi_ { false };
     RoomUiState currentRoomUiState_;
     juce::Label statusLabel_;
     bool hostSyncAssistLastActionWasCancel_ { false };
+    bool serverSettingsExpanded_ { true };
+    bool diagnosticsExpanded_ { false };
 };
 } // namespace famalamajam::plugin

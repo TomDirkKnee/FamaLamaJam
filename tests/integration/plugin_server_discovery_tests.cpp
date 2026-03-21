@@ -1,25 +1,54 @@
+#include <juce_core/juce_core.h>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include "app/session/ConnectionLifecycle.h"
+#include "infra/state/RememberedServerStore.h"
 #include "plugin/FamaLamaJamAudioProcessor.h"
 #include "support/FakeServerDiscoveryClient.h"
 
 using famalamajam::app::session::ConnectionEvent;
 using famalamajam::app::session::ConnectionEventType;
+using famalamajam::infra::state::makeRememberedServerStore;
 using famalamajam::plugin::FamaLamaJamAudioProcessor;
 using famalamajam::tests::integration::FakeServerDiscoveryClient;
 
 namespace
 {
+class ScopedTempStoreFile
+{
+public:
+    ScopedTempStoreFile()
+        : directory_(juce::File::getSpecialLocation(juce::File::tempDirectory)
+                         .getNonexistentChildFile("famalamajam-discovery-store", {}, false))
+        , file_(directory_.getChildFile("remembered-private-servers.xml"))
+    {
+        REQUIRE(directory_.createDirectory());
+    }
+
+    ~ScopedTempStoreFile()
+    {
+        directory_.deleteRecursively();
+    }
+
+    [[nodiscard]] const juce::File& file() const noexcept { return file_; }
+
+private:
+    juce::File directory_;
+    juce::File file_;
+};
+
 void completeSuccessfulConnection(FamaLamaJamAudioProcessor& processor,
                                   const std::string& host,
                                   std::uint16_t port,
-                                  const std::string& username = "discovery_user")
+                                  const std::string& username = "discovery_user",
+                                  const std::string& password = {})
 {
     auto settings = processor.getActiveSettings();
     settings.serverHost = host;
     settings.serverPort = port;
     settings.username = username;
+    settings.password = password;
 
     REQUIRE(processor.applySettingsFromUi(settings));
     REQUIRE(processor.requestConnect());
@@ -29,42 +58,96 @@ void completeSuccessfulConnection(FamaLamaJamAudioProcessor& processor,
 }
 } // namespace
 
-TEST_CASE("plugin server discovery remembers only successful connections", "[plugin_server_discovery]")
+TEST_CASE("plugin server discovery remembers only successful private connections", "[plugin_server_discovery]")
 {
-    FamaLamaJamAudioProcessor processor;
+    ScopedTempStoreFile tempStore;
 
-    auto settings = processor.getActiveSettings();
-    settings.serverHost = "failed.example.org";
-    settings.serverPort = 2050;
-    settings.username = "discovery_user";
+    {
+        FamaLamaJamAudioProcessor processor(makeRememberedServerStore(tempStore.file()));
 
-    REQUIRE(processor.applySettingsFromUi(settings));
-    REQUIRE(processor.requestConnect());
-    processor.handleConnectionEvent(ConnectionEvent {
-        .type = ConnectionEventType::ConnectionFailed,
-        .reason = "auth rejected",
-    });
+        auto settings = processor.getActiveSettings();
+        settings.serverHost = "draft-only.example.org";
+        settings.serverPort = 2049;
+        settings.username = "draft_user";
+        settings.password = "draft-secret";
+        REQUIRE(processor.applySettingsFromUi(settings));
 
-    auto discovery = processor.getServerDiscoveryUiState();
-    CHECK(discovery.combinedEntries.empty());
-    CHECK_FALSE(discovery.fetchInProgress);
-    CHECK_FALSE(discovery.hasStalePublicData);
-    CHECK(discovery.statusText.empty());
+        auto discovery = processor.getServerDiscoveryUiState();
+        CHECK(discovery.combinedEntries.empty());
+        CHECK_FALSE(discovery.fetchInProgress);
+        CHECK_FALSE(discovery.hasStalePublicData);
+        CHECK(discovery.statusText.empty());
 
-    settings.serverHost = "successful.example.org";
-    settings.serverPort = 2051;
-    REQUIRE(processor.applySettingsFromUi(settings));
-    REQUIRE(processor.requestConnect());
-    processor.handleConnectionEvent(ConnectionEvent { .type = ConnectionEventType::Connected });
+        settings.serverHost = "failed.example.org";
+        settings.serverPort = 2050;
+        settings.username = "failed_user";
+        settings.password = "wrong-secret";
 
-    discovery = processor.getServerDiscoveryUiState();
-    REQUIRE(discovery.combinedEntries.size() == 1);
-    CHECK(discovery.combinedEntries.front().source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Remembered);
-    CHECK(discovery.combinedEntries.front().host == "successful.example.org");
-    CHECK(discovery.combinedEntries.front().port == 2051);
-    CHECK(discovery.combinedEntries.front().label == "successful.example.org:2051");
-    CHECK(discovery.combinedEntries.front().connectedUsers == -1);
-    CHECK_FALSE(discovery.combinedEntries.front().stale);
+        REQUIRE(processor.applySettingsFromUi(settings));
+        REQUIRE(processor.requestConnect());
+        processor.handleConnectionEvent(ConnectionEvent {
+            .type = ConnectionEventType::ConnectionFailed,
+            .reason = "auth rejected",
+        });
+
+        discovery = processor.getServerDiscoveryUiState();
+        CHECK(discovery.combinedEntries.empty());
+        CHECK_FALSE(discovery.fetchInProgress);
+        CHECK_FALSE(discovery.hasStalePublicData);
+        CHECK(discovery.statusText.empty());
+
+        settings.serverHost = "successful.example.org";
+        settings.serverPort = 2051;
+        settings.username = "remembered_user";
+        settings.password = "correct-secret";
+        REQUIRE(processor.applySettingsFromUi(settings));
+        REQUIRE(processor.requestConnect());
+        processor.handleConnectionEvent(ConnectionEvent { .type = ConnectionEventType::Connected });
+
+        discovery = processor.getServerDiscoveryUiState();
+        REQUIRE(discovery.combinedEntries.size() == 1);
+        CHECK(discovery.combinedEntries.front().source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Remembered);
+        CHECK(discovery.combinedEntries.front().host == "successful.example.org");
+        CHECK(discovery.combinedEntries.front().port == 2051);
+        CHECK(discovery.combinedEntries.front().label == "successful.example.org:2051");
+        CHECK(discovery.combinedEntries.front().username == "remembered_user");
+        CHECK(discovery.combinedEntries.front().password == "correct-secret");
+        CHECK(discovery.combinedEntries.front().connectedUsers == -1);
+        CHECK_FALSE(discovery.combinedEntries.front().stale);
+    }
+
+    FamaLamaJamAudioProcessor restored(makeRememberedServerStore(tempStore.file()));
+    const auto restoredDiscovery = restored.getServerDiscoveryUiState();
+    REQUIRE(restoredDiscovery.combinedEntries.size() == 1);
+    CHECK(restoredDiscovery.combinedEntries.front().host == "successful.example.org");
+    CHECK(restoredDiscovery.combinedEntries.front().port == 2051);
+    CHECK(restoredDiscovery.combinedEntries.front().username == "remembered_user");
+    CHECK(restoredDiscovery.combinedEntries.front().password == "correct-secret");
+}
+
+TEST_CASE("plugin server discovery does not persist failed connects across new instances", "[plugin_server_discovery]")
+{
+    ScopedTempStoreFile tempStore;
+
+    {
+        FamaLamaJamAudioProcessor processor(makeRememberedServerStore(tempStore.file()));
+        auto settings = processor.getActiveSettings();
+        settings.serverHost = "failed.example.org";
+        settings.serverPort = 2050;
+        settings.username = "failed_user";
+        settings.password = "wrong-secret";
+
+        REQUIRE(processor.applySettingsFromUi(settings));
+        REQUIRE(processor.requestConnect());
+        processor.handleConnectionEvent(ConnectionEvent {
+            .type = ConnectionEventType::ConnectionFailed,
+            .reason = "auth rejected",
+        });
+        CHECK(processor.getServerDiscoveryUiState().combinedEntries.empty());
+    }
+
+    FamaLamaJamAudioProcessor restored(makeRememberedServerStore(tempStore.file()));
+    CHECK(restored.getServerDiscoveryUiState().combinedEntries.empty());
 }
 
 TEST_CASE("plugin server discovery keeps remembered history bounded and recent", "[plugin_server_discovery]")
@@ -100,6 +183,22 @@ TEST_CASE("plugin server discovery keeps remembered history bounded and recent",
     }
 
     CHECK(duplicateCount == 1);
+}
+
+TEST_CASE("plugin server discovery deduplicates remembered private entries by endpoint and keeps newest credentials",
+          "[plugin_server_discovery]")
+{
+    FamaLamaJamAudioProcessor processor;
+
+    completeSuccessfulConnection(processor, "private.example.org", 2050, "old_user", "old-secret");
+    completeSuccessfulConnection(processor, "private.example.org", 2050, "new_user", "new-secret");
+
+    const auto discovery = processor.getServerDiscoveryUiState();
+    REQUIRE(discovery.combinedEntries.size() == 1);
+    CHECK(discovery.combinedEntries.front().host == "private.example.org");
+    CHECK(discovery.combinedEntries.front().port == 2050);
+    CHECK(discovery.combinedEntries.front().username == "new_user");
+    CHECK(discovery.combinedEntries.front().password == "new-secret");
 }
 
 TEST_CASE("plugin server discovery combines remembered and public entries without duplicating endpoints",
@@ -160,7 +259,7 @@ TEST_CASE("plugin server discovery combines remembered and public entries withou
     REQUIRE(discovery.combinedEntries.size() == 6);
     CHECK_FALSE(discovery.fetchInProgress);
     CHECK_FALSE(discovery.hasStalePublicData);
-    CHECK(discovery.statusText == "Public server list updated.");
+    CHECK(discovery.statusText.empty());
 
     CHECK(discovery.combinedEntries[0].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Remembered);
     CHECK(discovery.combinedEntries[0].host == "remembered.example.org");

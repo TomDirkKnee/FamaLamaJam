@@ -214,6 +214,7 @@ public:
         std::string username { "peer" };
         std::uint8_t channelIndex { 0 };
         int startAfterUploadBegins { 0 };
+        std::uint8_t channelFlags { 0 };
     };
 
     struct UserInfoChange
@@ -222,6 +223,7 @@ public:
         std::string channelName;
         std::uint8_t channelIndex { 0 };
         bool active { false };
+        std::uint8_t channelFlags { 0 };
     };
 
     MiniNinjamServer()
@@ -303,7 +305,11 @@ public:
             remotePeers_.push_back(RemotePeer {});
     }
 
-    void enqueueUserInfoChange(std::string username, std::string channelName, std::uint8_t channelIndex, bool active)
+    void enqueueUserInfoChange(std::string username,
+                               std::string channelName,
+                               std::uint8_t channelIndex,
+                               bool active,
+                               std::uint8_t channelFlags = 0)
     {
         const juce::ScopedLock lock(configLock_);
         pendingUserInfoChanges_.push_back(UserInfoChange {
@@ -311,6 +317,7 @@ public:
             .channelName = std::move(channelName),
             .channelIndex = channelIndex,
             .active = active,
+            .channelFlags = channelFlags,
         });
         wakeEvent_.signal();
     }
@@ -543,7 +550,8 @@ private:
                       const std::string& username,
                       const std::string& channelName,
                       std::uint8_t channelIndex,
-                      bool active)
+                      bool active,
+                      std::uint8_t channelFlags)
     {
         std::vector<std::uint8_t> payload;
         payload.resize(1 + 1 + 2 + 1 + 1 + username.size() + 1 + channelName.size() + 1);
@@ -554,7 +562,7 @@ private:
         payload[offset++] = 0;
         payload[offset++] = 0;
         payload[offset++] = 0;
-        payload[offset++] = 0;
+        payload[offset++] = channelFlags;
 
         std::memcpy(payload.data() + offset, username.data(), username.size());
         offset += username.size();
@@ -632,7 +640,12 @@ private:
 
         for (const auto& update : updates)
         {
-            if (! sendUserInfo(socket, update.username, update.channelName, update.channelIndex, update.active))
+            if (! sendUserInfo(socket,
+                               update.username,
+                               update.channelName,
+                               update.channelIndex,
+                               update.active,
+                               update.channelFlags))
                 return false;
         }
 
@@ -790,7 +803,12 @@ private:
 
                     for (const auto& peer : peers)
                     {
-                        if (! sendUserInfo(*socket, peer.username, "room", peer.channelIndex, true))
+                        if (! sendUserInfo(*socket,
+                                           peer.username,
+                                           "room",
+                                           peer.channelIndex,
+                                           true,
+                                           peer.channelFlags))
                             return;
                     }
 
