@@ -26,7 +26,8 @@ target_sources(famalamajam_core
         src/audio/CodecStreamBridge.cpp
         src/audio/OggVorbisCodec.cpp
         src/net/FramedSocketTransport.cpp
-        src/infra/state/SessionSettingsSerializer.cpp)
+        src/infra/state/SessionSettingsSerializer.cpp
+        src/infra/state/RememberedServerStore.cpp)
 
 target_include_directories(famalamajam_core
     PUBLIC

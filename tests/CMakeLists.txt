@@ -8,6 +8,7 @@ add_executable(famalamajam_tests
     unit/connection_failure_classification_tests.cpp
     unit/codec_stream_bridge_tests.cpp
     unit/ogg_vorbis_codec_tests.cpp
+    unit/remembered_server_store_tests.cpp
     # Phase 2 lifecycle recovery integration coverage
     integration/plugin_apply_flow_tests.cpp
     integration/plugin_connection_command_flow_tests.cpp
