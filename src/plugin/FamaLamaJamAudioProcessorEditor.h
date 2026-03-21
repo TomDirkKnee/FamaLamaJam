@@ -201,10 +201,15 @@ public:
     {
         std::uint64_t resizedCalls { 0 };
         std::uint64_t timerCallbackCalls { 0 };
+        std::uint64_t transportRefreshCalls { 0 };
+        std::uint64_t serverDiscoveryRefreshCalls { 0 };
         std::uint64_t roomRefreshCalls { 0 };
+        std::uint64_t diagnosticsRefreshCalls { 0 };
+        std::uint64_t diagnosticsDocumentUpdateCalls { 0 };
         std::uint64_t roomFeedRebuildCalls { 0 };
         std::uint64_t roomFeedEntryWidgetsBuilt { 0 };
         std::uint64_t mixerRefreshCalls { 0 };
+        std::uint64_t mixerMeterUpdateCalls { 0 };
         std::uint64_t mixerStripUpdateCalls { 0 };
         std::uint64_t mixerStripWidgetBuildCount { 0 };
     };
@@ -319,6 +324,7 @@ public:
                                                            double& gain,
                                                            double& pan,
                                                            bool& muted) const;
+    [[nodiscard]] bool getMixerStripMeterLevelsForTesting(const juce::String& sourceId, float& left, float& right) const;
     bool setMixerStripControlStateForTesting(const juce::String& sourceId, double gain, double pan, bool muted);
     bool clickMixerStripTransmitForTesting(const juce::String& sourceId);
     bool setMixerStripSoloStateForTesting(const juce::String& sourceId, bool soloed);
@@ -331,6 +337,8 @@ public:
     void setPasswordTextForTesting(const juce::String& text);
     void clickConnectForTesting();
     void clickHostSyncAssistForTesting();
+    void clickDiagnosticsToggleForTesting();
+    void runTimerTickForTesting();
     void refreshForTesting();
 
 private:
@@ -365,6 +373,8 @@ private:
         juce::TextButton transmitButton;
         bool hasTransmitControl { false };
         bool showsGroupLabel { false };
+        float lastMeterLeft { 0.0f };
+        float lastMeterRight { 0.0f };
     };
 
     void timerCallback() override;
@@ -489,5 +499,11 @@ private:
     bool hostSyncAssistLastActionWasCancel_ { false };
     bool serverSettingsExpanded_ { true };
     bool diagnosticsExpanded_ { false };
+    std::uint64_t uiRefreshTick_ { 0 };
+    bool lastTransportUiInitialized_ { false };
+    SyncHealth lastTransportSyncHealth_ { SyncHealth::Disconnected };
+    int lastTransportBeat_ { 0 };
+    std::uint64_t lastTransportIntervalIndex_ { 0 };
+    std::string lastDiagnosticsText_;
 };
 } // namespace famalamajam::plugin

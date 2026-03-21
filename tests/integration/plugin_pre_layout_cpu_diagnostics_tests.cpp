@@ -1,6 +1,7 @@
 #include <functional>
 #include <string>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -33,6 +34,7 @@ struct EditorHarness
     FamaLamaJamAudioProcessorEditor::RoomUiState roomUi;
     std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> mixerStrips;
     bool metronomeEnabled { false };
+    int diagnosticsGetterCalls { 0 };
     std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor;
 
     EditorHarness()
@@ -128,7 +130,11 @@ struct EditorHarness
             [](bool) { return false; },
             [this]() { return roomUi; },
             [](std::string) { return true; },
-            [](FamaLamaJamAudioProcessorEditor::RoomVoteKind, int) { return true; });
+            [](FamaLamaJamAudioProcessorEditor::RoomVoteKind, int) { return true; },
+            [this]() {
+                ++diagnosticsGetterCalls;
+                return std::string("diagnostics");
+            });
     }
 };
 
@@ -217,6 +223,116 @@ TEST_CASE("plugin pre layout cpu diagnostics keeps unchanged mixer strips off th
     REQUIRE(snapshot.mixerRefreshCalls == 5);
     CHECK(snapshot.mixerStripWidgetBuildCount == 0);
     CHECK(snapshot.mixerStripUpdateCalls == 0);
+}
+
+TEST_CASE("plugin pre layout cpu diagnostics skips hidden diagnostics polling",
+          "[plugin_pre_layout_cpu_diagnostics]")
+{
+    EditorHarness harness;
+
+    harness.diagnosticsGetterCalls = 0;
+    harness.editor->resetCpuDiagnosticSnapshotForTesting();
+
+    for (int refresh = 0; refresh < 6; ++refresh)
+        harness.editor->refreshForTesting();
+
+    const auto snapshot = harness.editor->getCpuDiagnosticSnapshotForTesting();
+    CHECK(snapshot.timerCallbackCalls == 0);
+    CHECK(harness.editor->isDiagnosticsExpandedForTesting() == false);
+    CHECK(harness.diagnosticsGetterCalls == 0);
+}
+
+TEST_CASE("plugin pre layout cpu diagnostics throttles timer-driven nonessential refresh domains",
+          "[plugin_pre_layout_cpu_diagnostics]")
+{
+    EditorHarness harness;
+    harness.transport.syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::WaitingForTiming;
+
+    harness.diagnosticsGetterCalls = 0;
+    harness.editor->resetCpuDiagnosticSnapshotForTesting();
+
+    for (int tick = 0; tick < 20; ++tick)
+        harness.editor->runTimerTickForTesting();
+
+    const auto snapshot = harness.editor->getCpuDiagnosticSnapshotForTesting();
+    CHECK(snapshot.timerCallbackCalls == 20);
+    CHECK(snapshot.mixerRefreshCalls == 20);
+    CHECK(snapshot.transportRefreshCalls == 5);
+    CHECK(snapshot.roomRefreshCalls == 3);
+    CHECK(snapshot.serverDiscoveryRefreshCalls == 2);
+    CHECK(snapshot.diagnosticsRefreshCalls == 0);
+    CHECK(harness.diagnosticsGetterCalls == 0);
+}
+
+TEST_CASE("plugin pre layout cpu diagnostics quantizes transport and room refresh to beat changes",
+          "[plugin_pre_layout_cpu_diagnostics]")
+{
+    EditorHarness harness;
+
+    harness.transport.syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy;
+    harness.transport.intervalIndex = 3;
+    harness.transport.currentBeat = 4;
+    harness.editor->resetCpuDiagnosticSnapshotForTesting();
+
+    harness.editor->runTimerTickForTesting();
+    harness.editor->resetCpuDiagnosticSnapshotForTesting();
+
+    for (int tick = 0; tick < 4; ++tick)
+        harness.editor->runTimerTickForTesting();
+
+    auto snapshot = harness.editor->getCpuDiagnosticSnapshotForTesting();
+    CHECK(snapshot.transportRefreshCalls == 0);
+    CHECK(snapshot.roomRefreshCalls == 0);
+
+    harness.transport.currentBeat = 5;
+    harness.editor->runTimerTickForTesting();
+
+    snapshot = harness.editor->getCpuDiagnosticSnapshotForTesting();
+    CHECK(snapshot.transportRefreshCalls == 1);
+    CHECK(snapshot.roomRefreshCalls == 1);
+}
+
+TEST_CASE("plugin pre layout cpu diagnostics treats expanded diagnostics as low-cadence change-only snapshots",
+          "[plugin_pre_layout_cpu_diagnostics]")
+{
+    EditorHarness harness;
+
+    harness.editor->clickDiagnosticsToggleForTesting();
+    harness.diagnosticsGetterCalls = 0;
+    harness.editor->resetCpuDiagnosticSnapshotForTesting();
+
+    for (int tick = 0; tick < 20; ++tick)
+        harness.editor->runTimerTickForTesting();
+
+    auto snapshot = harness.editor->getCpuDiagnosticSnapshotForTesting();
+    CHECK(snapshot.diagnosticsRefreshCalls == 2);
+    CHECK(snapshot.diagnosticsDocumentUpdateCalls == 0);
+    CHECK(harness.diagnosticsGetterCalls == 2);
+}
+
+TEST_CASE("plugin pre layout cpu diagnostics avoids full strip updates when only meters change",
+          "[plugin_pre_layout_cpu_diagnostics]")
+{
+    EditorHarness harness;
+
+    harness.editor->resetCpuDiagnosticSnapshotForTesting();
+
+    for (int refresh = 0; refresh < 5; ++refresh)
+    {
+        harness.mixerStrips[1].meterLeft = 0.2f + (0.1f * static_cast<float>(refresh));
+        harness.mixerStrips[1].meterRight = 0.3f + (0.1f * static_cast<float>(refresh));
+        harness.editor->refreshForTesting();
+    }
+
+    const auto snapshot = harness.editor->getCpuDiagnosticSnapshotForTesting();
+    float left = 0.0f;
+    float right = 0.0f;
+    REQUIRE(harness.editor->getMixerStripMeterLevelsForTesting("alice#0", left, right));
+    CHECK(snapshot.mixerRefreshCalls == 5);
+    CHECK(snapshot.mixerStripUpdateCalls == 0);
+    CHECK(snapshot.mixerMeterUpdateCalls > 0);
+    CHECK(left == Catch::Approx(harness.mixerStrips[1].meterLeft));
+    CHECK(right == Catch::Approx(harness.mixerStrips[1].meterRight));
 }
 
 TEST_CASE("plugin pre layout cpu diagnostics separates processor hot-path counters from non-audio polling",

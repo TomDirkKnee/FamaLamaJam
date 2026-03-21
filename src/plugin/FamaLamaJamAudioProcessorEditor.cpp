@@ -442,8 +442,6 @@ constexpr auto kRememberedPasswordMask = "********";
         && juce::approximatelyEqual(lhs.pan, rhs.pan)
         && lhs.muted == rhs.muted
         && lhs.soloed == rhs.soloed
-        && juce::approximatelyEqual(lhs.meterLeft, rhs.meterLeft)
-        && juce::approximatelyEqual(lhs.meterRight, rhs.meterRight)
         && lhs.transmitState == rhs.transmitState
         && lhs.unsupportedVoiceMode == rhs.unsupportedVoiceMode
         && lhs.statusText == rhs.statusText
@@ -697,6 +695,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     diagnosticsToggle_.onClick = [this]() {
         diagnosticsExpanded_ = ! diagnosticsExpanded_;
         diagnosticsToggle_.setButtonText(getDiagnosticsToggleText());
+        if (diagnosticsExpanded_)
+            refreshDiagnosticsUi();
         resized();
     };
     addAndMakeVisible(diagnosticsToggle_);
@@ -740,7 +740,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     refreshRoomUi();
     refreshDiagnosticsUi();
     refreshMixerStrips();
-    startTimerHz(20);
+    startTimerHz(10);
     setSize(1080, 760);
 }
 
@@ -1045,12 +1045,35 @@ void FamaLamaJamAudioProcessorEditor::resized()
 void FamaLamaJamAudioProcessorEditor::timerCallback()
 {
     ++cpuDiagnosticSnapshot_.timerCallbackCalls;
+    ++uiRefreshTick_;
     refreshLifecycleStatus();
-    refreshTransportStatus();
-    refreshServerDiscoveryUi();
-    refreshRoomUi();
-    refreshDiagnosticsUi();
+
+    const auto transport = transportUiGetter_();
+    const bool beatPulse = ! lastTransportUiInitialized_
+        || transport.syncHealth != lastTransportSyncHealth_
+        || transport.intervalIndex != lastTransportIntervalIndex_
+        || transport.currentBeat != lastTransportBeat_;
+
+    lastTransportUiInitialized_ = true;
+    lastTransportSyncHealth_ = transport.syncHealth;
+    lastTransportIntervalIndex_ = transport.intervalIndex;
+    lastTransportBeat_ = transport.currentBeat;
+
+    const bool hasHealthyTiming = transport.syncHealth == SyncHealth::Healthy;
+
+    if (beatPulse || (! hasHealthyTiming && uiRefreshTick_ % 5 == 0))
+        refreshTransportStatus();
+
     refreshMixerStrips();
+
+    if (beatPulse || (! hasHealthyTiming && uiRefreshTick_ % 10 == 0))
+        refreshRoomUi();
+
+    if (uiRefreshTick_ % 10 == 0)
+        refreshServerDiscoveryUi();
+
+    if (diagnosticsExpanded_ && uiRefreshTick_ % 10 == 0)
+        refreshDiagnosticsUi();
 }
 
 app::session::SessionSettings FamaLamaJamAudioProcessorEditor::makeDraftFromUi() const
@@ -1199,6 +1222,7 @@ void FamaLamaJamAudioProcessorEditor::refreshLifecycleStatus()
 
 void FamaLamaJamAudioProcessorEditor::refreshTransportStatus()
 {
+    ++cpuDiagnosticSnapshot_.transportRefreshCalls;
     const auto transport = transportUiGetter_();
 
     intervalProgressValue_ = (transport.syncHealth == SyncHealth::Healthy)
@@ -1236,6 +1260,7 @@ void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
 
 void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
 {
+    ++cpuDiagnosticSnapshot_.serverDiscoveryRefreshCalls;
     const auto nextServerDiscoveryUiState = serverDiscoveryUiGetter_();
     if (serverDiscoveryStateMatches(nextServerDiscoveryUiState, currentServerDiscoveryUiState_))
     {
@@ -1361,7 +1386,18 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
 
 void FamaLamaJamAudioProcessorEditor::refreshDiagnosticsUi()
 {
-    diagnosticsEditor_.setText(juce::String(diagnosticsTextGetter_()), juce::dontSendNotification);
+    ++cpuDiagnosticSnapshot_.diagnosticsRefreshCalls;
+    if (! diagnosticsExpanded_)
+        return;
+
+    const auto nextDiagnosticsText = diagnosticsTextGetter_();
+    if (nextDiagnosticsText != lastDiagnosticsText_)
+    {
+        ++cpuDiagnosticSnapshot_.diagnosticsDocumentUpdateCalls;
+        lastDiagnosticsText_ = nextDiagnosticsText;
+        diagnosticsEditor_.setText(juce::String(nextDiagnosticsText), juce::dontSendNotification);
+    }
+
     diagnosticsToggle_.setButtonText(getDiagnosticsToggleText());
 }
 
@@ -1479,6 +1515,16 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
     {
         const auto& strip = visibleStrips[index];
         auto& widgets = *mixerStripWidgets_[index];
+        const bool meterChanged = ! juce::approximatelyEqual(strip.meterLeft, widgets.lastMeterLeft)
+            || ! juce::approximatelyEqual(strip.meterRight, widgets.lastMeterRight);
+
+        if (meterChanged)
+        {
+            ++cpuDiagnosticSnapshot_.mixerMeterUpdateCalls;
+            widgets.lastMeterLeft = strip.meterLeft;
+            widgets.lastMeterRight = strip.meterRight;
+            widgets.meter.setLevels(strip.meterLeft, strip.meterRight);
+        }
 
         const bool stripChanged = index >= currentVisibleMixerStrips_.size()
             || ! mixerStripStateMatches(strip, currentVisibleMixerStrips_[index]);
@@ -1497,7 +1543,6 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
                                       strip.unsupportedVoiceMode ? juce::Colour::fromRGB(214, 141, 72)
                                                                  : juce::Colour::fromRGB(188, 196, 210));
         widgets.statusLabel.setAlpha(strip.statusText.empty() ? 0.0f : 1.0f);
-        widgets.meter.setLevels(strip.meterLeft, strip.meterRight);
 
         if (! widgets.gainSlider.isMouseButtonDown())
             widgets.gainSlider.setValue(strip.gainDb, juce::dontSendNotification);
@@ -1606,6 +1651,9 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
             refreshMixerStrips();
         };
         widgets->transmitButton.setVisible(widgets->hasTransmitControl);
+        widgets->lastMeterLeft = strip.meterLeft;
+        widgets->lastMeterRight = strip.meterRight;
+        widgets->meter.setLevels(strip.meterLeft, strip.meterRight);
         mixerContent_.addAndMakeVisible(widgets->transmitButton);
 
         visibleMixerStripOrder_.push_back(strip.sourceId);
@@ -1859,6 +1907,24 @@ bool FamaLamaJamAudioProcessorEditor::getMixerStripControlStateForTesting(const 
     return false;
 }
 
+bool FamaLamaJamAudioProcessorEditor::getMixerStripMeterLevelsForTesting(const juce::String& sourceId,
+                                                                         float& left,
+                                                                         float& right) const
+{
+    const auto source = sourceId.toStdString();
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId != source)
+            continue;
+
+        left = widgets->meter.getLeftLevelForTesting();
+        right = widgets->meter.getRightLevelForTesting();
+        return true;
+    }
+
+    return false;
+}
+
 bool FamaLamaJamAudioProcessorEditor::setMixerStripControlStateForTesting(const juce::String& sourceId,
                                                                           double gain,
                                                                           double pan,
@@ -1954,6 +2020,17 @@ void FamaLamaJamAudioProcessorEditor::clickHostSyncAssistForTesting()
 {
     if (hostSyncAssistButton_.onClick != nullptr)
         hostSyncAssistButton_.onClick();
+}
+
+void FamaLamaJamAudioProcessorEditor::clickDiagnosticsToggleForTesting()
+{
+    if (diagnosticsToggle_.onClick != nullptr)
+        diagnosticsToggle_.onClick();
+}
+
+void FamaLamaJamAudioProcessorEditor::runTimerTickForTesting()
+{
+    timerCallback();
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshForTesting()
