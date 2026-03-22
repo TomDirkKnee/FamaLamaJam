@@ -152,10 +152,9 @@ TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[
     });
 
     const auto groupLabels = harness.editor->getVisibleMixerGroupLabelsForTesting();
-    REQUIRE(groupLabels.size() == 3);
-    CHECK(groupLabels[0] == "Local Monitor");
-    CHECK(groupLabels[1] == "alice");
-    CHECK(groupLabels[2] == "bob");
+    REQUIRE(groupLabels.size() == 2);
+    CHECK(groupLabels[0] == "alice");
+    CHECK(groupLabels[1] == "bob");
 
     const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
     REQUIRE(stripLabels.size() == 4);

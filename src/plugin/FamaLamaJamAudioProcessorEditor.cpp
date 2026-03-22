@@ -829,8 +829,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
     intervalProgressBar_.setBounds(footer);
     area.removeFromBottom(8);
 
-    titleLabel_.setBounds(area.removeFromTop(18));
-    area.removeFromTop(4);
+    titleLabel_.setVisible(false);
 
     constexpr int kSidebarWidth = 320;
     auto sidebar = area.removeFromRight(juce::jmin(kSidebarWidth, juce::jmax(220, area.getWidth() / 3)));
@@ -1714,7 +1713,8 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         auto widgets = std::make_unique<MixerStripWidgets>();
         widgets->sourceId = strip.sourceId;
         widgets->groupId = strip.groupId;
-        widgets->showsGroupLabel = previousGroupId != strip.groupId;
+        widgets->showsGroupLabel = previousGroupId != strip.groupId
+                                    && strip.groupLabel != strip.displayName;
         previousGroupId = strip.groupId;
 
         widgets->groupLabel.setJustificationType(juce::Justification::centredLeft);
