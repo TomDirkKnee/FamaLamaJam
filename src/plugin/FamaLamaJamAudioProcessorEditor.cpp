@@ -1308,8 +1308,8 @@ void FamaLamaJamAudioProcessorEditor::refreshTransportStatus()
     ++cpuDiagnosticSnapshot_.transportRefreshCalls;
     const auto transport = transportUiGetter_();
 
-    intervalProgressValue_ = (transport.syncHealth == SyncHealth::Healthy)
-        ? juce::jlimit(0.0, 1.0, static_cast<double>(transport.intervalProgress))
+    intervalProgressValue_ = (transport.syncHealth == SyncHealth::Healthy && transport.beatsPerInterval > 0)
+        ? juce::jlimit(0.0, 1.0, static_cast<double>(transport.currentBeat) / transport.beatsPerInterval)
         : 0.0;
     intervalProgressBar_.setProgress(intervalProgressValue_,
                                      transport.syncHealth == SyncHealth::Healthy ? transport.beatsPerInterval : 0);
