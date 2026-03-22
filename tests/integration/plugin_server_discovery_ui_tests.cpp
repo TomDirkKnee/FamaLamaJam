@@ -116,6 +116,17 @@ TEST_CASE("plugin server discovery ui selection fills host and port without auto
     CHECK(harness.editor->getPortTextForTesting() == "2090");
 }
 
+TEST_CASE("plugin server discovery ui shows a compact disconnected target summary without empty timing filler",
+          "[plugin_server_discovery_ui]")
+{
+    EditorHarness harness;
+
+    REQUIRE(harness.editor->selectServerDiscoveryEntryForTesting(1));
+
+    CHECK(harness.editor->getServerSettingsSummaryForTesting() == "Disconnected from public.example.org:2051");
+    CHECK(harness.editor->getTransportStatusTextForTesting().isEmpty());
+}
+
 TEST_CASE("plugin server discovery ui recalls remembered private credentials with a masked password placeholder",
           "[plugin_server_discovery_ui]")
 {

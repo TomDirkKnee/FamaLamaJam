@@ -32,6 +32,7 @@ struct EditorHarness
     int sentMessageCount { 0 };
     int submittedVoteCount { 0 };
     std::string lastSentMessage;
+    std::string diagnosticsText { "Diagnostics CPU\nresized=12\nroomRefresh=7" };
     FamaLamaJamAudioProcessorEditor::RoomVoteKind lastSubmittedVoteKind {
         FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm
     };
@@ -142,7 +143,8 @@ struct EditorHarness
                 lastSubmittedVoteKind = kind;
                 lastSubmittedVoteValue = value;
                 return true;
-            });
+            },
+            [this]() { return diagnosticsText; });
     }
 };
 
@@ -183,6 +185,54 @@ juce::Label* findLabelContainingText(juce::Component& parent, const juce::String
     return findComponent<juce::Label>(parent,
                                       [&](const juce::Label& label) { return label.getText().contains(text); });
 }
+
+juce::TextEditor* findTextEditorOnSameRowAs(juce::Component& parent, const juce::Label& label)
+{
+    return findComponent<juce::TextEditor>(parent, [&](const juce::TextEditor& editor) {
+        return editor.isVisible()
+            && editor.getX() >= label.getRight()
+            && editor.getBounds().getCentreY() >= label.getY()
+            && editor.getBounds().getCentreY() <= label.getBottom();
+    });
+}
+
+juce::TextEditor* findTextEditorContainingText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::TextEditor>(parent,
+                                           [&](const juce::TextEditor& editor) { return editor.getText().contains(text); });
+}
+
+juce::Viewport* findRoomSidebarViewport(juce::Component& parent)
+{
+    return findComponent<juce::Viewport>(parent, [&](const juce::Viewport& viewport) {
+        return viewport.getX() > parent.getWidth() / 2;
+    });
+}
+
+std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry> makeScrollableFeed()
+{
+    std::vector<FamaLamaJamAudioProcessorEditor::RoomFeedEntry> entries;
+    for (int index = 0; index < 18; ++index)
+    {
+        entries.push_back({
+            .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Chat,
+            .author = "player" + std::to_string(index),
+            .text = "Long wrapped room note " + std::to_string(index)
+                + " keeps the sidebar busy enough to require scrolling in the compact room chat view.",
+        });
+    }
+
+    return entries;
+}
+
+int getViewportMaxScrollY(const juce::Viewport& viewport)
+{
+    const auto* viewed = viewport.getViewedComponent();
+    if (viewed == nullptr)
+        return 0;
+
+    return juce::jmax(0, viewed->getHeight() - viewport.getHeight());
+}
 } // namespace
 
 TEST_CASE("plugin room controls ui exposes one mixed room section in the current page", "[plugin_room_controls_ui]")
@@ -203,23 +253,24 @@ TEST_CASE("plugin room controls ui exposes one mixed room section in the current
                               .intervalIndex = 2,
                           });
 
-    auto* roomLabel = findLabelWithText(*harness.editor, "Room");
+    auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
     auto* composerLabel = findLabelWithText(*harness.editor, "Message");
     auto* sendButton = findButtonWithText(*harness.editor, "Send");
+    auto* voteButton = findButtonWithText(*harness.editor, "Vote");
     auto* bpmButton = findButtonWithText(*harness.editor, "Vote BPM");
     auto* bpiButton = findButtonWithText(*harness.editor, "Vote BPI");
 
     REQUIRE(roomLabel != nullptr);
     REQUIRE(composerLabel != nullptr);
     REQUIRE(sendButton != nullptr);
-    REQUIRE(bpmButton != nullptr);
-    REQUIRE(bpiButton != nullptr);
+    REQUIRE(voteButton != nullptr);
 
     CHECK(roomLabel->isVisible());
     CHECK(composerLabel->isVisible());
     CHECK(sendButton->isVisible());
-    CHECK(bpmButton->isVisible());
-    CHECK(bpiButton->isVisible());
+    CHECK(voteButton->isVisible());
+    CHECK(bpmButton == nullptr);
+    CHECK(bpiButton == nullptr);
     CHECK(harness.editor->hasRoomFeedViewportForTesting());
     REQUIRE(harness.editor->getVisibleRoomFeedForTesting().size() == 4);
     CHECK(harness.editor->getVisibleRoomFeedForTesting()[0].kind
@@ -260,38 +311,32 @@ TEST_CASE("plugin room controls ui keeps the right-hand room sidebar visible whi
                                       });
 
     auto* connectedHostLabel = findLabelWithText(*connectedHarness.editor, "Host");
-    auto* connectedRoomLabel = findLabelWithText(*connectedHarness.editor, "Room");
+    auto* connectedRoomLabel = findLabelWithText(*connectedHarness.editor, "Room Chat");
     auto* connectedComposerLabel = findLabelWithText(*connectedHarness.editor, "Message");
     auto* connectedSendButton = findButtonWithText(*connectedHarness.editor, "Send");
-    auto* connectedBpmButton = findButtonWithText(*connectedHarness.editor, "Vote BPM");
-    auto* connectedBpiButton = findButtonWithText(*connectedHarness.editor, "Vote BPI");
+    auto* connectedVoteButton = findButtonWithText(*connectedHarness.editor, "Vote");
     auto* disconnectedHostLabel = findLabelWithText(*disconnectedHarness.editor, "Host");
-    auto* disconnectedRoomLabel = findLabelWithText(*disconnectedHarness.editor, "Room");
+    auto* disconnectedRoomLabel = findLabelWithText(*disconnectedHarness.editor, "Room Chat");
     auto* disconnectedComposerLabel = findLabelWithText(*disconnectedHarness.editor, "Message");
-    auto* disconnectedBpmButton = findButtonWithText(*disconnectedHarness.editor, "Vote BPM");
-    auto* disconnectedBpiButton = findButtonWithText(*disconnectedHarness.editor, "Vote BPI");
+    auto* disconnectedVoteButton = findButtonWithText(*disconnectedHarness.editor, "Vote");
 
     REQUIRE(connectedHostLabel != nullptr);
     REQUIRE(connectedRoomLabel != nullptr);
     REQUIRE(connectedComposerLabel != nullptr);
     REQUIRE(connectedSendButton != nullptr);
-    REQUIRE(connectedBpmButton != nullptr);
-    REQUIRE(connectedBpiButton != nullptr);
+    REQUIRE(connectedVoteButton != nullptr);
     REQUIRE(disconnectedHostLabel != nullptr);
     REQUIRE(disconnectedRoomLabel != nullptr);
     REQUIRE(disconnectedComposerLabel != nullptr);
-    REQUIRE(disconnectedBpmButton != nullptr);
-    REQUIRE(disconnectedBpiButton != nullptr);
+    REQUIRE(disconnectedVoteButton != nullptr);
 
     CHECK(connectedRoomLabel->getX() > connectedHostLabel->getRight());
     CHECK(connectedComposerLabel->isVisible());
     CHECK(connectedSendButton->isVisible());
-    CHECK(connectedBpmButton->isVisible());
-    CHECK(connectedBpiButton->isVisible());
+    CHECK(connectedVoteButton->isVisible());
     CHECK(disconnectedRoomLabel->isVisible());
     CHECK(disconnectedComposerLabel->isVisible());
-    CHECK(disconnectedBpmButton->isVisible());
-    CHECK(disconnectedBpiButton->isVisible());
+    CHECK(disconnectedVoteButton->isVisible());
     CHECK(disconnectedRoomLabel->getX() > disconnectedHostLabel->getRight());
     CHECK(connectedHarness.editor->isRoomComposerEnabledForTesting());
     CHECK_FALSE(disconnectedHarness.editor->isRoomComposerEnabledForTesting());
@@ -330,36 +375,43 @@ TEST_CASE("plugin room controls ui keeps compact vote controls near the top of t
                               .intervalProgress = 0.5f,
                               .intervalIndex = 2,
                           });
+    harness.roomUi.bpmVote = {};
+    harness.roomUi.bpiVote = {};
+    harness.editor->refreshForTesting();
 
     auto* hostLabel = findLabelWithText(*harness.editor, "Host");
-    auto* roomLabel = findLabelWithText(*harness.editor, "Room");
-    auto* bpmButton = findButtonWithText(*harness.editor, "Vote BPM");
-    auto* bpiButton = findButtonWithText(*harness.editor, "Vote BPI");
+    auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
+    auto* bpmLabel = findLabelWithText(*harness.editor, "BPM");
+    auto* bpiLabel = findLabelWithText(*harness.editor, "BPI");
+    auto* voteButton = findButtonWithText(*harness.editor, "Vote");
     auto* roomStatusLabel = findLabelContainingText(*harness.editor, "Room activity");
-    auto* pendingLabel = findLabelWithText(*harness.editor, "BPM vote pending");
-    auto* failureLabel = findLabelWithText(*harness.editor, "BPI vote failed");
+    auto* bpmEditor = bpmLabel == nullptr ? nullptr : findTextEditorOnSameRowAs(*harness.editor, *bpmLabel);
+    auto* bpiEditor = bpiLabel == nullptr ? nullptr : findTextEditorOnSameRowAs(*harness.editor, *bpiLabel);
 
     REQUIRE(hostLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
-    REQUIRE(bpmButton != nullptr);
-    REQUIRE(bpiButton != nullptr);
+    REQUIRE(bpmLabel != nullptr);
+    REQUIRE(bpiLabel != nullptr);
+    REQUIRE(voteButton != nullptr);
     REQUIRE(roomStatusLabel != nullptr);
-    REQUIRE(pendingLabel != nullptr);
-    REQUIRE(failureLabel != nullptr);
+    REQUIRE(bpmEditor != nullptr);
+    REQUIRE(bpiEditor != nullptr);
 
     CHECK(roomLabel->getX() > hostLabel->getRight());
-    CHECK(bpmButton->getX() > hostLabel->getRight());
-    CHECK(bpiButton->getX() > hostLabel->getRight());
-    CHECK(bpmButton->getY() < roomStatusLabel->getY());
-    CHECK(bpiButton->getY() < roomStatusLabel->getY());
-    CHECK(bpmButton->getBottom() < pendingLabel->getY());
-    CHECK(bpiButton->getBottom() < failureLabel->getY());
+    CHECK(voteButton->getX() > hostLabel->getRight());
+    CHECK(voteButton->getY() < roomStatusLabel->getY());
     CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm)
-          == "BPM vote pending");
+          .isEmpty());
     CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
-          == "BPI vote failed");
-    CHECK(harness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm));
-    CHECK(harness.editor->isRoomVoteEnabledForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
+          .isEmpty());
+
+    bpmEditor->setText("124");
+    CHECK(bpmEditor->getText() == "124");
+    CHECK(bpiEditor->getText().isEmpty());
+
+    bpiEditor->setText("12");
+    CHECK(bpiEditor->getText() == "12");
+    CHECK(bpmEditor->getText().isEmpty());
 }
 
 TEST_CASE("plugin room controls ui submits validated direct votes and clears inline feedback after room updates",
@@ -385,8 +437,19 @@ TEST_CASE("plugin room controls ui submits validated direct votes and clears inl
     harness.roomUi.bpiVote = {};
     harness.editor->refreshForTesting();
 
-    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm, 124);
-    REQUIRE(harness.editor->submitRoomVoteForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm));
+    auto* bpmLabel = findLabelWithText(*harness.editor, "BPM");
+    auto* bpiLabel = findLabelWithText(*harness.editor, "BPI");
+    auto* bpmEditor = bpmLabel == nullptr ? nullptr : findTextEditorOnSameRowAs(*harness.editor, *bpmLabel);
+    auto* bpiEditor = bpiLabel == nullptr ? nullptr : findTextEditorOnSameRowAs(*harness.editor, *bpiLabel);
+    auto* voteButton = findButtonWithText(*harness.editor, "Vote");
+
+    REQUIRE(bpmEditor != nullptr);
+    REQUIRE(bpiEditor != nullptr);
+    REQUIRE(voteButton != nullptr);
+
+    bpmEditor->setText("124");
+    REQUIRE(voteButton->onClick != nullptr);
+    voteButton->onClick();
     CHECK(harness.submittedVoteCount == 1);
     CHECK(harness.lastSubmittedVoteKind == FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm);
     CHECK(harness.lastSubmittedVoteValue == 124);
@@ -406,16 +469,16 @@ TEST_CASE("plugin room controls ui submits validated direct votes and clears inl
     };
     harness.editor->refreshForTesting();
     CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm)
-          == "Vote BPM 40-400");
+          .isEmpty());
 
-    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi, 99);
-    CHECK_FALSE(harness.editor->submitRoomVoteForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
+    bpiEditor->setText("99");
+    voteButton->onClick();
     CHECK(harness.submittedVoteCount == 1);
     CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
           == "Enter a BPI between 2 and 64.");
 
-    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi, 12);
-    REQUIRE(harness.editor->submitRoomVoteForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi));
+    bpiEditor->setText("12");
+    voteButton->onClick();
     CHECK(harness.submittedVoteCount == 2);
     CHECK(harness.lastSubmittedVoteKind == FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi);
     CHECK(harness.lastSubmittedVoteValue == 12);
@@ -433,7 +496,99 @@ TEST_CASE("plugin room controls ui submits validated direct votes and clears inl
         harness.editor->refreshForTesting();
 
     CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
-          == "Vote BPI 2-64");
+          .isEmpty());
+}
+
+TEST_CASE("plugin room controls ui keeps diagnostics hidden until requested and lets them take over the sidebar",
+          "[plugin_room_controls_ui]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 4,
+                              .intervalProgress = 0.5f,
+                              .intervalIndex = 2,
+                          });
+
+    auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
+    auto* diagnosticsButton = findButtonWithText(*harness.editor, "Show Diagnostics");
+    auto* roomViewport = findRoomSidebarViewport(*harness.editor);
+
+    REQUIRE(roomLabel != nullptr);
+    REQUIRE(diagnosticsButton != nullptr);
+    REQUIRE(roomViewport != nullptr);
+
+    CHECK_FALSE(harness.editor->isDiagnosticsExpandedForTesting());
+    CHECK(roomViewport->isVisible());
+    CHECK(diagnosticsButton->getY() < roomLabel->getY());
+    CHECK(diagnosticsButton->getX() < roomLabel->getX());
+
+    harness.editor->clickDiagnosticsToggleForTesting();
+
+    auto* diagnosticsEditor = findTextEditorContainingText(*harness.editor, "Diagnostics CPU");
+    REQUIRE(diagnosticsEditor != nullptr);
+
+    CHECK(harness.editor->isDiagnosticsExpandedForTesting());
+    CHECK(diagnosticsEditor->isVisible());
+    CHECK_FALSE(roomViewport->isVisible());
+}
+
+TEST_CASE("plugin room controls ui only auto-scrolls the room feed when the reader is already near the bottom",
+          "[plugin_room_controls_ui]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 4,
+                              .intervalProgress = 0.5f,
+                              .intervalIndex = 2,
+                          });
+
+    harness.roomUi.visibleFeed = makeScrollableFeed();
+    harness.editor->refreshForTesting();
+
+    auto* roomViewport = findRoomSidebarViewport(*harness.editor);
+    REQUIRE(roomViewport != nullptr);
+
+    const auto initialMaxY = getViewportMaxScrollY(*roomViewport);
+    REQUIRE(initialMaxY > 0);
+
+    roomViewport->setViewPosition(0, juce::jmax(0, initialMaxY - 6));
+    harness.roomUi.visibleFeed.push_back({
+        .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Chat,
+        .author = "latecomer",
+        .text = "Fresh update lands while the user is already following the bottom of the room chat feed.",
+    });
+    harness.editor->refreshForTesting();
+
+    const auto bottomAfterRefresh = getViewportMaxScrollY(*roomViewport);
+    CHECK(roomViewport->getViewPositionY() >= juce::jmax(0, bottomAfterRefresh - 4));
+
+    roomViewport->setViewPosition(0, 0);
+    harness.roomUi.visibleFeed.push_back({
+        .kind = FamaLamaJamAudioProcessorEditor::RoomFeedEntryKind::Chat,
+        .author = "another-user",
+        .text = "A later room update should not yank the view back down once the user has scrolled upward to read.",
+    });
+    harness.editor->refreshForTesting();
+
+    CHECK(roomViewport->getViewPositionY() == 0);
 }
 
 TEST_CASE("plugin room controls ui places the room workflow in a fixed right sidebar instead of above the mixer",
@@ -456,7 +611,7 @@ TEST_CASE("plugin room controls ui places the room workflow in a fixed right sid
                           });
 
     auto* hostLabel = findLabelWithText(*harness.editor, "Host");
-    auto* roomLabel = findLabelWithText(*harness.editor, "Room");
+    auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
     auto* mixerLabel = findLabelWithText(*harness.editor, "Mixer");
 
     REQUIRE(hostLabel != nullptr);

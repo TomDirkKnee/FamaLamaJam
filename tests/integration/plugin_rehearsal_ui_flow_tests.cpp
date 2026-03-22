@@ -341,6 +341,12 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
                               .targetBeatsPerMinute = 120,
                               .targetBeatsPerInterval = 16,
                           });
+    auto draft = harness.settings;
+    draft.serverHost = "jam.example.net";
+    draft.serverPort = 2049;
+    draft.username = "Dirk";
+    harness.editor->setSettingsDraftForTesting(draft);
+    harness.editor->refreshForTesting();
 
     auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
     auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
@@ -350,8 +356,38 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
 
     CHECK(syncButton->isVisible());
     CHECK(syncButton->getBottom() < mixerSectionLabel->getY());
-    CHECK(harness.editor->getHostSyncAssistStatusTextForTesting()
-          == "Ready for 120 BPM / 16 BPI room timing. Arm sync when Ableton is stopped.");
+    CHECK(harness.editor->getServerSettingsSummaryForTesting() == "Connected as Dirk | jam.example.net:2049");
+    CHECK(harness.editor->getTransportStatusTextForTesting() == "120 BPM | 16 BPI");
+}
+
+TEST_CASE("plugin rehearsal ui flow places host tempo mismatch guidance on the sync assist button",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 123,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 3,
+                              .intervalProgress = 0.25f,
+                              .intervalIndex = 6,
+                          },
+                          {},
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .blocked = true,
+                              .blockReason = FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::HostTempoMismatch,
+                              .targetBeatsPerMinute = 123,
+                              .targetBeatsPerInterval = 16,
+                          });
+
+    CHECK(harness.editor->getHostSyncAssistButtonTextForTesting() == "Set DAW tempo to 123");
+    CHECK_FALSE(harness.editor->isHostSyncAssistEnabledForTesting());
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps the room workflow in a fixed right sidebar instead of above the mixer",
