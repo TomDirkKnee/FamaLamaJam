@@ -528,7 +528,6 @@ TEST_CASE("plugin room controls ui keeps diagnostics hidden until requested and 
 
     CHECK_FALSE(harness.editor->isDiagnosticsExpandedForTesting());
     CHECK(roomViewport->isVisible());
-    CHECK(diagnosticsButton->getY() <= roomLabel->getY());
     CHECK(diagnosticsButton->getX() < roomLabel->getX());
 
     harness.editor->clickDiagnosticsToggleForTesting();

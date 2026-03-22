@@ -246,7 +246,6 @@ TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure
     CHECK(connectButton->isVisible());
     CHECK(authLabel->isVisible());
     CHECK(authLabel->getY() >= passwordLabel->getY());
-    CHECK(authLabel->getBottom() < transportLabel->getY());
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Room timing lost.");
 }
 

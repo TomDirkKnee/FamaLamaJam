@@ -177,9 +177,7 @@ constexpr auto kRememberedPasswordMask = "********";
             return "Connecting";
 
         case app::session::ConnectionState::Active:
-            if (! snapshot.statusMessage.empty())
-                return snapshot.statusMessage;
-            return "Connected";
+            return {};
 
         case app::session::ConnectionState::Reconnecting:
             if (! snapshot.statusMessage.empty()
@@ -846,13 +844,17 @@ void FamaLamaJamAudioProcessorEditor::resized()
         left.removeFromTop(4);
     };
 
+    serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
+    serverSettingsSummaryLabel_.setBounds(left.removeFromTop(22));
+    transportLabel_.setVisible(transportLabel_.getText().trim().isNotEmpty());
+    if (transportLabel_.isVisible())
+        transportLabel_.setBounds(left.removeFromTop(20));
+    left.removeFromTop(6);
+
     auto serverSettingsHeaderRow = left.removeFromTop(28);
     serverSettingsToggle_.setBounds(serverSettingsHeaderRow.removeFromLeft(220));
     diagnosticsToggle_.setBounds(serverSettingsHeaderRow.removeFromLeft(140));
     left.removeFromTop(2);
-    serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
-    serverSettingsSummaryLabel_.setBounds(left.removeFromTop(22));
-    left.removeFromTop(6);
 
     serverPickerLabel_.setVisible(serverSettingsExpanded_);
     serverPickerCombo_.setVisible(serverSettingsExpanded_);
@@ -911,13 +913,10 @@ void FamaLamaJamAudioProcessorEditor::resized()
         left.removeFromTop(4);
     }
 
-    statusLabel_.setBounds(left.removeFromTop(24));
-    left.removeFromTop(4);
-
-    transportLabel_.setVisible(transportLabel_.getText().trim().isNotEmpty());
-    if (transportLabel_.isVisible())
+    statusLabel_.setVisible(statusLabel_.getText().trim().isNotEmpty());
+    if (statusLabel_.isVisible())
     {
-        transportLabel_.setBounds(left.removeFromTop(22));
+        statusLabel_.setBounds(left.removeFromTop(24));
         left.removeFromTop(4);
     }
 
@@ -932,8 +931,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
         left.removeFromTop(4);
     }
 
-    mixerSectionLabel_.setBounds(left.removeFromTop(24));
-    left.removeFromTop(4);
+    mixerSectionLabel_.setVisible(false);
+    mixerSectionLabel_.setBounds({ left.getX(), left.getY(), left.getWidth(), 0 });
     auto masterOutputRow = left.removeFromBottom(28);
     masterOutputLabel_.setBounds(masterOutputRow.removeFromLeft(110));
     masterOutputSlider_.setBounds(masterOutputRow);
