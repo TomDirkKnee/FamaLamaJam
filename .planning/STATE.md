@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: In Progress
-stopped_at: Completed 08.3-07-PLAN.md
-last_updated: "2026-03-21T21:15:00.000Z"
-last_activity: "2026-03-21 - Completed Phase 08.3 plan 07: the focused 08.3 gate reran on build-vs-2026, the brand-new-instance private-room recall checkpoint passed in Ableton, and Phase 08.3 is now closed."
+status: Planned
+stopped_at: Completed 08.3.1-01-PLAN.md
+last_updated: "2026-03-22T10:00:32.647Z"
+last_activity: 2026-03-22 - Planned urgent follow-up Phase 08.3.1 to preserve rich public discovery rows while compacting the current session/chat UI before the broader Phase 9 redesign.
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 10
-  total_plans: 39
+  total_plans: 42
   completed_plans: 39
-  percent: 100
+  percent: 93
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3 is closed. The remaining carry-forward concern before Phase 9 is the still-unexercised same-machine CPU repro from Phase 08.2.
+**Current focus:** Phase 08.3.1 is planned and ready to execute for public-row credential overlay plus compact session/chat polish. Phase 08.2 still carries the separate same-machine CPU repro concern.
 
 ## Current Position
 
-Phase: 08.3 - Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard  
-Plan: Complete - Focused gate rerun and real-host brand-new-instance recall are both validated.  
-Status: Complete  
-Last activity: 2026-03-21 - Closed Phase 08.3 after the brand-new-instance private-room recall rerun passed in Ableton.
+Phase: 08.3.1 - Private Server Recall + Compact Session UI Polish  
+Plan: Ready for execution  
+Status: Planned  
+Last activity: 2026-03-22 - Planned urgent follow-up Phase 08.3.1 to preserve rich public discovery rows while compacting the current session/chat UI before the broader Phase 9 redesign.
 
-Progress: 100%
+Progress: 93%
 
 ## Accumulated Context
 
@@ -78,12 +78,15 @@ Progress: 100%
 - [Phase 08.3]: Keep remembered private-room persistence as a narrow processor-owned app-data store that merges wrapped project history instead of introducing a separate credential-management UX.
 - [Phase 08.3]: Use the existing build-vs-2026 Visual Studio generator for verification when the local build-vs NMake tree blocks on U1076 name-too-long failures.
 - [Phase 08.3]: Preserve the four previously passing manual rows as carried-forward evidence during the gap-close rerun unless the focused checkpoint reports a new regression.
+- [Phase 08.3.1]: Keep credential overlay synthesis inside getServerDiscoveryUiState so cached public metadata stays untouched. — The editor already handles remembered password masking and draft hydration, so changing the merge layer preserves public-row metadata without adding a second credential path.
+- [Phase 08.3.1]: Use temp remembered-server stores in discovery tests so AppData history cannot leak into deterministic regressions. — The rebuilt discovery suite was reading shared remembered history from the real store, so the RED expectations needed isolated temp stores to represent this plan only.
 
 ### Roadmap Evolution
 
 - Phase 08.1 inserted after Phase 8: Server Discovery Polish & JamTaba Parity Check (URGENT)
 - Phase 08.2 inserted after Phase 8: Pre-Layout CPU, Mixer, UI, and Auth Hardening (URGENT)
 - Phase 08.3 inserted after Phase 08.2: Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard (URGENT)
+- Phase 08.3.1 inserted after Phase 08.3: Private Server Recall + Compact Session UI Polish (URGENT)
 
 ### Pending Todos
 
@@ -118,6 +121,6 @@ Progress: 100%
 
 ## Session Continuity
 
-Last session: 2026-03-21T19:54:13.985Z
-Stopped at: Completed 08.3-07-PLAN.md
+Last session: 2026-03-22T10:00:32.638Z
+Stopped at: Completed 08.3.1-01-PLAN.md
 Resume file: None

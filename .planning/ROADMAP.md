@@ -216,9 +216,27 @@ Plans:
 - [x] 08.3-06-PLAN.md - Add a small app-level remembered-server store and merge it with the existing project-state recall path.
 - [x] 08.3-07-PLAN.md - Re-ran the focused 08.3 gate, recorded the approved brand-new-instance recall rerun, and closed the phase without reopening unrelated scope.
 
+### Phase 08.3.1: Private Server Recall + Compact Session UI Polish (INSERTED)
+
+**Goal:** Preserve rich Ninbot public discovery rows while remembered credentials remain convenient, and compact the current session/chat UI without starting the deferred mixer redesign.
+**Requirements**: DISC-02, LAYOUT-03
+**Depends on:** Phase 08.3
+**Success Criteria** (what must be TRUE):
+1. Public Ninbot rows remain the visible primary discovery rows even when remembered credentials exist for the same `host:port`.
+2. Selecting a public row for a previously successful endpoint restores remembered username/password behind the scenes, while failed attempts do not overwrite the last known good credentials.
+3. The compact session area reads cleanly in one page: concise connection summary, concise BPM/BPI timing line, and sync-assist guidance carried by the button itself.
+4. The room sidebar wastes less space: a shared vote action, hidden-by-default diagnostics that can take over the sidebar, and chat follow behavior that only auto-scrolls when already near the bottom.
+5. The phase explicitly avoids the deferred mixer redesign and hands broader strip/layout work forward to the later phase.
+**Plans:** 1/3 plans executed
+
+Plans:
+- [ ] 08.3.1-01-PLAN.md - Keep Ninbot public rows primary while overlaying remembered credentials by endpoint.
+- [ ] 08.3.1-02-PLAN.md - Compact the top/session area and room sidebar inside the existing single-page editor.
+- [ ] 08.3.1-03-PLAN.md - Run the focused gate, rebuild the VST3, and close the inserted polish phase.
+
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
-**Depends on**: Phase 08.3
+**Depends on**: Phase 08.3.1
 **Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03
 **Success Criteria** (what must be TRUE):
 1. Mixer strips are presented horizontally with the local monitor clearly distinguished and visually anchored.
@@ -261,10 +279,10 @@ Plans:
 | ROOM-01 | Phase 7 |
 | ROOM-02 | Phase 7 |
 | DISC-01 | Phase 8 |
-| DISC-02 | Phase 8 / Phase 08.1 / Phase 08.3 |
+| DISC-02 | Phase 8 / Phase 08.1 / Phase 08.3 / Phase 08.3.1 |
 | LAYOUT-01 | Phase 9 |
 | LAYOUT-02 | Phase 08.3 / Phase 9 |
-| LAYOUT-03 | Phase 08.2 / Phase 08.3 / Phase 9 |
+| LAYOUT-03 | Phase 08.2 / Phase 08.3 / Phase 08.3.1 / Phase 9 |
 | PAR-01 | Phase 10 |
 | PAR-02 | Phase 10 |
 
@@ -277,7 +295,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 8.3 -> 9 -> 10
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 8.3 -> 8.3.1 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -292,6 +310,7 @@ Plans:
 | 8.1. Server Discovery Polish & JamTaba Parity Check | 3/3 | Complete    | 2026-03-19 |
 | 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 6/6 | Blocked | - |
 | 8.3. Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard | 7/7 | Complete | 2026-03-21 |
+| 8.3.1. Private Server Recall + Compact Session UI Polish | 0/3 | Planned | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
