@@ -7,6 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Link the MSVC runtime statically so the VST3 runs on any Windows PC
+# without needing a separate Visual C++ Redistributable install.
+# MultiThreaded      = /MT  (Release)
+# MultiThreadedDebug = /MTd (Debug)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 option(FAMALAMAJAM_ENABLE_TESTS "Build unit and integration tests." ON)
 
 include(cmake/dependencies.cmake)
@@ -54,7 +60,7 @@ juce_add_plugin(famalamajam_plugin
     COPY_PLUGIN_AFTER_BUILD FALSE
     PLUGIN_MANUFACTURER_CODE FmLj
     PLUGIN_CODE Flj1
-    FORMATS VST3
+    FORMATS VST3 AU
     PRODUCT_NAME "FamaLamaJam")
 
 target_sources(famalamajam_plugin
