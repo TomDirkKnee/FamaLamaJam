@@ -190,7 +190,7 @@ TEST_CASE("plugin server discovery ui preserves selected endpoint across public 
     CHECK(harness.editor->getSelectedServerDiscoveryLabelForTesting() == "busy.example.org:2054 - Busy Groove (20 users)");
 }
 
-TEST_CASE("plugin server discovery ui preserves selected endpoint after connect-time remembered insertion",
+TEST_CASE("plugin server discovery ui keeps the public row selected while restoring remembered credentials after refresh",
           "[plugin_server_discovery_ui]")
 {
     EditorHarness harness;
@@ -199,12 +199,13 @@ TEST_CASE("plugin server discovery ui preserves selected endpoint after connect-
 
     harness.discovery.combinedEntries = {
         {
-            .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Remembered,
-            .label = "public.example.org:2051",
+            .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Public,
+            .label = "public.example.org:2051 - Public Groove (12/20 users)",
             .host = "public.example.org",
             .port = 2051,
             .username = "public_user",
             .password = "public-secret",
+            .connectedUsers = 12,
         },
         {
             .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Remembered,
@@ -225,7 +226,8 @@ TEST_CASE("plugin server discovery ui preserves selected endpoint after connect-
 
     harness.editor->refreshForTesting();
 
-    CHECK(harness.editor->getSelectedServerDiscoveryLabelForTesting() == "public.example.org:2051");
+    CHECK(harness.editor->getSelectedServerDiscoveryLabelForTesting()
+          == "public.example.org:2051 - Public Groove (12/20 users)");
     CHECK(harness.editor->getHostTextForTesting() == "public.example.org");
     CHECK(harness.editor->getPortTextForTesting() == "2051");
     CHECK(harness.editor->getUsernameTextForTesting() == "public_user");

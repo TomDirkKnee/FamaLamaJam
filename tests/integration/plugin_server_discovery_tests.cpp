@@ -152,7 +152,8 @@ TEST_CASE("plugin server discovery does not persist failed connects across new i
 
 TEST_CASE("plugin server discovery keeps remembered history bounded and recent", "[plugin_server_discovery]")
 {
-    FamaLamaJamAudioProcessor processor;
+    ScopedTempStoreFile tempStore;
+    FamaLamaJamAudioProcessor processor(makeRememberedServerStore(tempStore.file()));
 
     for (int index = 0; index < 13; ++index)
     {
@@ -188,7 +189,8 @@ TEST_CASE("plugin server discovery keeps remembered history bounded and recent",
 TEST_CASE("plugin server discovery deduplicates remembered private entries by endpoint and keeps newest credentials",
           "[plugin_server_discovery]")
 {
-    FamaLamaJamAudioProcessor processor;
+    ScopedTempStoreFile tempStore;
+    FamaLamaJamAudioProcessor processor(makeRememberedServerStore(tempStore.file()));
 
     completeSuccessfulConnection(processor, "private.example.org", 2050, "old_user", "old-secret");
     completeSuccessfulConnection(processor, "private.example.org", 2050, "new_user", "new-secret");
@@ -201,10 +203,11 @@ TEST_CASE("plugin server discovery deduplicates remembered private entries by en
     CHECK(discovery.combinedEntries.front().password == "new-secret");
 }
 
-TEST_CASE("plugin server discovery combines remembered and public entries without duplicating endpoints",
+TEST_CASE("plugin server discovery keeps public rows primary while overlaying remembered credentials by endpoint",
           "[plugin_server_discovery]")
 {
-    FamaLamaJamAudioProcessor processor;
+    ScopedTempStoreFile tempStore;
+    FamaLamaJamAudioProcessor processor(makeRememberedServerStore(tempStore.file()));
     auto client = std::make_unique<FakeServerDiscoveryClient>();
     client->enqueueResult({
         .succeeded = true,
@@ -250,8 +253,8 @@ TEST_CASE("plugin server discovery combines remembered and public entries withou
     });
     processor.setPublicServerDiscoveryClientForTesting(std::move(client));
 
-    completeSuccessfulConnection(processor, "recent.example.org", 2050);
-    completeSuccessfulConnection(processor, "remembered.example.org", 2060);
+    completeSuccessfulConnection(processor, "recent.example.org", 2050, "remembered_public_user", "remembered-public-secret");
+    completeSuccessfulConnection(processor, "remembered.example.org", 2060, "private_user", "private-secret");
 
     REQUIRE(processor.requestPublicServerDiscoveryRefreshForTesting(true));
     const auto discovery = processor.getServerDiscoveryUiState();
@@ -261,92 +264,101 @@ TEST_CASE("plugin server discovery combines remembered and public entries withou
     CHECK_FALSE(discovery.hasStalePublicData);
     CHECK(discovery.statusText.empty());
 
-    CHECK(discovery.combinedEntries[0].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Remembered);
-    CHECK(discovery.combinedEntries[0].host == "remembered.example.org");
-    CHECK(discovery.combinedEntries[0].port == 2060);
-
-    CHECK(discovery.combinedEntries[1].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Remembered);
-    CHECK(discovery.combinedEntries[1].host == "recent.example.org");
-    CHECK(discovery.combinedEntries[1].port == 2050);
-
-    CHECK(discovery.combinedEntries[2].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
-    CHECK(discovery.combinedEntries[2].host == "busy.example.org");
-    CHECK(discovery.combinedEntries[2].port == 2054);
-    CHECK(discovery.combinedEntries[2].connectedUsers == 3);
-    CHECK(discovery.combinedEntries[2].label == "busy.example.org:2054 - 135 BPM / 16 BPI (3/10 users)");
-
-    CHECK(discovery.combinedEntries[3].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
-    CHECK(discovery.combinedEntries[3].host == "alpha.example.org");
-    CHECK(discovery.combinedEntries[3].port == 2053);
-    CHECK(discovery.combinedEntries[3].connectedUsers == 2);
-
-    CHECK(discovery.combinedEntries[4].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
-    CHECK(discovery.combinedEntries[4].host == "zeta.example.org");
-    CHECK(discovery.combinedEntries[4].port == 2052);
-    CHECK(discovery.combinedEntries[4].connectedUsers == 2);
-
-    CHECK(discovery.combinedEntries[5].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
-    CHECK(discovery.combinedEntries[5].host == "quiet.example.org");
-    CHECK(discovery.combinedEntries[5].port == 2051);
-    CHECK(discovery.combinedEntries[5].connectedUsers == 1);
-
-    for (const auto& entry : discovery.combinedEntries)
-    {
-        const bool isDuplicatedPublicRecent = entry.host == "recent.example.org"
-            && entry.port == 2050
-            && entry.source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public;
-        CHECK_FALSE(isDuplicatedPublicRecent);
-    }
-}
-
-TEST_CASE("plugin server discovery keeps remembered servers ahead of sorted public rooms",
-          "[plugin_server_discovery]")
-{
-    FamaLamaJamAudioProcessor processor;
-    auto client = std::make_unique<FakeServerDiscoveryClient>();
-    client->enqueueResult({
-        .succeeded = true,
-        .payloadText = R"({
-            "servers": [
-                {
-                    "name": "late.example.org:2059",
-                    "user_max": "8",
-                    "users": [{ "name": "solo" }],
-                    "bpm": "100",
-                    "bpi": "16"
-                },
-                {
-                    "name": "busy.example.org:2054",
-                    "user_max": "10",
-                    "users": [{ "name": "amy" }, { "name": "bob" }, { "name": "carol" }],
-                    "bpm": "135",
-                    "bpi": "16"
-                }
-            ]
-        })",
-    });
-    processor.setPublicServerDiscoveryClientForTesting(std::move(client));
-
-    completeSuccessfulConnection(processor, "remembered.example.org", 2060);
-    REQUIRE(processor.requestPublicServerDiscoveryRefreshForTesting(true));
-
-    const auto discovery = processor.getServerDiscoveryUiState();
-    REQUIRE(discovery.combinedEntries.size() == 3);
-
-    CHECK(discovery.combinedEntries[0].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Remembered);
-    CHECK(discovery.combinedEntries[0].host == "remembered.example.org");
+    CHECK(discovery.combinedEntries[0].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
+    CHECK(discovery.combinedEntries[0].host == "busy.example.org");
+    CHECK(discovery.combinedEntries[0].port == 2054);
+    CHECK(discovery.combinedEntries[0].connectedUsers == 3);
+    CHECK(discovery.combinedEntries[0].label == "busy.example.org:2054 - 135 BPM / 16 BPI (3/10 users)");
 
     CHECK(discovery.combinedEntries[1].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
-    CHECK(discovery.combinedEntries[1].host == "busy.example.org");
+    CHECK(discovery.combinedEntries[1].host == "alpha.example.org");
+    CHECK(discovery.combinedEntries[1].port == 2053);
+    CHECK(discovery.combinedEntries[1].connectedUsers == 2);
 
     CHECK(discovery.combinedEntries[2].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
-    CHECK(discovery.combinedEntries[2].host == "late.example.org");
+    CHECK(discovery.combinedEntries[2].host == "zeta.example.org");
+    CHECK(discovery.combinedEntries[2].port == 2052);
+    CHECK(discovery.combinedEntries[2].connectedUsers == 2);
+
+    CHECK(discovery.combinedEntries[3].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
+    CHECK(discovery.combinedEntries[3].host == "quiet.example.org");
+    CHECK(discovery.combinedEntries[3].port == 2051);
+    CHECK(discovery.combinedEntries[3].connectedUsers == 1);
+
+    CHECK(discovery.combinedEntries[4].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
+    CHECK(discovery.combinedEntries[4].host == "recent.example.org");
+    CHECK(discovery.combinedEntries[4].port == 2050);
+    CHECK(discovery.combinedEntries[4].connectedUsers == 1);
+    CHECK(discovery.combinedEntries[4].label == "recent.example.org:2050 - 120 BPM / 16 BPI (1/8 users)");
+    CHECK(discovery.combinedEntries[4].username == "remembered_public_user");
+    CHECK(discovery.combinedEntries[4].password == "remembered-public-secret");
+
+    CHECK(discovery.combinedEntries[5].source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Remembered);
+    CHECK(discovery.combinedEntries[5].host == "remembered.example.org");
+    CHECK(discovery.combinedEntries[5].port == 2060);
+    CHECK(discovery.combinedEntries[5].username == "private_user");
+    CHECK(discovery.combinedEntries[5].password == "private-secret");
+
+    std::size_t recentEndpointCount = 0;
+    for (const auto& entry : discovery.combinedEntries)
+    {
+        if (entry.host == "recent.example.org" && entry.port == 2050)
+        {
+            ++recentEndpointCount;
+            CHECK(entry.source == FamaLamaJamAudioProcessor::ServerDiscoveryEntry::Source::Public);
+        }
+    }
+
+    CHECK(recentEndpointCount == 1);
+}
+
+TEST_CASE("plugin server discovery only updates remembered credentials after a subsequent successful reconnect",
+          "[plugin_server_discovery]")
+{
+    ScopedTempStoreFile tempStore;
+    FamaLamaJamAudioProcessor processor(makeRememberedServerStore(tempStore.file()));
+
+    completeSuccessfulConnection(processor, "private.example.org", 2050, "remembered_user", "good-secret");
+
+    auto settings = processor.getActiveSettings();
+    settings.serverHost = "private.example.org";
+    settings.serverPort = 2050;
+    settings.username = "failed_user";
+    settings.password = "bad-secret";
+
+    REQUIRE(processor.applySettingsFromUi(settings));
+    REQUIRE(processor.requestConnect());
+    processor.handleConnectionEvent(ConnectionEvent {
+        .type = ConnectionEventType::ConnectionFailed,
+        .reason = "auth rejected",
+    });
+
+    auto discovery = processor.getServerDiscoveryUiState();
+    REQUIRE(discovery.combinedEntries.size() == 1);
+    CHECK(discovery.combinedEntries.front().host == "private.example.org");
+    CHECK(discovery.combinedEntries.front().port == 2050);
+    CHECK(discovery.combinedEntries.front().username == "remembered_user");
+    CHECK(discovery.combinedEntries.front().password == "good-secret");
+
+    settings.username = "fresh_user";
+    settings.password = "fresh-secret";
+    REQUIRE(processor.applySettingsFromUi(settings));
+    REQUIRE(processor.requestConnect());
+    processor.handleConnectionEvent(ConnectionEvent { .type = ConnectionEventType::Connected });
+
+    discovery = processor.getServerDiscoveryUiState();
+    REQUIRE(discovery.combinedEntries.size() == 1);
+    CHECK(discovery.combinedEntries.front().host == "private.example.org");
+    CHECK(discovery.combinedEntries.front().port == 2050);
+    CHECK(discovery.combinedEntries.front().username == "fresh_user");
+    CHECK(discovery.combinedEntries.front().password == "fresh-secret");
 }
 
 TEST_CASE("plugin server discovery keeps stale cached public entries visible after refresh failure",
           "[plugin_server_discovery]")
 {
-    FamaLamaJamAudioProcessor processor;
+    ScopedTempStoreFile tempStore;
+    FamaLamaJamAudioProcessor processor(makeRememberedServerStore(tempStore.file()));
     auto client = std::make_unique<FakeServerDiscoveryClient>();
     client->enqueueResult({
         .succeeded = true,

@@ -557,6 +557,42 @@ TEST_CASE("plugin rehearsal ui flow replaces remembered password provenance afte
     CHECK(harness.settings.password == "replacement-secret");
 }
 
+TEST_CASE("plugin rehearsal ui flow reuses overlaid remembered credentials from a selected public row",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Idle,
+                              .statusMessage = "Ready",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {});
+    harness.discovery = {
+        .combinedEntries = {
+            {
+                .source = FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry::Source::Public,
+                .label = "public.example.org:2051 - Public Groove (12/20 users)",
+                .host = "public.example.org",
+                .port = 2051,
+                .username = "public_user",
+                .password = "remembered-public-secret",
+                .connectedUsers = 12,
+            },
+        },
+    };
+    harness.editor->refreshForTesting();
+
+    REQUIRE(harness.editor->selectServerDiscoveryEntryForTesting(0));
+    CHECK(harness.editor->getPasswordTextForTesting() == "********");
+
+    harness.editor->clickConnectForTesting();
+
+    CHECK(harness.applyCallCount == 1);
+    CHECK(harness.connectCallCount == 1);
+    CHECK(harness.settings.serverHost == "public.example.org");
+    CHECK(harness.settings.serverPort == 2051);
+    CHECK(harness.settings.username == "public_user");
+    CHECK(harness.settings.password == "remembered-public-secret");
+}
+
 TEST_CASE("plugin rehearsal ui flow does not connect when the current draft fails validation",
           "[plugin_rehearsal_ui_flow]")
 {
