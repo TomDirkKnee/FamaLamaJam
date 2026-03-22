@@ -2027,6 +2027,7 @@ FamaLamaJamAudioProcessor::ServerDiscoveryUiState FamaLamaJamAudioProcessor::get
     const_cast<FamaLamaJamAudioProcessor*>(this)->drainPublicServerDiscoveryResults();
 
     ServerDiscoveryUiState state;
+    std::unordered_map<std::string, const app::session::RememberedServerEntry*> rememberedByEndpoint;
     std::unordered_set<std::string> seenEndpoints;
 
     const std::scoped_lock lock(serverDiscoveryMutex_);
@@ -2038,7 +2039,35 @@ FamaLamaJamAudioProcessor::ServerDiscoveryUiState FamaLamaJamAudioProcessor::get
     for (const auto& entry : rememberedServers_)
     {
         const auto key = app::session::makeDiscoveryEndpointKey(entry.host, entry.port);
+        rememberedByEndpoint.emplace(std::move(key), &entry);
+    }
+
+    for (const auto& entry : cachedPublicServers_)
+    {
+        const auto key = app::session::makeDiscoveryEndpointKey(entry.host, entry.port);
+        const auto rememberedIt = rememberedByEndpoint.find(key);
+        const auto* remembered = rememberedIt != rememberedByEndpoint.end() ? rememberedIt->second : nullptr;
         seenEndpoints.insert(key);
+
+        state.combinedEntries.push_back(ServerDiscoveryEntry {
+            .source = ServerDiscoveryEntry::Source::Public,
+            .label = makePublicDiscoveryEntryLabel(entry),
+            .host = entry.host,
+            .port = entry.port,
+            .username = remembered != nullptr ? remembered->username : std::string {},
+            .password = remembered != nullptr ? remembered->password : std::string {},
+            .connectedUsers = entry.connectedUsers,
+            .maxUsers = entry.maxUsers,
+            .stale = publicServerListStale_,
+        });
+    }
+
+    for (const auto& entry : rememberedServers_)
+    {
+        const auto key = app::session::makeDiscoveryEndpointKey(entry.host, entry.port);
+        if (seenEndpoints.contains(key))
+            continue;
+
         state.combinedEntries.push_back(ServerDiscoveryEntry {
             .source = ServerDiscoveryEntry::Source::Remembered,
             .label = makeDiscoveryEntryLabel(entry.host, entry.port),
@@ -2049,25 +2078,6 @@ FamaLamaJamAudioProcessor::ServerDiscoveryUiState FamaLamaJamAudioProcessor::get
             .connectedUsers = -1,
             .maxUsers = -1,
             .stale = false,
-        });
-    }
-
-    for (const auto& entry : cachedPublicServers_)
-    {
-        const auto key = app::session::makeDiscoveryEndpointKey(entry.host, entry.port);
-        if (seenEndpoints.contains(key))
-            continue;
-
-        state.combinedEntries.push_back(ServerDiscoveryEntry {
-            .source = ServerDiscoveryEntry::Source::Public,
-            .label = makePublicDiscoveryEntryLabel(entry),
-            .host = entry.host,
-            .port = entry.port,
-            .username = {},
-            .password = {},
-            .connectedUsers = entry.connectedUsers,
-            .maxUsers = entry.maxUsers,
-            .stale = publicServerListStale_,
         });
     }
 
