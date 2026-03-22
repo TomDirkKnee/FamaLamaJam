@@ -144,7 +144,7 @@ TEST_CASE("plugin transport ui sync renders waiting and reconnecting states expl
                                  },
                                  true);
 
-    CHECK(waitingHarness.editor->getTransportStatusTextForTesting() == "Waiting for interval timing. Start when the beat appears.");
+    CHECK(waitingHarness.editor->getTransportStatusTextForTesting() == "Waiting for room timing.");
     CHECK(waitingHarness.editor->getIntervalProgressForTesting() == Catch::Approx(0.0));
     CHECK(waitingHarness.editor->getIntervalBeatDivisionsForTesting() == 0);
     CHECK_FALSE(waitingHarness.editor->isMetronomeToggleEnabledForTesting());
@@ -160,7 +160,7 @@ TEST_CASE("plugin transport ui sync renders waiting and reconnecting states expl
                                        .metronomeAvailable = false,
                                    });
 
-    CHECK(reconnectHarness.editor->getTransportStatusTextForTesting() == "Interval timing paused while reconnecting.");
+    CHECK(reconnectHarness.editor->getTransportStatusTextForTesting() == "Reconnecting room timing.");
     CHECK(reconnectHarness.editor->getIntervalProgressForTesting() == Catch::Approx(0.0));
     CHECK(reconnectHarness.editor->getIntervalBeatDivisionsForTesting() == 0);
 }
@@ -185,7 +185,7 @@ TEST_CASE("plugin transport ui sync renders healthy beat-divided progress and ti
                                  },
                                  true);
 
-    CHECK(healthyHarness.editor->getTransportStatusTextForTesting() == "Beat 3/8 | 120 BPM | 38%");
+    CHECK(healthyHarness.editor->getTransportStatusTextForTesting() == "120 BPM | 8 BPI");
     CHECK(healthyHarness.editor->getIntervalProgressForTesting() == Catch::Approx(0.375));
     CHECK(healthyHarness.editor->getIntervalBeatDivisionsForTesting() == 8);
     CHECK(healthyHarness.editor->isMetronomeToggleEnabledForTesting());
@@ -207,7 +207,7 @@ TEST_CASE("plugin transport ui sync renders healthy beat-divided progress and ti
                               },
                               true);
 
-    CHECK(lostHarness.editor->getTransportStatusTextForTesting() == "Interval timing lost. Wait for timing or reconnect.");
+    CHECK(lostHarness.editor->getTransportStatusTextForTesting() == "120 BPM | 8 BPI");
     CHECK(lostHarness.editor->getIntervalProgressForTesting() == Catch::Approx(0.0));
     CHECK(lostHarness.editor->getIntervalBeatDivisionsForTesting() == 0);
     CHECK_FALSE(lostHarness.editor->isMetronomeToggleEnabledForTesting());
@@ -238,8 +238,7 @@ TEST_CASE("plugin transport ui sync shows a ready arm control with room timing c
                                });
 
     CHECK(readyHarness.editor->getHostSyncAssistButtonTextForTesting() == "Arm Sync to Ableton Play");
-    CHECK(readyHarness.editor->getHostSyncAssistStatusTextForTesting()
-          == "Ready for 120 BPM / 16 BPI room timing. Arm sync when Ableton is stopped.");
+    CHECK(readyHarness.editor->getHostSyncAssistStatusTextForTesting().isEmpty());
     CHECK(readyHarness.editor->isHostSyncAssistEnabledForTesting());
 }
 
@@ -292,8 +291,8 @@ TEST_CASE("plugin transport ui sync disables the arm control with explicit block
                                       .targetBeatsPerInterval = 16,
                                   });
 
-    CHECK(mismatchHarness.editor->getHostSyncAssistStatusTextForTesting()
-          == "Set Ableton to 121 BPM to arm this room sync.");
+    CHECK(mismatchHarness.editor->getHostSyncAssistButtonTextForTesting() == "Set DAW tempo to 121");
+    CHECK(mismatchHarness.editor->getHostSyncAssistStatusTextForTesting().isEmpty());
     CHECK_FALSE(mismatchHarness.editor->isHostSyncAssistEnabledForTesting());
 }
 

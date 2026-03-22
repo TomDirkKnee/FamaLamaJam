@@ -1480,8 +1480,6 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
 
     if (feedChanged && followRoomFeed)
         scrollRoomFeedToBottom();
-
-    resized();
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshDiagnosticsUi()

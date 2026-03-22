@@ -161,7 +161,8 @@ TEST_CASE("plugin_state_roundtrip restores saved settings in fresh instance", "[
 TEST_CASE("plugin_state_roundtrip preserves remembered server history while clearing transient discovery state",
           "[plugin_state_roundtrip]")
 {
-    FamaLamaJamAudioProcessor source;
+    ScopedTempStoreFile store;
+    FamaLamaJamAudioProcessor source(makeRememberedServerStore(store.file()));
 
     auto settings = source.getActiveSettings();
     settings.username = "history_user";
@@ -187,7 +188,7 @@ TEST_CASE("plugin_state_roundtrip preserves remembered server history while clea
     juce::MemoryBlock state;
     source.getStateInformation(state);
 
-    FamaLamaJamAudioProcessor restored;
+    FamaLamaJamAudioProcessor restored(makeRememberedServerStore(store.file()));
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
 
     const auto discovery = restored.getServerDiscoveryUiState();
@@ -268,6 +269,7 @@ TEST_CASE("plugin_state_roundtrip merges wrapped remembered history with the glo
 TEST_CASE("plugin_state_roundtrip restores older remembered server blobs without private credentials",
           "[plugin_state_roundtrip]")
 {
+    ScopedTempStoreFile store;
     auto settings = famalamajam::app::session::makeDefaultSessionSettings();
     settings.serverHost = "legacy.example.org";
     settings.serverPort = 2049;
@@ -293,7 +295,7 @@ TEST_CASE("plugin_state_roundtrip restores older remembered server blobs without
     juce::MemoryOutputStream stream;
     stateTree.writeToStream(stream);
 
-    FamaLamaJamAudioProcessor restored;
+    FamaLamaJamAudioProcessor restored(makeRememberedServerStore(store.file()));
     restored.setStateInformation(stream.getData(), static_cast<int>(stream.getDataSize()));
 
     const auto discovery = restored.getServerDiscoveryUiState();
