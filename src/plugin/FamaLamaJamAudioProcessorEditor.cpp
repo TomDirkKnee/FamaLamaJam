@@ -224,31 +224,31 @@ constexpr auto kRememberedPasswordMask = "********";
 
 [[nodiscard]] std::string formatTransportStatus(const FamaLamaJamAudioProcessorEditor::TransportUiState& state)
 {
+    if ((state.hasServerTiming || (state.beatsPerMinute > 0 && state.beatsPerInterval > 0))
+        && state.beatsPerMinute > 0 && state.beatsPerInterval > 0)
+    {
+        return std::to_string(state.beatsPerMinute) + " BPM | " + std::to_string(state.beatsPerInterval) + " BPI";
+    }
+
     switch (state.syncHealth)
     {
         case FamaLamaJamAudioProcessorEditor::SyncHealth::Disconnected:
-            return "Disconnected from interval timing.";
+            return {};
 
         case FamaLamaJamAudioProcessorEditor::SyncHealth::WaitingForTiming:
-            return "Waiting for interval timing. Start when the beat appears.";
+            return state.connected ? "Waiting for room timing." : std::string {};
 
         case FamaLamaJamAudioProcessorEditor::SyncHealth::Reconnecting:
-            return "Interval timing paused while reconnecting.";
+            return "Reconnecting room timing.";
 
         case FamaLamaJamAudioProcessorEditor::SyncHealth::TimingLost:
-            return "Interval timing lost. Wait for timing or reconnect.";
+            return "Room timing lost.";
 
         case FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy:
-            break;
+            return {};
     }
 
-    const auto beat = juce::jlimit(1, state.beatsPerInterval, state.currentBeat > 0 ? state.currentBeat : 1);
-    const auto progress = juce::jlimit(0.0f, 1.0f, state.intervalProgress);
-    const auto progressPercent = juce::roundToInt(progress * 100.0f);
-
-    return "Beat " + std::to_string(beat) + "/" + std::to_string(state.beatsPerInterval)
-         + " | " + std::to_string(state.beatsPerMinute) + " BPM"
-         + " | " + std::to_string(progressPercent) + "%";
+    return {};
 }
 
 [[nodiscard]] std::string formatHostSyncAssistTarget(
@@ -296,10 +296,7 @@ constexpr auto kRememberedPasswordMask = "********";
                 return "Open Ableton transport so sync assist can read the host tempo.";
 
             case FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::HostTempoMismatch:
-                if (state.targetBeatsPerMinute > 0)
-                    return "Set Ableton to " + std::to_string(state.targetBeatsPerMinute)
-                         + " BPM to arm this room sync.";
-                return "Set Ableton tempo to match the room before arming sync assist.";
+                return {};
 
             case FamaLamaJamAudioProcessorEditor::HostSyncAssistBlockReason::None:
                 break;
@@ -310,13 +307,9 @@ constexpr auto kRememberedPasswordMask = "********";
         return "Sync assist canceled. Arm again when you want Ableton Play to start aligned.";
 
     if (state.targetBeatsPerMinute > 0 && state.targetBeatsPerInterval > 0)
-    {
-        return "Ready for " + std::to_string(state.targetBeatsPerMinute) + " BPM / "
-             + std::to_string(state.targetBeatsPerInterval)
-             + " BPI room timing. Arm sync when Ableton is stopped.";
-    }
+        return {};
 
-    return "Sync assist will be ready when room timing appears.";
+    return {};
 }
 
 [[nodiscard]] juce::Colour stripAccentColour(FamaLamaJamAudioProcessorEditor::MixerStripKind kind, bool active)
@@ -360,7 +353,8 @@ constexpr auto kRememberedPasswordMask = "********";
 
 [[nodiscard]] juce::String neutralVoteStatusText(FamaLamaJamAudioProcessorEditor::RoomVoteKind kind)
 {
-    return kind == FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm ? "Vote BPM 40-400" : "Vote BPI 2-64";
+    juce::ignoreUnused(kind);
+    return {};
 }
 
 [[nodiscard]] juce::String invalidVoteStatusText(FamaLamaJamAudioProcessorEditor::RoomVoteKind kind)
@@ -503,7 +497,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , metronomeGainSetter_(metronomeGainSetter ? std::move(metronomeGainSetter) : [](float) {})
     , transmitToggleHandler_(transmitToggleHandler ? std::move(transmitToggleHandler) : []() { return false; })
 {
-    titleLabel_.setText("FamaLamaJam Session Settings", juce::dontSendNotification);
+    titleLabel_.setText("Session", juce::dontSendNotification);
     titleLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(titleLabel_);
 
@@ -644,7 +638,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     hostSyncAssistStatusLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(hostSyncAssistStatusLabel_);
 
-    roomSectionLabel_.setText("Room", juce::dontSendNotification);
+    roomSectionLabel_.setText("Room Chat", juce::dontSendNotification);
     roomSectionLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(roomSectionLabel_);
 
@@ -669,10 +663,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     addAndMakeVisible(roomBpmLabel_);
     roomBpmEditor_.setInputRestrictions(3, "0123456789");
     roomBpmEditor_.onReturnKey = [this]() { (void) submitRoomVote(RoomVoteKind::Bpm); };
+    roomBpmEditor_.onTextChange = [this]() { updateRoomVoteInputState(RoomVoteKind::Bpm); };
     addAndMakeVisible(roomBpmEditor_);
-    roomBpmVoteButton_.setButtonText("Vote BPM");
-    roomBpmVoteButton_.onClick = [this]() { (void) submitRoomVote(RoomVoteKind::Bpm); };
-    addAndMakeVisible(roomBpmVoteButton_);
     roomBpmStatusLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(roomBpmStatusLabel_);
 
@@ -680,10 +672,11 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     addAndMakeVisible(roomBpiLabel_);
     roomBpiEditor_.setInputRestrictions(2, "0123456789");
     roomBpiEditor_.onReturnKey = [this]() { (void) submitRoomVote(RoomVoteKind::Bpi); };
+    roomBpiEditor_.onTextChange = [this]() { updateRoomVoteInputState(RoomVoteKind::Bpi); };
     addAndMakeVisible(roomBpiEditor_);
-    roomBpiVoteButton_.setButtonText("Vote BPI");
-    roomBpiVoteButton_.onClick = [this]() { (void) submitRoomVote(RoomVoteKind::Bpi); };
-    addAndMakeVisible(roomBpiVoteButton_);
+    roomVoteButton_.setButtonText("Vote");
+    roomVoteButton_.onClick = [this]() { (void) submitRoomVote(getActiveRoomVoteKind()); };
+    addAndMakeVisible(roomVoteButton_);
     roomBpiStatusLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(roomBpiStatusLabel_);
 
@@ -758,13 +751,14 @@ FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
     hostSyncAssistButton_.onClick = {};
     diagnosticsToggle_.onClick = {};
     roomSendButton_.onClick = {};
-    roomBpmVoteButton_.onClick = {};
-    roomBpiVoteButton_.onClick = {};
+    roomVoteButton_.onClick = {};
     roomComposerEditor_.onReturnKey = {};
     roomComposerEditor_.onEscapeKey = {};
     roomComposerEditor_.onFocusLost = {};
     roomBpmEditor_.onReturnKey = {};
+    roomBpmEditor_.onTextChange = {};
     roomBpiEditor_.onReturnKey = {};
+    roomBpiEditor_.onTextChange = {};
     masterOutputSlider_.onValueChange = {};
 
     for (auto& widgets : mixerStripWidgets_)
@@ -837,8 +831,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
     intervalProgressBar_.setBounds(footer);
     area.removeFromBottom(8);
 
-    titleLabel_.setBounds(area.removeFromTop(28));
-    area.removeFromTop(8);
+    titleLabel_.setBounds(area.removeFromTop(18));
+    area.removeFromTop(4);
 
     constexpr int kSidebarWidth = 320;
     auto sidebar = area.removeFromRight(juce::jmin(kSidebarWidth, juce::jmax(220, area.getWidth() / 3)));
@@ -852,7 +846,9 @@ void FamaLamaJamAudioProcessorEditor::resized()
         left.removeFromTop(4);
     };
 
-    serverSettingsToggle_.setBounds(left.removeFromTop(28));
+    auto serverSettingsHeaderRow = left.removeFromTop(28);
+    serverSettingsToggle_.setBounds(serverSettingsHeaderRow.removeFromLeft(220));
+    diagnosticsToggle_.setBounds(serverSettingsHeaderRow.removeFromLeft(140));
     left.removeFromTop(2);
     serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
     serverSettingsSummaryLabel_.setBounds(left.removeFromTop(22));
@@ -897,25 +893,44 @@ void FamaLamaJamAudioProcessorEditor::resized()
     }
 
     auto controls = left.removeFromTop(34);
-    connectButton_.setBounds(controls.removeFromLeft(110));
+    connectButton_.setBounds(controls.removeFromLeft(98));
     controls.removeFromLeft(8);
-    disconnectButton_.setBounds(controls.removeFromLeft(120));
+    disconnectButton_.setBounds(controls.removeFromLeft(108));
     controls.removeFromLeft(8);
-    hostSyncAssistButton_.setBounds(controls.removeFromLeft(220));
-    controls.removeFromLeft(12);
+    hostSyncAssistButton_.setBounds(controls.removeFromLeft(190));
+    controls.removeFromLeft(8);
     metronomeToggle_.setBounds(controls.removeFromLeft(110));
     controls.removeFromLeft(6);
     metronomeVolumeSlider_.setBounds(controls.removeFromLeft(64).reduced(0, -4));
     left.removeFromTop(6);
 
-    authStatusLabel_.setBounds(left.removeFromTop(22));
+    authStatusLabel_.setVisible(authStatusLabel_.getText().trim().isNotEmpty());
+    if (authStatusLabel_.isVisible())
+    {
+        authStatusLabel_.setBounds(left.removeFromTop(22));
+        left.removeFromTop(4);
+    }
+
+    statusLabel_.setBounds(left.removeFromTop(24));
     left.removeFromTop(4);
-    statusLabel_.setBounds(left.removeFromTop(28));
-    left.removeFromTop(4);
-    transportLabel_.setBounds(left.removeFromTop(22));
-    left.removeFromTop(8);
-    hostSyncAssistStatusLabel_.setBounds(left.removeFromTop(32));
-    left.removeFromTop(10);
+
+    transportLabel_.setVisible(transportLabel_.getText().trim().isNotEmpty());
+    if (transportLabel_.isVisible())
+    {
+        transportLabel_.setBounds(left.removeFromTop(22));
+        left.removeFromTop(4);
+    }
+
+    hostSyncAssistStatusLabel_.setVisible(hostSyncAssistStatusLabel_.getText().trim().isNotEmpty());
+    if (hostSyncAssistStatusLabel_.isVisible())
+    {
+        hostSyncAssistStatusLabel_.setBounds(left.removeFromTop(22));
+        left.removeFromTop(8);
+    }
+    else
+    {
+        left.removeFromTop(4);
+    }
 
     mixerSectionLabel_.setBounds(left.removeFromTop(24));
     left.removeFromTop(4);
@@ -925,48 +940,83 @@ void FamaLamaJamAudioProcessorEditor::resized()
     left.removeFromBottom(4);
     mixerViewport_.setBounds(left);
 
-    roomSectionLabel_.setBounds(sidebar.removeFromTop(24));
-    sidebar.removeFromTop(4);
-
-    auto bpmRow = sidebar.removeFromTop(24);
-    roomBpmLabel_.setBounds(bpmRow.removeFromLeft(32));
-    roomBpmEditor_.setBounds(bpmRow.removeFromLeft(60));
-    bpmRow.removeFromLeft(6);
-    roomBpmVoteButton_.setBounds(bpmRow.removeFromLeft(96));
-    sidebar.removeFromTop(2);
-    roomBpmStatusLabel_.setBounds(sidebar.removeFromTop(20));
-    sidebar.removeFromTop(4);
-
-    auto bpiRow = sidebar.removeFromTop(24);
-    roomBpiLabel_.setBounds(bpiRow.removeFromLeft(32));
-    roomBpiEditor_.setBounds(bpiRow.removeFromLeft(60));
-    bpiRow.removeFromLeft(6);
-    roomBpiVoteButton_.setBounds(bpiRow.removeFromLeft(96));
-    sidebar.removeFromTop(2);
-    roomBpiStatusLabel_.setBounds(sidebar.removeFromTop(20));
-    sidebar.removeFromTop(6);
-
-    roomStatusLabel_.setBounds(sidebar.removeFromTop(18));
-    sidebar.removeFromTop(6);
-
-    auto composerRow = sidebar.removeFromBottom(28);
-    roomComposerLabel_.setBounds(composerRow.removeFromLeft(70));
-    roomSendButton_.setBounds(composerRow.removeFromRight(78));
-    composerRow.removeFromRight(6);
-    roomComposerEditor_.setBounds(composerRow);
-    sidebar.removeFromBottom(6);
-
-    diagnosticsToggle_.setBounds(sidebar.removeFromBottom(26));
-    sidebar.removeFromBottom(6);
-    diagnosticsEditor_.setVisible(diagnosticsExpanded_);
     if (diagnosticsExpanded_)
     {
-        auto diagnosticsArea = sidebar.removeFromBottom(180);
-        diagnosticsEditor_.setBounds(diagnosticsArea);
-        sidebar.removeFromBottom(6);
+        roomSectionLabel_.setVisible(false);
+        roomBpmLabel_.setVisible(false);
+        roomBpmEditor_.setVisible(false);
+        roomBpmStatusLabel_.setVisible(false);
+        roomBpiLabel_.setVisible(false);
+        roomBpiEditor_.setVisible(false);
+        roomVoteButton_.setVisible(false);
+        roomBpiStatusLabel_.setVisible(false);
+        roomStatusLabel_.setVisible(false);
+        roomComposerLabel_.setVisible(false);
+        roomComposerEditor_.setVisible(false);
+        roomSendButton_.setVisible(false);
+        roomFeedViewport_.setVisible(false);
+        diagnosticsEditor_.setVisible(true);
+        diagnosticsEditor_.setBounds(sidebar);
     }
+    else
+    {
+        roomSectionLabel_.setVisible(true);
+        roomBpmLabel_.setVisible(true);
+        roomBpmEditor_.setVisible(true);
+        roomBpmStatusLabel_.setVisible(roomBpmStatusLabel_.getText().trim().isNotEmpty());
+        roomBpiLabel_.setVisible(true);
+        roomBpiEditor_.setVisible(true);
+        roomVoteButton_.setVisible(true);
+        roomBpiStatusLabel_.setVisible(roomBpiStatusLabel_.getText().trim().isNotEmpty());
+        roomStatusLabel_.setVisible(roomStatusLabel_.getText().trim().isNotEmpty());
+        roomComposerLabel_.setVisible(true);
+        roomComposerEditor_.setVisible(true);
+        roomSendButton_.setVisible(true);
+        roomFeedViewport_.setVisible(true);
+        diagnosticsEditor_.setVisible(false);
 
-    roomFeedViewport_.setBounds(sidebar);
+        roomSectionLabel_.setBounds(sidebar.removeFromTop(24));
+        sidebar.removeFromTop(4);
+
+        auto voteArea = sidebar.removeFromTop(52);
+        auto voteButtonArea = voteArea.removeFromRight(96);
+        auto bpmRow = voteArea.removeFromTop(24);
+        roomBpmLabel_.setBounds(bpmRow.removeFromLeft(32));
+        roomBpmEditor_.setBounds(bpmRow);
+        voteArea.removeFromTop(4);
+        auto bpiRow = voteArea.removeFromTop(24);
+        roomBpiLabel_.setBounds(bpiRow.removeFromLeft(32));
+        roomBpiEditor_.setBounds(bpiRow);
+        roomVoteButton_.setBounds(voteButtonArea);
+        sidebar.removeFromTop(2);
+
+        if (roomBpmStatusLabel_.isVisible())
+        {
+            roomBpmStatusLabel_.setBounds(sidebar.removeFromTop(20));
+            sidebar.removeFromTop(2);
+        }
+
+        if (roomBpiStatusLabel_.isVisible())
+        {
+            roomBpiStatusLabel_.setBounds(sidebar.removeFromTop(20));
+            sidebar.removeFromTop(2);
+        }
+
+        if (roomStatusLabel_.isVisible())
+        {
+            roomStatusLabel_.setBounds(sidebar.removeFromTop(18));
+            sidebar.removeFromTop(6);
+        }
+
+        auto composerRow = sidebar.removeFromBottom(28);
+        roomComposerLabel_.setBounds(composerRow.removeFromLeft(70));
+        roomSendButton_.setBounds(composerRow.removeFromRight(78));
+        composerRow.removeFromRight(6);
+        roomComposerEditor_.setBounds(composerRow);
+        sidebar.removeFromBottom(6);
+
+        roomFeedViewport_.setBounds(sidebar);
+    }
 
     int y = 0;
     const auto roomFeedWidth = juce::jmax(140, roomFeedViewport_.getWidth() - 18);
@@ -1105,6 +1155,8 @@ void FamaLamaJamAudioProcessorEditor::loadFromSettings(const app::session::Sessi
         applyRememberedPassword(settings.password);
     else
         clearRememberedPassword();
+
+    serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
 }
 
 void FamaLamaJamAudioProcessorEditor::applyServerDiscoveryEntrySelection(const ServerDiscoveryEntry& entry)
@@ -1117,6 +1169,8 @@ void FamaLamaJamAudioProcessorEditor::applyServerDiscoveryEntrySelection(const S
         applyRememberedPassword(entry.password);
     else
         clearRememberedPassword();
+
+    serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
 }
 
 void FamaLamaJamAudioProcessorEditor::applyRememberedPassword(const std::string& password)
@@ -1136,6 +1190,31 @@ void FamaLamaJamAudioProcessorEditor::clearRememberedPassword()
     showingRememberedPasswordMask_ = false;
     passwordEditor_.setText({}, juce::dontSendNotification);
     updatingPasswordEditor_ = false;
+}
+
+void FamaLamaJamAudioProcessorEditor::updateRoomVoteInputState(RoomVoteKind changedKind)
+{
+    if (updatingRoomVoteInputs_)
+        return;
+
+    auto& changedEditor = changedKind == RoomVoteKind::Bpm ? roomBpmEditor_ : roomBpiEditor_;
+    auto& otherEditor = changedKind == RoomVoteKind::Bpm ? roomBpiEditor_ : roomBpmEditor_;
+
+    const auto changedText = changedEditor.getText().trim();
+    if (changedText.isNotEmpty())
+    {
+        updatingRoomVoteInputs_ = true;
+        otherEditor.setText({}, juce::dontSendNotification);
+        updatingRoomVoteInputs_ = false;
+        activeRoomVoteKind_ = changedKind;
+        return;
+    }
+
+    const auto otherText = otherEditor.getText().trim();
+    if (otherText.isNotEmpty())
+        activeRoomVoteKind_ = changedKind == RoomVoteKind::Bpm ? RoomVoteKind::Bpi : RoomVoteKind::Bpm;
+    else
+        activeRoomVoteKind_ = changedKind;
 }
 
 void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripWidgets& widgets,
@@ -1169,33 +1248,39 @@ void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripW
 juce::String FamaLamaJamAudioProcessorEditor::getCollapsedServerSummary() const
 {
     const auto lifecycle = lifecycleGetter_();
-
-    juce::String summary = lifecycle.state == app::session::ConnectionState::Active ? "Connected" : "Disconnected";
-
     const auto host = hostEditor_.getText().trim();
     const auto port = portEditor_.getText().trim();
-    if (host.isNotEmpty() && port.isNotEmpty())
-        summary << " • " << host << ":" << port;
-    else if (host.isNotEmpty())
-        summary << " • " << host;
+    const auto username = usernameEditor_.getText().trim();
+    const auto endpoint = host.isNotEmpty() && port.isNotEmpty() ? host + ":" + port : host;
 
-    return summary;
+    if (lifecycle.state == app::session::ConnectionState::Active)
+    {
+        juce::String summary = username.isNotEmpty() ? "Connected as " + username : "Connected";
+        if (endpoint.isNotEmpty())
+            summary << " • " << endpoint;
+        return summary;
+    }
+
+    return endpoint.isNotEmpty() ? "Disconnected from " + endpoint : "Disconnected";
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getCollapsedServerSummaryAscii() const
 {
     const auto lifecycle = lifecycleGetter_();
-
-    juce::String summary = lifecycle.state == app::session::ConnectionState::Active ? "Connected" : "Disconnected";
-
     const auto host = hostEditor_.getText().trim();
     const auto port = portEditor_.getText().trim();
-    if (host.isNotEmpty() && port.isNotEmpty())
-        summary << " | " << host << ":" << port;
-    else if (host.isNotEmpty())
-        summary << " | " << host;
+    const auto username = usernameEditor_.getText().trim();
+    const auto endpoint = host.isNotEmpty() && port.isNotEmpty() ? host + ":" + port : host;
 
-    return summary;
+    if (lifecycle.state == app::session::ConnectionState::Active)
+    {
+        juce::String summary = username.isNotEmpty() ? "Connected as " + username : "Connected";
+        if (endpoint.isNotEmpty())
+            summary << " | " << endpoint;
+        return summary;
+    }
+
+    return endpoint.isNotEmpty() ? "Disconnected from " + endpoint : "Disconnected";
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsToggleText() const
@@ -1249,9 +1334,19 @@ void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
 
     hostSyncAssistStatusLabel_.setText(formatHostSyncAssistStatus(hostSyncAssist, hostSyncAssistLastActionWasCancel_),
                                        juce::dontSendNotification);
-    hostSyncAssistButton_.setButtonText(hostSyncAssist.armed || hostSyncAssist.waitingForHost
-                                            ? "Cancel Sync to Ableton Play"
-                                            : "Arm Sync to Ableton Play");
+    if (! (hostSyncAssist.armed || hostSyncAssist.waitingForHost)
+        && hostSyncAssist.blocked
+        && hostSyncAssist.blockReason == HostSyncAssistBlockReason::HostTempoMismatch
+        && hostSyncAssist.targetBeatsPerMinute > 0)
+    {
+        hostSyncAssistButton_.setButtonText("Set DAW tempo to " + juce::String(hostSyncAssist.targetBeatsPerMinute));
+    }
+    else
+    {
+        hostSyncAssistButton_.setButtonText(hostSyncAssist.armed || hostSyncAssist.waitingForHost
+                                                ? "Cancel Sync to Ableton Play"
+                                                : "Arm Sync to Ableton Play");
+    }
 
     const auto enabled = hostSyncAssist.armed || hostSyncAssist.waitingForHost || hostSyncAssist.armable;
     hostSyncAssistButton_.setEnabled(enabled);
@@ -1320,6 +1415,7 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
     ++cpuDiagnosticSnapshot_.roomRefreshCalls;
     const auto nextRoomUiState = roomUiGetter_();
     const bool feedChanged = ! roomFeedMatches(nextRoomUiState.visibleFeed, currentRoomUiState_.visibleFeed);
+    const bool followRoomFeed = feedChanged && isRoomFeedNearBottom();
     currentRoomUiState_ = nextRoomUiState;
 
     if (feedChanged)
@@ -1332,9 +1428,8 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
     roomComposerEditor_.setEnabled(canInteract);
     roomSendButton_.setEnabled(canInteract);
     roomBpmEditor_.setEnabled(canInteract);
-    roomBpmVoteButton_.setEnabled(canInteract);
     roomBpiEditor_.setEnabled(canInteract);
-    roomBpiVoteButton_.setEnabled(canInteract);
+    roomVoteButton_.setEnabled(canInteract);
 
     auto applyVoteFeedback = [&](RoomVoteKind kind,
                                  const RoomVoteUiState& state,
@@ -1382,6 +1477,11 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
 
     applyVoteFeedback(RoomVoteKind::Bpm, currentRoomUiState_.bpmVote, roomBpmFeedbackState_, roomBpmStatusLabel_);
     applyVoteFeedback(RoomVoteKind::Bpi, currentRoomUiState_.bpiVote, roomBpiFeedbackState_, roomBpiStatusLabel_);
+
+    if (feedChanged && followRoomFeed)
+        scrollRoomFeedToBottom();
+
+    resized();
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshDiagnosticsUi()
@@ -1488,6 +1588,37 @@ bool FamaLamaJamAudioProcessorEditor::submitRoomVote(RoomVoteKind kind)
 
     refreshRoomUi();
     return true;
+}
+
+FamaLamaJamAudioProcessorEditor::RoomVoteKind FamaLamaJamAudioProcessorEditor::getActiveRoomVoteKind() const noexcept
+{
+    if (roomBpiEditor_.getText().trim().isNotEmpty())
+        return RoomVoteKind::Bpi;
+
+    if (roomBpmEditor_.getText().trim().isNotEmpty())
+        return RoomVoteKind::Bpm;
+
+    return activeRoomVoteKind_;
+}
+
+bool FamaLamaJamAudioProcessorEditor::isRoomFeedNearBottom() const noexcept
+{
+    const auto* viewed = roomFeedViewport_.getViewedComponent();
+    if (viewed == nullptr)
+        return true;
+
+    const auto maxScrollY = juce::jmax(0, viewed->getHeight() - roomFeedViewport_.getHeight());
+    return roomFeedViewport_.getViewPositionY() >= juce::jmax(0, maxScrollY - 24);
+}
+
+void FamaLamaJamAudioProcessorEditor::scrollRoomFeedToBottom()
+{
+    const auto* viewed = roomFeedViewport_.getViewedComponent();
+    if (viewed == nullptr)
+        return;
+
+    const auto maxScrollY = juce::jmax(0, viewed->getHeight() - roomFeedViewport_.getHeight());
+    roomFeedViewport_.setViewPosition(0, maxScrollY);
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
@@ -1766,7 +1897,8 @@ bool FamaLamaJamAudioProcessorEditor::isRoomComposerEnabledForTesting() const no
 
 bool FamaLamaJamAudioProcessorEditor::isRoomVoteEnabledForTesting(RoomVoteKind kind) const noexcept
 {
-    return kind == RoomVoteKind::Bpm ? roomBpmVoteButton_.isEnabled() : roomBpiVoteButton_.isEnabled();
+    juce::ignoreUnused(kind);
+    return roomVoteButton_.isEnabled();
 }
 
 bool FamaLamaJamAudioProcessorEditor::isRoomSectionAboveMixerForTesting() const noexcept
@@ -1826,10 +1958,12 @@ void FamaLamaJamAudioProcessorEditor::setRoomVoteValueForTesting(RoomVoteKind ki
 {
     auto& editor = kind == RoomVoteKind::Bpm ? roomBpmEditor_ : roomBpiEditor_;
     editor.setText(juce::String(value), juce::dontSendNotification);
+    updateRoomVoteInputState(kind);
 }
 
 bool FamaLamaJamAudioProcessorEditor::submitRoomVoteForTesting(RoomVoteKind kind)
 {
+    activeRoomVoteKind_ = kind;
     return submitRoomVote(kind);
 }
 

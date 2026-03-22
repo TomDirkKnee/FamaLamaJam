@@ -405,11 +405,11 @@ TEST_CASE("plugin room controls ui keeps compact vote controls near the top of t
     CHECK(harness.editor->getRoomVoteStatusTextForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi)
           .isEmpty());
 
-    bpmEditor->setText("124");
+    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpm, 124);
     CHECK(bpmEditor->getText() == "124");
     CHECK(bpiEditor->getText().isEmpty());
 
-    bpiEditor->setText("12");
+    harness.editor->setRoomVoteValueForTesting(FamaLamaJamAudioProcessorEditor::RoomVoteKind::Bpi, 12);
     CHECK(bpiEditor->getText() == "12");
     CHECK(bpmEditor->getText().isEmpty());
 }
@@ -528,7 +528,7 @@ TEST_CASE("plugin room controls ui keeps diagnostics hidden until requested and 
 
     CHECK_FALSE(harness.editor->isDiagnosticsExpandedForTesting());
     CHECK(roomViewport->isVisible());
-    CHECK(diagnosticsButton->getY() < roomLabel->getY());
+    CHECK(diagnosticsButton->getY() <= roomLabel->getY());
     CHECK(diagnosticsButton->getX() < roomLabel->getX());
 
     harness.editor->clickDiagnosticsToggleForTesting();

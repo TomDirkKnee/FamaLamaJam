@@ -233,8 +233,7 @@ TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure
     auto* passwordEditor = passwordLabel == nullptr ? nullptr : findDirectTextEditorToRightOf(*harness.editor, *passwordLabel);
     auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
     auto* authLabel = findDirectLabelWithText(*harness.editor, "Authentication failed: Wrong room password");
-    auto* transportLabel =
-        findDirectLabelWithText(*harness.editor, "Interval timing lost. Wait for timing or reconnect.");
+    auto* transportLabel = findDirectLabelWithText(*harness.editor, "Room timing lost.");
 
     REQUIRE(passwordLabel != nullptr);
     REQUIRE(passwordEditor != nullptr);
@@ -248,7 +247,7 @@ TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure
     CHECK(authLabel->isVisible());
     CHECK(authLabel->getY() >= passwordLabel->getY());
     CHECK(authLabel->getBottom() < transportLabel->getY());
-    CHECK(harness.editor->getTransportStatusTextForTesting() == "Interval timing lost. Wait for timing or reconnect.");
+    CHECK(harness.editor->getTransportStatusTextForTesting() == "Room timing lost.");
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing recovery guidance",
@@ -298,7 +297,7 @@ TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing
     CHECK(stripLabels[0] == "Local Monitor");
     CHECK(stripLabels[1] == "alice - guitar");
     CHECK(statusLabel->getBottom() < mixerSectionLabel->getY());
-    CHECK(harness.editor->getTransportStatusTextForTesting() == "Interval timing paused while reconnecting.");
+    CHECK(harness.editor->getTransportStatusTextForTesting() == "Reconnecting room timing.");
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport workflow", "[plugin_rehearsal_ui_flow]")
@@ -433,7 +432,7 @@ TEST_CASE("plugin rehearsal ui flow keeps the room workflow in a fixed right sid
                           });
 
     auto* hostLabel = findDirectLabelWithText(*harness.editor, "Host");
-    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room");
+    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
     auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
     auto* roomTabButton = findDirectButtonWithText(*harness.editor, "Room Tab");
     auto* popoutButton = findDirectButtonWithText(*harness.editor, "Open Chat");

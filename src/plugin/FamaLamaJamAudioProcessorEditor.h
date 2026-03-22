@@ -383,6 +383,7 @@ private:
     void applyServerDiscoveryEntrySelection(const ServerDiscoveryEntry& entry);
     void applyRememberedPassword(const std::string& password);
     void clearRememberedPassword();
+    void updateRoomVoteInputState(RoomVoteKind changedKind);
     void refreshLifecycleStatus();
     void refreshTransportStatus();
     void refreshHostSyncAssistStatus();
@@ -395,6 +396,9 @@ private:
     void refreshMixerStrips();
     void rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips);
     void updateTransmitButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
+    [[nodiscard]] RoomVoteKind getActiveRoomVoteKind() const noexcept;
+    [[nodiscard]] bool isRoomFeedNearBottom() const noexcept;
+    void scrollRoomFeedToBottom();
     [[nodiscard]] juce::String getCollapsedServerSummary() const;
     [[nodiscard]] juce::String getCollapsedServerSummaryAscii() const;
     [[nodiscard]] juce::String getDiagnosticsToggleText() const;
@@ -466,11 +470,10 @@ private:
     juce::TextButton roomSendButton_;
     juce::Label roomBpmLabel_;
     juce::TextEditor roomBpmEditor_;
-    juce::TextButton roomBpmVoteButton_;
     juce::Label roomBpmStatusLabel_;
     juce::Label roomBpiLabel_;
     juce::TextEditor roomBpiEditor_;
-    juce::TextButton roomBpiVoteButton_;
+    juce::TextButton roomVoteButton_;
     juce::Label roomBpiStatusLabel_;
     juce::Viewport roomFeedViewport_;
     juce::Component roomFeedContent_;
@@ -499,11 +502,13 @@ private:
     bool hostSyncAssistLastActionWasCancel_ { false };
     bool serverSettingsExpanded_ { true };
     bool diagnosticsExpanded_ { false };
+    bool updatingRoomVoteInputs_ { false };
     std::uint64_t uiRefreshTick_ { 0 };
     bool lastTransportUiInitialized_ { false };
     SyncHealth lastTransportSyncHealth_ { SyncHealth::Disconnected };
     int lastTransportBeat_ { 0 };
     std::uint64_t lastTransportIntervalIndex_ { 0 };
     std::string lastDiagnosticsText_;
+    RoomVoteKind activeRoomVoteKind_ { RoomVoteKind::Bpm };
 };
 } // namespace famalamajam::plugin
