@@ -310,12 +310,38 @@ constexpr auto kRememberedPasswordMask = "********";
     return {};
 }
 
-[[nodiscard]] juce::Colour stripAccentColour(FamaLamaJamAudioProcessorEditor::MixerStripKind kind, bool active)
+[[nodiscard]] juce::Colour stripAccentColour(const FamaLamaJamAudioProcessorEditor::MixerStripState& strip)
 {
-    if (kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
-        return active ? juce::Colour::fromRGB(214, 141, 72) : juce::Colour::fromRGB(132, 102, 74);
+    if (strip.kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
+        return strip.active ? juce::Colour::fromRGB(214, 141, 72) : juce::Colour::fromRGB(132, 102, 74);
 
-    return active ? juce::Colour::fromRGB(80, 150, 204) : juce::Colour::fromRGB(78, 90, 110);
+    if (strip.unsupportedVoiceMode)
+        return juce::Colour::fromRGB(214, 141, 72);
+
+    if (strip.active)
+        return juce::Colour::fromRGB(88, 168, 102);
+
+    if (strip.visible)
+        return juce::Colour::fromRGB(196, 92, 92);
+
+    return juce::Colour::fromRGB(78, 90, 110);
+}
+
+[[nodiscard]] juce::Colour stripStatusColour(const FamaLamaJamAudioProcessorEditor::MixerStripState& strip)
+{
+    if (strip.kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
+        return juce::Colour::fromRGB(188, 196, 210);
+
+    if (strip.unsupportedVoiceMode)
+        return juce::Colour::fromRGB(214, 141, 72);
+
+    if (strip.active)
+        return juce::Colour::fromRGB(131, 198, 152);
+
+    if (strip.visible)
+        return juce::Colour::fromRGB(214, 122, 122);
+
+    return juce::Colour::fromRGB(188, 196, 210);
 }
 
 [[nodiscard]] juce::String formatRoomFeedEntryText(
@@ -1663,12 +1689,10 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         widgets.groupLabel.setText(strip.groupLabel, juce::dontSendNotification);
         widgets.titleLabel.setText(strip.displayName, juce::dontSendNotification);
         widgets.subtitleLabel.setText(strip.subtitle, juce::dontSendNotification);
-        widgets.titleLabel.setColour(juce::Label::textColourId, stripAccentColour(strip.kind, strip.active));
+        widgets.titleLabel.setColour(juce::Label::textColourId, stripAccentColour(strip));
         widgets.subtitleLabel.setAlpha(strip.active ? 1.0f : 0.7f);
         widgets.statusLabel.setText(strip.statusText, juce::dontSendNotification);
-        widgets.statusLabel.setColour(juce::Label::textColourId,
-                                      strip.unsupportedVoiceMode ? juce::Colour::fromRGB(214, 141, 72)
-                                                                 : juce::Colour::fromRGB(188, 196, 210));
+        widgets.statusLabel.setColour(juce::Label::textColourId, stripStatusColour(strip));
         widgets.statusLabel.setAlpha(strip.statusText.empty() ? 0.0f : 1.0f);
 
         if (! widgets.gainSlider.isMouseButtonDown())

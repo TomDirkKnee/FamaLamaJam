@@ -85,6 +85,7 @@ public:
     bool popRoomEvent(RoomEvent& event);
     bool getServerTimingConfig(ServerTimingConfig& config) const;
     bool getLatestIntervalBoundaryEvent(IntervalBoundaryEvent& event) const;
+    bool getSubscribedUserMask(const std::string& username, std::uint32_t& channelMask) const;
 
     [[nodiscard]] std::size_t getSentFrameCount() const;
     [[nodiscard]] std::size_t getReceivedFrameCount() const;

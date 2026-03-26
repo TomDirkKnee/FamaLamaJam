@@ -413,8 +413,11 @@ void queueDecodedRemoteInterval(
         {
             ++diagnostics.lateDrops;
             diagnostics.lastCopiedSamples = copiedSamples;
+            diagnostics.lastDropTargetBoundary = nextTargetBoundary;
+            diagnostics.lastDropCurrentBoundary = earliestPlayableBoundary;
             diagnostics.lastQueuedBoundary = earliestPlayableBoundary;
-            nextTargetBoundary = earliestPlayableBoundary;
+            queueCompletedRemoteInterval(queuedBySource, sourceId, std::move(normalized), earliestPlayableBoundary);
+            nextTargetBoundary = earliestPlayableBoundary + 1;
             return;
         }
 
@@ -628,6 +631,7 @@ void FamaLamaJamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
         remoteActiveIntervalBySource_.clear();
         lastRemoteActivationBoundaryBySource_.clear();
         remoteReceiveDiagnosticsBySource_.clear();
+        knownRemoteSourcesById_.clear();
         clearAuthoritativeTiming();
         resetMixerStripMeters();
         updateRemoteMixerStripActivity();
@@ -655,6 +659,7 @@ void FamaLamaJamAudioProcessor::releaseResources()
     remoteActiveIntervalBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
     remoteReceiveDiagnosticsBySource_.clear();
+    knownRemoteSourcesById_.clear();
     clearAuthoritativeTiming();
     clearRoomUiState(false);
     resetMixerStripMeters();
@@ -721,7 +726,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 localStrip.snapshot.statusText = "Transmitting";
                 break;
         }
-        localStrip.lastSeenIntervalIndex = authoritativeTiming_.intervalIndex;
+        localStrip.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
+        localStrip.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
     };
 
     auto applyMasterOutputToBuffer = [this, &buffer]() {
@@ -918,7 +924,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         while (sourceUpdatesConsumed < 16 && framedTransport_.popRemoteSourceActivityUpdate(sourceActivityUpdate))
         {
             if (sourceActivityUpdate.active)
-                syncRemoteMixerStrip(sourceActivityUpdate.sourceInfo);
+                syncRemoteMixerStrip(sourceActivityUpdate.sourceInfo, false);
             else
                 markRemoteMixerStripInactive(sourceActivityUpdate.sourceInfo.sourceId);
 
@@ -930,9 +936,11 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         while (framesConsumed < 8 && framedTransport_.popInboundFrame(inboundFrame))
         {
-            syncRemoteMixerStrip(inboundFrame.sourceInfo);
+            syncRemoteMixerStrip(inboundFrame.sourceInfo, true);
             const auto sourceId = inboundFrame.sourceId.empty() ? std::string("unknown") : inboundFrame.sourceId;
-            remoteReceiveDiagnosticsBySource_[sourceId].lastEncodedBytes = inboundFrame.payload.getSize();
+            auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
+            diagnostics.lastEncodedBytes = inboundFrame.payload.getSize();
+            diagnostics.lastInboundIntervalIndex = authoritativeTiming_.intervalIndex;
             if (! isUnsupportedVoiceMode(inboundFrame.sourceInfo.channelFlags))
             {
                 codecStreamBridge_.submitInboundEncoded(inboundFrame.sourceId,
@@ -1147,6 +1155,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                     remoteActiveIntervalBySource_.clear();
                     lastRemoteActivationBoundaryBySource_.clear();
                     remoteReceiveDiagnosticsBySource_.clear();
+                    knownRemoteSourcesById_.clear();
                     
                 }
 
@@ -1603,7 +1612,8 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
 
         auto& runtimeState = mixerStripsBySourceId_[snapshot.descriptor.sourceId];
         runtimeState.snapshot = std::move(snapshot);
-        runtimeState.lastSeenIntervalIndex = 0;
+        runtimeState.lastPresenceIntervalIndex = 0;
+        runtimeState.lastAudioIntervalIndex = 0;
     }
 
     ensureLocalMonitorMixerStrip();
@@ -1886,6 +1896,7 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
 
     std::sort(sourceIds.begin(), sourceIds.end());
 
+    bool firstSource = true;
     for (const auto& sourceId : sourceIds)
     {
         const auto diagnosticsIt = remoteReceiveDiagnosticsBySource_.find(sourceId);
@@ -1893,30 +1904,61 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
         const auto activeIt = remoteActiveIntervalBySource_.find(sourceId);
         const auto nextIt = nextRemoteTargetBoundaryBySource_.find(sourceId);
         const auto lastIt = lastRemoteActivationBoundaryBySource_.find(sourceId);
+        const auto knownIt = knownRemoteSourcesById_.find(sourceId);
+        const auto stripIt = mixerStripsBySourceId_.find(sourceId);
 
         const auto decodedSamples = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSamples : 0;
         const auto decodedRate = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSampleRate : 0.0;
         const auto channelFlags = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.channelFlags : 0u;
         const auto encodedBytes = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastEncodedBytes : 0u;
         const auto copiedSamples = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastCopiedSamples : 0;
+        const auto lastInboundInterval = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastInboundIntervalIndex : 0u;
         const auto queuedBoundary = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastQueuedBoundary : 0u;
+        const auto lastDropTargetBoundary = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDropTargetBoundary : 0u;
+        const auto lastDropCurrentBoundary = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDropCurrentBoundary : 0u;
         const auto lateDrops = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lateDrops : 0u;
         const auto queuedCount = queuedIt != remoteQueuedIntervalsBySource_.end() ? queuedIt->second.size() : 0u;
         const auto activeSamples = activeIt != remoteActiveIntervalBySource_.end() ? activeIt->second.getNumSamples() : 0;
         const auto nextBoundary = nextIt != nextRemoteTargetBoundaryBySource_.end() ? nextIt->second : 0u;
         const auto lastBoundary = lastIt != lastRemoteActivationBoundaryBySource_.end() ? lastIt->second : 0u;
+        const auto knownInRoom = knownIt != knownRemoteSourcesById_.end();
+        const auto stripVisible = stripIt != mixerStripsBySourceId_.end() ? stripIt->second.snapshot.descriptor.visible : false;
+        const auto stripActive = stripIt != mixerStripsBySourceId_.end() ? stripIt->second.snapshot.descriptor.active : false;
+        const auto presenceAt = stripIt != mixerStripsBySourceId_.end() ? stripIt->second.lastPresenceIntervalIndex : 0u;
+        const auto audioAt = stripIt != mixerStripsBySourceId_.end() ? stripIt->second.lastAudioIntervalIndex : 0u;
+        const auto stripState = ! stripVisible ? "hidden" : (stripActive ? "interval" : (channelFlags == 2u ? "voice" : "idle"));
+        const auto remoteUser = knownIt != knownRemoteSourcesById_.end()
+            ? knownIt->second.userName
+            : (stripIt != mixerStripsBySourceId_.end() ? stripIt->second.snapshot.descriptor.userName : std::string {});
+        const auto channelIndex = knownIt != knownRemoteSourcesById_.end()
+            ? knownIt->second.channelIndex
+            : static_cast<std::uint8_t>(stripIt != mixerStripsBySourceId_.end()
+                                            ? juce::jmax(0, stripIt->second.snapshot.descriptor.channelIndex)
+                                            : 0);
+        std::uint32_t subscribedMask = 0;
+        const auto hasSubscribedMask = ! remoteUser.empty() && framedTransport_.getSubscribedUserMask(remoteUser, subscribedMask);
+        const auto subscribed = hasSubscribedMask && (subscribedMask & (1u << channelIndex)) != 0u;
 
-        stream << "\n" << sourceId
+        stream << (firstSource ? "\n" : "\n\n") << sourceId
                << " mode=" << (channelFlags == 2u ? "voice" : (channelFlags == 0u ? "interval" : ("flags" + std::to_string(channelFlags))))
+               << " known=" << (knownInRoom ? "yes" : "no")
+               << " sub=" << (subscribed ? "yes" : "no")
+               << " mask=" << subscribedMask
+               << " strip=" << stripState
                << " enc=" << encodedBytes
                << " dec=" << decodedSamples << "@" << juce::roundToInt(decodedRate)
                << " copy=" << copiedSamples
                << " active=" << activeSamples
                << " queued=" << queuedCount
-               << " queuedAt=" << queuedBoundary
+                << " queuedAt=" << queuedBoundary
+               << " in=" << lastInboundInterval
+               << " seenUser=" << presenceAt
+               << " seenAudio=" << audioAt
                << " next=" << nextBoundary
                << " last=" << lastBoundary
+               << " drop=" << lastDropTargetBoundary << "->" << lastDropCurrentBoundary
                << " drops=" << lateDrops;
+        firstSource = false;
     }
 
     return stream.str();
@@ -1934,7 +1976,7 @@ void FamaLamaJamAudioProcessor::injectDecodedRemoteIntervalForTesting(const std:
     sourceInfo.groupId = sourceId;
     sourceInfo.userName = sourceId;
     sourceInfo.displayName = sourceId;
-    syncRemoteMixerStrip(sourceInfo);
+    syncRemoteMixerStrip(sourceInfo, true);
 
     const auto decodedAtHostRate = audio::resampleAudioBuffer(audio, sampleRate, currentSampleRate_);
     auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
@@ -2369,6 +2411,7 @@ void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::Con
         remoteActiveIntervalBySource_.clear();
         lastRemoteActivationBoundaryBySource_.clear();
         remoteReceiveDiagnosticsBySource_.clear();
+        knownRemoteSourcesById_.clear();
         clearAuthoritativeTiming();
         clearRoomUiState(false);
         hideAllRemoteMixerStrips();
@@ -2426,6 +2469,7 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     nextRemoteTargetBoundaryBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
     remoteReceiveDiagnosticsBySource_.clear();
+    knownRemoteSourcesById_.clear();
     hasServerTimingForUi_.store(false, std::memory_order_relaxed);
     serverBpmForUi_.store(0, std::memory_order_relaxed);
     beatsPerIntervalForUi_.store(0, std::memory_order_relaxed);
@@ -2693,7 +2737,8 @@ void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
         it = mixerStripsBySourceId_.emplace(kLocalMonitorSourceId,
                                             MixerStripRuntimeState {
                                                 .snapshot = std::move(snapshot),
-                                                .lastSeenIntervalIndex = authoritativeTiming_.intervalIndex,
+                                                .lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex,
+                                                .lastAudioIntervalIndex = authoritativeTiming_.intervalIndex,
                                             })
                  .first;
     }
@@ -2708,14 +2753,18 @@ void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
     it->second.snapshot.descriptor.visible = true;
     it->second.snapshot.descriptor.inactiveIntervals = 0;
     it->second.snapshot.unsupportedVoiceMode = false;
+    it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
+    it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
 }
 
-void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTransport::RemoteSourceInfo& sourceInfo)
+void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTransport::RemoteSourceInfo& sourceInfo,
+                                                     bool hasAudioActivity)
 {
     if (sourceInfo.sourceId.empty())
         return;
 
     remoteReceiveDiagnosticsBySource_[sourceInfo.sourceId].channelFlags = sourceInfo.channelFlags;
+    knownRemoteSourcesById_[sourceInfo.sourceId] = sourceInfo;
 
     auto it = mixerStripsBySourceId_.find(sourceInfo.sourceId);
     if (it == mixerStripsBySourceId_.end())
@@ -2737,7 +2786,8 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
         it = mixerStripsBySourceId_.emplace(sourceInfo.sourceId,
                                             MixerStripRuntimeState {
                                                 .snapshot = std::move(snapshot),
-                                                .lastSeenIntervalIndex = authoritativeTiming_.intervalIndex,
+                                                .lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex,
+                                                .lastAudioIntervalIndex = hasAudioActivity ? authoritativeTiming_.intervalIndex : 0u,
                                             })
                  .first;
     }
@@ -2756,7 +2806,9 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
     it->second.snapshot.unsupportedVoiceMode = isUnsupportedVoiceMode(sourceInfo.channelFlags);
     it->second.snapshot.statusText = it->second.snapshot.unsupportedVoiceMode ? "Voice chat mode is not supported yet."
                                                                               : std::string {};
-    it->second.lastSeenIntervalIndex = authoritativeTiming_.intervalIndex;
+    it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
+    if (hasAudioActivity)
+        it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
 }
 
 void FamaLamaJamAudioProcessor::markRemoteMixerStripInactive(const std::string& sourceId)
@@ -2764,6 +2816,7 @@ void FamaLamaJamAudioProcessor::markRemoteMixerStripInactive(const std::string& 
     if (sourceId.empty())
         return;
 
+    knownRemoteSourcesById_.erase(sourceId);
     remoteQueuedIntervalsBySource_.erase(sourceId);
     nextRemoteTargetBoundaryBySource_.erase(sourceId);
     remoteActiveIntervalBySource_.erase(sourceId);
@@ -2777,7 +2830,7 @@ void FamaLamaJamAudioProcessor::markRemoteMixerStripInactive(const std::string& 
         descriptor.visible = false;
         descriptor.inactiveIntervals = 0;
         it->second.snapshot.meter = {};
-        it->second.lastSeenIntervalIndex = authoritativeTiming_.intervalIndex;
+        it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
     }
 }
 
@@ -2794,7 +2847,7 @@ void FamaLamaJamAudioProcessor::hideAllRemoteMixerStrips() noexcept
         descriptor.visible = false;
         descriptor.inactiveIntervals = 0;
         runtimeState.snapshot.meter = {};
-        runtimeState.lastSeenIntervalIndex = authoritativeTiming_.intervalIndex;
+        runtimeState.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
     }
 }
 
@@ -2819,30 +2872,49 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
             descriptor.active = true;
             descriptor.visible = true;
             descriptor.inactiveIntervals = 0;
-            runtimeState.lastSeenIntervalIndex = currentIntervalIndex;
+            runtimeState.lastPresenceIntervalIndex = currentIntervalIndex;
+            runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
             continue;
         }
 
+        const bool isKnownRemoteSource = knownRemoteSourcesById_.find(sourceId) != knownRemoteSourcesById_.end();
         const bool hasActiveInterval = remoteActiveIntervalBySource_.find(sourceId) != remoteActiveIntervalBySource_.end();
         const bool hasQueuedInterval = remoteQueuedIntervalsBySource_.find(sourceId) != remoteQueuedIntervalsBySource_.end();
-        const bool isActiveNow = hasActiveInterval || hasQueuedInterval;
+        const bool hasAudioActivity = hasActiveInterval || hasQueuedInterval;
+        const bool unsupportedVoiceMode = runtimeState.snapshot.unsupportedVoiceMode;
 
-        if (isActiveNow)
+        if (hasAudioActivity)
         {
             descriptor.active = true;
             descriptor.visible = true;
             descriptor.inactiveIntervals = 0;
-            runtimeState.lastSeenIntervalIndex = currentIntervalIndex;
+            runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
+            runtimeState.snapshot.statusText = unsupportedVoiceMode ? "Voice chat mode is not supported yet."
+                                                                   : "Receiving interval audio";
             continue;
         }
 
         descriptor.active = false;
 
-        const auto inactiveIntervals = currentIntervalIndex >= runtimeState.lastSeenIntervalIndex
-            ? currentIntervalIndex - runtimeState.lastSeenIntervalIndex
+        const auto referenceIntervalIndex = runtimeState.lastAudioIntervalIndex > 0
+            ? runtimeState.lastAudioIntervalIndex
+            : runtimeState.lastPresenceIntervalIndex;
+        const auto inactiveIntervals = currentIntervalIndex >= referenceIntervalIndex
+            ? currentIntervalIndex - referenceIntervalIndex
             : 0u;
         descriptor.inactiveIntervals = inactiveIntervals;
-        descriptor.visible = descriptor.visible && inactiveIntervals <= kInactiveStripRetentionIntervals;
+
+        if (isKnownRemoteSource)
+        {
+            descriptor.visible = true;
+            runtimeState.snapshot.statusText = unsupportedVoiceMode ? "Voice chat mode is not supported yet."
+                                                                   : "In room, waiting for interval audio";
+        }
+        else
+        {
+            descriptor.visible = descriptor.visible && inactiveIntervals <= kInactiveStripRetentionIntervals;
+            runtimeState.snapshot.statusText.clear();
+        }
     }
 }
 

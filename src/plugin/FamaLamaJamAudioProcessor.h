@@ -232,7 +232,10 @@ public:
         double lastDecodedSampleRate { 0.0 };
         std::uint8_t channelFlags { 0 };
         int lastCopiedSamples { 0 };
+        std::uint64_t lastInboundIntervalIndex { 0 };
         std::uint64_t lastQueuedBoundary { 0 };
+        std::uint64_t lastDropTargetBoundary { 0 };
+        std::uint64_t lastDropCurrentBoundary { 0 };
         std::uint64_t lateDrops { 0 };
     };
 
@@ -358,7 +361,8 @@ private:
     struct MixerStripRuntimeState
     {
         MixerStripSnapshot snapshot;
-        std::uint64_t lastSeenIntervalIndex { 0 };
+        std::uint64_t lastPresenceIntervalIndex { 0 };
+        std::uint64_t lastAudioIntervalIndex { 0 };
     };
 
     void timerCallback() override;
@@ -371,7 +375,7 @@ private:
     void closeLiveSocket();
     void clearAuthoritativeTiming() noexcept;
     void ensureLocalMonitorMixerStrip();
-    void syncRemoteMixerStrip(const net::FramedSocketTransport::RemoteSourceInfo& sourceInfo);
+    void syncRemoteMixerStrip(const net::FramedSocketTransport::RemoteSourceInfo& sourceInfo, bool hasAudioActivity);
     void markRemoteMixerStripInactive(const std::string& sourceId);
     void hideAllRemoteMixerStrips() noexcept;
     void updateRemoteMixerStripActivity();
@@ -413,6 +417,7 @@ private:
     std::unordered_map<std::string, juce::AudioBuffer<float>> remoteActiveIntervalBySource_;
     std::unordered_map<std::string, std::uint64_t> lastRemoteActivationBoundaryBySource_;
     std::unordered_map<std::string, RemoteReceiveDiagnosticRuntime> remoteReceiveDiagnosticsBySource_;
+    std::unordered_map<std::string, net::FramedSocketTransport::RemoteSourceInfo> knownRemoteSourcesById_;
     std::unordered_map<std::string, MixerStripRuntimeState> mixerStripsBySourceId_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::atomic<bool> hasServerTimingForUi_ { false };

@@ -505,6 +505,17 @@ bool FramedSocketTransport::getLatestIntervalBoundaryEvent(IntervalBoundaryEvent
     return true;
 }
 
+bool FramedSocketTransport::getSubscribedUserMask(const std::string& username, std::uint32_t& channelMask) const
+{
+    const juce::ScopedLock lock(stateLock_);
+    const auto it = subscribedUserMasks_.find(username);
+    if (it == subscribedUserMasks_.end())
+        return false;
+
+    channelMask = it->second;
+    return true;
+}
+
 std::size_t FramedSocketTransport::getSentFrameCount() const
 {
     const juce::ScopedLock lock(stateLock_);
