@@ -357,6 +357,12 @@ public:
         std::uint64_t targetIntervalIndex { 0 };
     };
 
+    struct RemoteVoiceChunk
+    {
+        juce::AudioBuffer<float> audio;
+        int playbackPosition { 0 };
+    };
+
 private:
     struct MixerStripRuntimeState
     {
@@ -413,6 +419,7 @@ private:
     std::atomic<std::size_t> lastCodecPayloadBytes_ { 0 };
     std::atomic<int> lastDecodedSamples_ { 0 };
     std::unordered_map<std::string, std::deque<RemoteQueuedInterval>> remoteQueuedIntervalsBySource_;
+    std::unordered_map<std::string, std::deque<RemoteVoiceChunk>> remoteVoiceChunksBySource_;
     std::unordered_map<std::string, std::uint64_t> nextRemoteTargetBoundaryBySource_;
     std::unordered_map<std::string, juce::AudioBuffer<float>> remoteActiveIntervalBySource_;
     std::unordered_map<std::string, std::uint64_t> lastRemoteActivationBoundaryBySource_;

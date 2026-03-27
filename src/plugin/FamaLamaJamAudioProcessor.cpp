@@ -107,6 +107,7 @@ constexpr float kMaxMetronomeGainDb = 12.0f;
 }
 
 constexpr std::size_t kMaxQueuedIntervalsPerSource = 8;
+constexpr std::size_t kMaxQueuedVoiceChunksPerSource = 32;
 constexpr int kPreparedTransmitIntervals = 2;
 constexpr int kMinBpm = 20;
 constexpr int kMaxBpm = 400;
@@ -482,9 +483,27 @@ void activateRemoteIntervalsForBoundary(
     return FamaLamaJamAudioProcessor::MixerStripMixState {};
 }
 
-[[nodiscard]] bool isUnsupportedVoiceMode(std::uint8_t channelFlags)
+[[nodiscard]] bool isVoiceMode(std::uint8_t channelFlags)
 {
     return (channelFlags & 0x2u) != 0;
+}
+
+void queueDecodedRemoteVoiceChunk(
+    std::unordered_map<std::string, std::deque<FamaLamaJamAudioProcessor::RemoteVoiceChunk>>& queuedBySource,
+    const std::string& sourceId,
+    juce::AudioBuffer<float> decoded)
+{
+    if (decoded.getNumChannels() <= 0 || decoded.getNumSamples() <= 0)
+        return;
+
+    auto& queuedChunks = queuedBySource[sourceId];
+    queuedChunks.push_back(FamaLamaJamAudioProcessor::RemoteVoiceChunk {
+        .audio = std::move(decoded),
+        .playbackPosition = 0,
+    });
+
+    while (queuedChunks.size() > kMaxQueuedVoiceChunksPerSource)
+        queuedChunks.pop_front();
 }
 
 void computePanGains(float pan, float& left, float& right, float& other)
@@ -627,6 +646,7 @@ void FamaLamaJamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
         lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
         lastDecodedSamples_.store(0, std::memory_order_relaxed);
         remoteQueuedIntervalsBySource_.clear();
+        remoteVoiceChunksBySource_.clear();
         nextRemoteTargetBoundaryBySource_.clear();
         remoteActiveIntervalBySource_.clear();
         lastRemoteActivationBoundaryBySource_.clear();
@@ -655,6 +675,7 @@ void FamaLamaJamAudioProcessor::releaseResources()
     lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
     lastDecodedSamples_.store(0, std::memory_order_relaxed);
     remoteQueuedIntervalsBySource_.clear();
+    remoteVoiceChunksBySource_.clear();
     nextRemoteTargetBoundaryBySource_.clear();
     remoteActiveIntervalBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
@@ -941,12 +962,9 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
             diagnostics.lastEncodedBytes = inboundFrame.payload.getSize();
             diagnostics.lastInboundIntervalIndex = authoritativeTiming_.intervalIndex;
-            if (! isUnsupportedVoiceMode(inboundFrame.sourceInfo.channelFlags))
-            {
-                codecStreamBridge_.submitInboundEncoded(inboundFrame.sourceId,
-                                                        inboundFrame.payload.getData(),
-                                                        inboundFrame.payload.getSize());
-            }
+            codecStreamBridge_.submitInboundEncoded(inboundFrame.sourceId,
+                                                    inboundFrame.payload.getData(),
+                                                    inboundFrame.payload.getSize());
             ++framesConsumed;
         }
     }
@@ -966,12 +984,25 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
         diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
         diagnostics.lastDecodedSampleRate = decodedFrame.sampleRate;
-        queueDecodedRemoteInterval(remoteQueuedIntervalsBySource_,
-                                   nextRemoteTargetBoundaryBySource_,
-                                   remoteReceiveDiagnosticsBySource_,
-                                   authoritativeTiming_,
-                                   sourceId,
-                                   decodedAtHostRate);
+        const auto knownSourceIt = knownRemoteSourcesById_.find(sourceId);
+        const auto sourceIsVoice = knownSourceIt != knownRemoteSourcesById_.end()
+            && isVoiceMode(knownSourceIt->second.channelFlags);
+
+        if (sourceIsVoice)
+        {
+            diagnostics.lastCopiedSamples = decodedAtHostRate.getNumSamples();
+            diagnostics.lastQueuedBoundary = authoritativeTiming_.intervalIndex;
+            queueDecodedRemoteVoiceChunk(remoteVoiceChunksBySource_, sourceId, std::move(decodedAtHostRate));
+        }
+        else
+        {
+            queueDecodedRemoteInterval(remoteQueuedIntervalsBySource_,
+                                       nextRemoteTargetBoundaryBySource_,
+                                       remoteReceiveDiagnosticsBySource_,
+                                       authoritativeTiming_,
+                                       sourceId,
+                                       decodedAtHostRate);
+        }
 
         ++cpuDiagnosticSnapshot_.remoteFramesDecoded;
 
@@ -1040,6 +1071,76 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         for (int sample = 0; sample < outputSamples; ++sample)
         {
+            for (auto voiceIt = remoteVoiceChunksBySource_.begin(); voiceIt != remoteVoiceChunksBySource_.end();)
+            {
+                auto& queuedChunks = voiceIt->second;
+                while (! queuedChunks.empty()
+                       && queuedChunks.front().playbackPosition >= queuedChunks.front().audio.getNumSamples())
+                {
+                    queuedChunks.pop_front();
+                }
+
+                if (queuedChunks.empty())
+                {
+                    voiceIt = remoteVoiceChunksBySource_.erase(voiceIt);
+                    continue;
+                }
+
+                const auto stripIt = mixerStripsBySourceId_.find(voiceIt->first);
+                const auto& voiceChunk = queuedChunks.front();
+                const auto sourceChannels = voiceChunk.audio.getNumChannels();
+                const bool stripAudible = stripIt != mixerStripsBySourceId_.end()
+                    && isStripAudible(stripIt->second.snapshot.mix, soloActive);
+
+                if (stripAudible && sourceChannels > 0
+                    && voiceChunk.playbackPosition < voiceChunk.audio.getNumSamples())
+                {
+                    ++cpuDiagnosticSnapshot_.remoteMixSourceVisits;
+
+                    float panLeft = 1.0f;
+                    float panRight = 1.0f;
+                    float panOther = 1.0f;
+                    computePanGains(stripIt->second.snapshot.mix.pan, panLeft, panRight, panOther);
+                    const auto gainLinear = juce::Decibels::decibelsToGain(stripIt->second.snapshot.mix.gainDb);
+
+                    for (int channel = 0; channel < outputChannels; ++channel)
+                    {
+                        const auto sourceChannel = sourceChannels == 1 ? 0 : juce::jmin(channel, sourceChannels - 1);
+                        float channelGain = gainLinear * panOther;
+                        if (outputChannels > 1)
+                        {
+                            if (channel == 0)
+                                channelGain = gainLinear * panLeft;
+                            else if (channel == 1)
+                                channelGain = gainLinear * panRight;
+                        }
+
+                        const auto mixedSample = voiceChunk.audio.getSample(sourceChannel,
+                                                                            voiceChunk.playbackPosition)
+                            * channelGain;
+                        buffer.addSample(channel, sample, mixedSample);
+                        ++cpuDiagnosticSnapshot_.remoteMixChannelWrites;
+
+                        const auto magnitude = std::abs(mixedSample);
+                        if (channel == 0)
+                            stripIt->second.snapshot.meter.left
+                                = juce::jmax(stripIt->second.snapshot.meter.left, magnitude);
+                        else if (channel == 1)
+                            stripIt->second.snapshot.meter.right
+                                = juce::jmax(stripIt->second.snapshot.meter.right, magnitude);
+                    }
+                }
+
+                ++queuedChunks.front().playbackPosition;
+                if (queuedChunks.front().playbackPosition >= queuedChunks.front().audio.getNumSamples())
+                    queuedChunks.pop_front();
+
+                if (queuedChunks.empty())
+                    voiceIt = remoteVoiceChunksBySource_.erase(voiceIt);
+                else
+                    ++voiceIt;
+            }
+
             for (auto& sourceEntry : remoteActiveIntervalBySource_)
             {
                 const auto stripIt = mixerStripsBySourceId_.find(sourceEntry.first);
@@ -1151,6 +1252,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                     localUploadIntervalBuffer_.setSize(0, 0);
                     localUploadIntervalWritePosition_ = 0;
                     remoteQueuedIntervalsBySource_.clear();
+                    remoteVoiceChunksBySource_.clear();
                     nextRemoteTargetBoundaryBySource_.clear();
                     remoteActiveIntervalBySource_.clear();
                     lastRemoteActivationBoundaryBySource_.clear();
@@ -1893,6 +1995,12 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
         if (std::find(sourceIds.begin(), sourceIds.end(), sourceId) == sourceIds.end())
             sourceIds.push_back(sourceId);
     }
+    for (const auto& [sourceId, voice] : remoteVoiceChunksBySource_)
+    {
+        (void) voice;
+        if (std::find(sourceIds.begin(), sourceIds.end(), sourceId) == sourceIds.end())
+            sourceIds.push_back(sourceId);
+    }
 
     std::sort(sourceIds.begin(), sourceIds.end());
 
@@ -1902,6 +2010,7 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
         const auto diagnosticsIt = remoteReceiveDiagnosticsBySource_.find(sourceId);
         const auto queuedIt = remoteQueuedIntervalsBySource_.find(sourceId);
         const auto activeIt = remoteActiveIntervalBySource_.find(sourceId);
+        const auto voiceIt = remoteVoiceChunksBySource_.find(sourceId);
         const auto nextIt = nextRemoteTargetBoundaryBySource_.find(sourceId);
         const auto lastIt = lastRemoteActivationBoundaryBySource_.find(sourceId);
         const auto knownIt = knownRemoteSourcesById_.find(sourceId);
@@ -1909,7 +2018,9 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
 
         const auto decodedSamples = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSamples : 0;
         const auto decodedRate = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSampleRate : 0.0;
-        const auto channelFlags = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.channelFlags : 0u;
+        const auto channelFlags = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end()
+            ? diagnosticsIt->second.channelFlags
+            : static_cast<std::uint8_t>(0);
         const auto encodedBytes = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastEncodedBytes : 0u;
         const auto copiedSamples = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastCopiedSamples : 0;
         const auto lastInboundInterval = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastInboundIntervalIndex : 0u;
@@ -1918,7 +2029,11 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
         const auto lastDropCurrentBoundary = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDropCurrentBoundary : 0u;
         const auto lateDrops = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lateDrops : 0u;
         const auto queuedCount = queuedIt != remoteQueuedIntervalsBySource_.end() ? queuedIt->second.size() : 0u;
-        const auto activeSamples = activeIt != remoteActiveIntervalBySource_.end() ? activeIt->second.getNumSamples() : 0;
+        const auto activeSamples = activeIt != remoteActiveIntervalBySource_.end()
+            ? activeIt->second.getNumSamples()
+            : (voiceIt != remoteVoiceChunksBySource_.end() && ! voiceIt->second.empty()
+                   ? voiceIt->second.front().audio.getNumSamples()
+                   : 0);
         const auto nextBoundary = nextIt != nextRemoteTargetBoundaryBySource_.end() ? nextIt->second : 0u;
         const auto lastBoundary = lastIt != lastRemoteActivationBoundaryBySource_.end() ? lastIt->second : 0u;
         const auto knownInRoom = knownIt != knownRemoteSourcesById_.end();
@@ -1926,15 +2041,18 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
         const auto stripActive = stripIt != mixerStripsBySourceId_.end() ? stripIt->second.snapshot.descriptor.active : false;
         const auto presenceAt = stripIt != mixerStripsBySourceId_.end() ? stripIt->second.lastPresenceIntervalIndex : 0u;
         const auto audioAt = stripIt != mixerStripsBySourceId_.end() ? stripIt->second.lastAudioIntervalIndex : 0u;
-        const auto stripState = ! stripVisible ? "hidden" : (stripActive ? "interval" : (channelFlags == 2u ? "voice" : "idle"));
+        const auto stripState = ! stripVisible ? "hidden"
+            : (stripActive ? (isVoiceMode(channelFlags) ? "voice" : "interval")
+                           : (isVoiceMode(channelFlags) ? "voice" : "idle"));
         const auto remoteUser = knownIt != knownRemoteSourcesById_.end()
             ? knownIt->second.userName
             : (stripIt != mixerStripsBySourceId_.end() ? stripIt->second.snapshot.descriptor.userName : std::string {});
+        const auto fallbackChannelIndex = stripIt != mixerStripsBySourceId_.end()
+            ? juce::jlimit(0, 31, stripIt->second.snapshot.descriptor.channelIndex)
+            : 0;
         const auto channelIndex = knownIt != knownRemoteSourcesById_.end()
             ? knownIt->second.channelIndex
-            : static_cast<std::uint8_t>(stripIt != mixerStripsBySourceId_.end()
-                                            ? juce::jmax(0, stripIt->second.snapshot.descriptor.channelIndex)
-                                            : 0);
+            : static_cast<std::uint8_t>(fallbackChannelIndex);
         std::uint32_t subscribedMask = 0;
         const auto hasSubscribedMask = ! remoteUser.empty() && framedTransport_.getSubscribedUserMask(remoteUser, subscribedMask);
         const auto subscribed = hasSubscribedMask && (subscribedMask & (1u << channelIndex)) != 0u;
@@ -2407,6 +2525,7 @@ void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::Con
         lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
         lastDecodedSamples_.store(0, std::memory_order_relaxed);
         remoteQueuedIntervalsBySource_.clear();
+        remoteVoiceChunksBySource_.clear();
         nextRemoteTargetBoundaryBySource_.clear();
         remoteActiveIntervalBySource_.clear();
         lastRemoteActivationBoundaryBySource_.clear();
@@ -2468,6 +2587,7 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     transmitWarmupIntervalsRemaining_ = 0;
     nextRemoteTargetBoundaryBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
+    remoteVoiceChunksBySource_.clear();
     remoteReceiveDiagnosticsBySource_.clear();
     knownRemoteSourcesById_.clear();
     hasServerTimingForUi_.store(false, std::memory_order_relaxed);
@@ -2780,8 +2900,8 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
         snapshot.descriptor.active = true;
         snapshot.descriptor.visible = true;
         snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
-        snapshot.unsupportedVoiceMode = isUnsupportedVoiceMode(sourceInfo.channelFlags);
-        snapshot.statusText = snapshot.unsupportedVoiceMode ? "Voice chat mode is not supported yet." : std::string {};
+        snapshot.unsupportedVoiceMode = false;
+        snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice chat: near realtime" : std::string {};
 
         it = mixerStripsBySourceId_.emplace(sourceInfo.sourceId,
                                             MixerStripRuntimeState {
@@ -2803,9 +2923,9 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
     descriptor.active = true;
     descriptor.visible = true;
     descriptor.inactiveIntervals = 0;
-    it->second.snapshot.unsupportedVoiceMode = isUnsupportedVoiceMode(sourceInfo.channelFlags);
-    it->second.snapshot.statusText = it->second.snapshot.unsupportedVoiceMode ? "Voice chat mode is not supported yet."
-                                                                              : std::string {};
+    it->second.snapshot.unsupportedVoiceMode = false;
+    it->second.snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice chat: near realtime"
+                                                                          : std::string {};
     it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
     if (hasAudioActivity)
         it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
@@ -2818,6 +2938,7 @@ void FamaLamaJamAudioProcessor::markRemoteMixerStripInactive(const std::string& 
 
     knownRemoteSourcesById_.erase(sourceId);
     remoteQueuedIntervalsBySource_.erase(sourceId);
+    remoteVoiceChunksBySource_.erase(sourceId);
     nextRemoteTargetBoundaryBySource_.erase(sourceId);
     remoteActiveIntervalBySource_.erase(sourceId);
     lastRemoteActivationBoundaryBySource_.erase(sourceId);
@@ -2880,8 +3001,10 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
         const bool isKnownRemoteSource = knownRemoteSourcesById_.find(sourceId) != knownRemoteSourcesById_.end();
         const bool hasActiveInterval = remoteActiveIntervalBySource_.find(sourceId) != remoteActiveIntervalBySource_.end();
         const bool hasQueuedInterval = remoteQueuedIntervalsBySource_.find(sourceId) != remoteQueuedIntervalsBySource_.end();
-        const bool hasAudioActivity = hasActiveInterval || hasQueuedInterval;
-        const bool unsupportedVoiceMode = runtimeState.snapshot.unsupportedVoiceMode;
+        const bool hasVoiceAudio = remoteVoiceChunksBySource_.find(sourceId) != remoteVoiceChunksBySource_.end();
+        const bool hasAudioActivity = hasActiveInterval || hasQueuedInterval || hasVoiceAudio;
+        const bool voiceMode = knownRemoteSourcesById_.find(sourceId) != knownRemoteSourcesById_.end()
+            && isVoiceMode(knownRemoteSourcesById_.at(sourceId).channelFlags);
 
         if (hasAudioActivity)
         {
@@ -2889,8 +3012,7 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
             descriptor.visible = true;
             descriptor.inactiveIntervals = 0;
             runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
-            runtimeState.snapshot.statusText = unsupportedVoiceMode ? "Voice chat mode is not supported yet."
-                                                                   : "Receiving interval audio";
+            runtimeState.snapshot.statusText = voiceMode ? "Receiving voice chat audio" : "Receiving interval audio";
             continue;
         }
 
@@ -2907,8 +3029,7 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
         if (isKnownRemoteSource)
         {
             descriptor.visible = true;
-            runtimeState.snapshot.statusText = unsupportedVoiceMode ? "Voice chat mode is not supported yet."
-                                                                   : "In room, waiting for interval audio";
+            runtimeState.snapshot.statusText = voiceMode ? "Voice chat: near realtime" : "In room, waiting for interval audio";
         }
         else
         {
