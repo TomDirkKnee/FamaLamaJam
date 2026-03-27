@@ -28,6 +28,7 @@ add_executable(famalamajam_tests
     integration/plugin_transmit_controls_tests.cpp
     integration/plugin_transmit_controls_ui_tests.cpp
     integration/plugin_voice_mode_guard_tests.cpp
+    integration/plugin_voice_mode_transport_tests.cpp
     integration/plugin_pre_layout_cpu_diagnostics_tests.cpp
     integration/plugin_streaming_runtime_compat_tests.cpp
     integration/plugin_room_chat_tests.cpp

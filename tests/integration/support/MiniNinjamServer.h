@@ -226,6 +226,13 @@ public:
         std::uint8_t channelFlags { 0 };
     };
 
+    struct RemoteTransfer
+    {
+        RemotePeer peer;
+        juce::MemoryBlock encodedPayload;
+        int chunkBytes { 0 };
+    };
+
     MiniNinjamServer()
         : juce::Thread("MiniNinjamServer")
     {
@@ -319,6 +326,21 @@ public:
             .active = active,
             .channelFlags = channelFlags,
         });
+        wakeEvent_.signal();
+    }
+
+    void enqueueRemoteTransfer(RemotePeer peer, const juce::MemoryBlock& encodedPayload, int chunkBytes = 0)
+    {
+        if (encodedPayload.getSize() == 0)
+            return;
+
+        RemoteTransfer transfer;
+        transfer.peer = std::move(peer);
+        transfer.encodedPayload = encodedPayload;
+        transfer.chunkBytes = chunkBytes;
+
+        const juce::ScopedLock lock(configLock_);
+        pendingRemoteTransfers_.push_back(std::move(transfer));
         wakeEvent_.signal();
     }
 
@@ -671,6 +693,62 @@ private:
         return true;
     }
 
+    bool flushPendingRemoteTransfers(juce::StreamingSocket& socket)
+    {
+        std::vector<RemoteTransfer> transfers;
+
+        {
+            const juce::ScopedLock lock(configLock_);
+            transfers.swap(pendingRemoteTransfers_);
+        }
+
+        for (auto& transfer : transfers)
+        {
+            if (! sendUserInfo(socket,
+                               transfer.peer.username,
+                               "room",
+                               transfer.peer.channelIndex,
+                               true,
+                               transfer.peer.channelFlags))
+            {
+                return false;
+            }
+
+            std::array<std::uint8_t, 16> guid {};
+            encodeLe32(remoteTransferGuidCounter_++, guid.data());
+            encodeLe32(static_cast<std::uint32_t>(transfer.peer.channelIndex), guid.data() + 4);
+            encodeLe32(static_cast<std::uint32_t>(transfer.peer.channelFlags), guid.data() + 8);
+            encodeLe32(static_cast<std::uint32_t>(transfer.peer.username.size()), guid.data() + 12);
+
+            if (! sendDownloadBegin(socket,
+                                    guid,
+                                    static_cast<std::uint32_t>(transfer.encodedPayload.getSize()),
+                                    transfer.peer.username,
+                                    transfer.peer.channelIndex))
+            {
+                return false;
+            }
+
+            const auto* encodedBytes = static_cast<const std::uint8_t*>(transfer.encodedPayload.getData());
+            const auto totalBytes = transfer.encodedPayload.getSize();
+            const auto boundedChunkBytes = static_cast<std::size_t>(transfer.chunkBytes > 0 ? transfer.chunkBytes
+                                                                                            : static_cast<int>(totalBytes));
+
+            std::size_t offset = 0;
+            while (offset < totalBytes)
+            {
+                const auto writeBytes = juce::jmin(boundedChunkBytes, totalBytes - offset);
+                const auto isLastPart = (offset + writeBytes) >= totalBytes;
+                if (! sendDownloadWrite(socket, guid, isLastPart, encodedBytes + offset, writeBytes))
+                    return false;
+
+                offset += writeBytes;
+            }
+        }
+
+        return true;
+    }
+
     void run() override
     {
         while (! threadShouldExit())
@@ -718,6 +796,8 @@ private:
                 if (authed && ! flushPendingUserInfoChanges(*socket))
                     return;
                 if (authed && ! flushPendingRoomMessages(*socket))
+                    return;
+                if (authed && ! flushPendingRemoteTransfers(*socket))
                     return;
 
                 if (socket->waitUntilReady(true, 20) <= 0)
@@ -929,6 +1009,7 @@ private:
     std::vector<std::pair<std::uint16_t, std::uint16_t>> pendingConfigChanges_;
     std::vector<UserInfoChange> pendingUserInfoChanges_;
     std::vector<RoomMessage> pendingRoomMessages_;
+    std::vector<RemoteTransfer> pendingRemoteTransfers_;
     std::vector<RoomMessage> capturedRoomMessages_;
     std::vector<RemotePeer> remotePeers_ { RemotePeer {} };
     std::string lastAuthUsername_;
@@ -936,6 +1017,7 @@ private:
     std::uint16_t initialBpm_ { 120 };
     std::uint16_t initialBpi_ { 16 };
     std::uint8_t keepAliveSeconds_ { 3 };
+    std::uint32_t remoteTransferGuidCounter_ { 1 };
     int port_ { -1 };
 };
 

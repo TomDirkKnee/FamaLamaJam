@@ -78,45 +78,6 @@ TEST_CASE("plugin voice mode guard harness can advertise per-peer channel flags"
     CHECK(peer.channelFlags == 2);
 }
 
-TEST_CASE("plugin voice mode guard does not mix remote voice-mode channels as interval audio",
-          "[plugin_voice_mode_guard]")
-{
-    MiniNinjamServer server;
-    server.setInitialTiming(400, 1);
-    server.setRemotePeers({ { "voice-user", 0, 0, 2 } });
-    REQUIRE(server.startServer());
-
-    FamaLamaJamAudioProcessor processor(true, true);
-    auto settings = processor.getActiveSettings();
-    settings.serverHost = "127.0.0.1";
-    settings.serverPort = static_cast<std::uint16_t>(server.port());
-    settings.username = "guest";
-
-    REQUIRE(processor.applySettingsFromUi(settings));
-    processor.prepareToPlay(48000.0, 512);
-    REQUIRE(processor.requestConnect());
-    REQUIRE(server.waitForAuthentication(2000));
-
-    juce::AudioBuffer<float> buffer(2, 512);
-    juce::MidiBuffer midi;
-    REQUIRE(waitUntil(processor, buffer, midi, [&]() {
-        return processor.getTransportReceivedFramesForTesting() > 0
-            && processor.getRemoteReceiveDiagnosticsText().find("mode=voice") != std::string::npos;
-    }));
-
-    CHECK(captureRemoteAudibleRms(processor, buffer, midi) == 0.0f);
-
-    FamaLamaJamAudioProcessor::MixerStripSnapshot snapshot;
-    REQUIRE(processor.getMixerStripSnapshot("voice-user#0", snapshot));
-    CHECK(snapshot.unsupportedVoiceMode);
-    CHECK(snapshot.statusText == "Voice chat mode is not supported yet.");
-    CHECK_FALSE(processor.isRemoteSourceActiveForTesting("voice-user#0"));
-
-    REQUIRE(processor.requestDisconnect());
-    processor.releaseResources();
-    server.stopServer();
-}
-
 TEST_CASE("plugin voice mode guard reserves explicit unsupported state in normal mixer snapshots",
           "[plugin_voice_mode_guard]")
 {
