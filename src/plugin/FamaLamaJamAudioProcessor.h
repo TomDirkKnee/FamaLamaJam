@@ -33,6 +33,8 @@ class FamaLamaJamAudioProcessor final : public juce::AudioProcessor, private juc
 {
 public:
     static constexpr const char* kLocalMonitorSourceId = "local-monitor";
+    static constexpr const char* kHostRoutingProofAuxInputBusName = "Local Send 2";
+    static constexpr const char* kHostRoutingProofAuxOutputBusName = "Remote Out 1";
 
     enum class SyncHealth
     {
@@ -234,6 +236,18 @@ public:
         std::uint64_t remoteFramesDecoded { 0 };
     };
 
+    struct HostRoutingProof
+    {
+        static constexpr int kMainInputBusIndex = 0;
+        static constexpr int kAuxInputBusIndex = 1;
+        static constexpr int kMainOutputBusIndex = 0;
+        static constexpr int kRoutedOutputBusIndex = 1;
+
+        bool mainPathActive { false };
+        bool auxInputActive { false };
+        std::string selectedRoutedSourceId;
+    };
+
     struct RemoteReceiveDiagnosticRuntime
     {
         std::size_t lastEncodedBytes { 0 };
@@ -333,6 +347,11 @@ public:
                                         std::uint8_t channelFlags);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
+    [[nodiscard]] HostRoutingProof getHostRoutingProofForTesting() const { return hostRoutingProof_; }
+    void selectHostRoutingProofSourceForTesting(std::string sourceId)
+    {
+        hostRoutingProof_.selectedRoutedSourceId = std::move(sourceId);
+    }
     bool setStemCaptureDirectoryForTesting(const juce::File& directory, bool enabled);
     [[nodiscard]] bool waitForStemCaptureFlushForTesting(int timeoutMs) const;
     [[nodiscard]] juce::File getStemCaptureSessionDirectoryForTesting() const;
@@ -483,6 +502,7 @@ private:
     std::unordered_map<std::string, net::FramedSocketTransport::RemoteSourceInfo> knownRemoteSourcesById_;
     std::unordered_map<std::string, MixerStripRuntimeState> mixerStripsBySourceId_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
+    HostRoutingProof hostRoutingProof_;
     std::atomic<bool> hasServerTimingForUi_ { false };
     std::atomic<int> serverBpmForUi_ { 0 };
     std::atomic<int> beatsPerIntervalForUi_ { 0 };

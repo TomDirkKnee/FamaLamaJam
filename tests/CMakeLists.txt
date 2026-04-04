@@ -37,6 +37,7 @@ add_executable(famalamajam_tests
     integration/plugin_server_discovery_tests.cpp
     integration/plugin_server_discovery_ui_tests.cpp
     integration/plugin_remote_interval_alignment_tests.cpp
+    integration/plugin_host_multi_io_routing_tests.cpp
     integration/plugin_stem_capture_tests.cpp)
 
 target_link_libraries(famalamajam_tests
