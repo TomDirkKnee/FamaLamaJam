@@ -248,6 +248,12 @@ public:
         std::string selectedRoutedSourceId;
     };
 
+    struct HostRoutingProofRoute
+    {
+        int outputBusIndex { HostRoutingProof::kRoutedOutputBusIndex };
+        std::string sourceId;
+    };
+
     struct RemoteReceiveDiagnosticRuntime
     {
         std::size_t lastEncodedBytes { 0 };
@@ -350,7 +356,8 @@ public:
     [[nodiscard]] HostRoutingProof getHostRoutingProofForTesting() const { return hostRoutingProof_; }
     void selectHostRoutingProofSourceForTesting(std::string sourceId)
     {
-        hostRoutingProof_.selectedRoutedSourceId = std::move(sourceId);
+        hostRoutingProofRoute_.sourceId = std::move(sourceId);
+        hostRoutingProof_.selectedRoutedSourceId = hostRoutingProofRoute_.sourceId;
     }
     bool setStemCaptureDirectoryForTesting(const juce::File& directory, bool enabled);
     [[nodiscard]] bool waitForStemCaptureFlushForTesting(int timeoutMs) const;
@@ -504,6 +511,7 @@ private:
     std::unordered_map<std::string, MixerStripRuntimeState> mixerStripsBySourceId_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     HostRoutingProof hostRoutingProof_;
+    HostRoutingProofRoute hostRoutingProofRoute_;
     std::atomic<bool> hasServerTimingForUi_ { false };
     std::atomic<int> serverBpmForUi_ { 0 };
     std::atomic<int> beatsPerIntervalForUi_ { 0 };

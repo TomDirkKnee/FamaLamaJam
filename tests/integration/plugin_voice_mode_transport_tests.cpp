@@ -78,6 +78,11 @@ float maxAudibleRms(const juce::AudioBuffer<float>& buffer)
     const auto right = buffer.getNumChannels() > 1 ? buffer.getRMSLevel(1, 0, buffer.getNumSamples()) : left;
     return juce::jmax(left, right);
 }
+
+juce::AudioBuffer<float> getMainOutputBus(FamaLamaJamAudioProcessor& processor, juce::AudioBuffer<float>& buffer)
+{
+    return processor.getBusBuffer(buffer, false, FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+}
 } // namespace
 
 TEST_CASE("plugin voice mode transport plays remote voice chunks before the next interval boundary in mixed rooms",
@@ -96,15 +101,16 @@ TEST_CASE("plugin voice mode transport plays remote voice chunks before the next
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    juce::AudioBuffer<float> buffer(processor.getTotalNumOutputChannels(), 512);
     juce::MidiBuffer midi;
 
     const auto heardVoiceBeforeBoundary = processUntil(processor, buffer, midi, [&](const juce::AudioBuffer<float>& output) {
         const auto transport = processor.getTransportUiState();
+        auto mainOutput = getMainOutputBus(processor, const_cast<juce::AudioBuffer<float>&>(output));
         return transport.hasServerTiming
             && transport.intervalIndex == 0
             && processor.getTransportReceivedFramesForTesting() >= 2
-            && maxAudibleRms(output) > 1.0e-4f;
+            && maxAudibleRms(mainOutput) > 1.0e-4f;
     });
 
     INFO(processor.getRemoteReceiveDiagnosticsText());
@@ -138,15 +144,16 @@ TEST_CASE("plugin voice mode transport keeps interval peers boundary-quantized w
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    juce::AudioBuffer<float> buffer(processor.getTotalNumOutputChannels(), 512);
     juce::MidiBuffer midi;
 
     const auto heardVoiceFirst = processUntil(processor, buffer, midi, [&](const juce::AudioBuffer<float>& output) {
         const auto transport = processor.getTransportUiState();
+        auto mainOutput = getMainOutputBus(processor, const_cast<juce::AudioBuffer<float>&>(output));
         return transport.hasServerTiming
             && transport.intervalIndex == 0
             && processor.getTransportReceivedFramesForTesting() >= 2
-            && maxAudibleRms(output) > 1.0e-4f;
+            && maxAudibleRms(mainOutput) > 1.0e-4f;
     });
 
     INFO(processor.getRemoteReceiveDiagnosticsText());

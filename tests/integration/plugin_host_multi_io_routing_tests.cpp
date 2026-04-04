@@ -72,6 +72,13 @@ float channelRms(const juce::AudioBuffer<float>& buffer, int channel)
     return buffer.getRMSLevel(channel, 0, buffer.getNumSamples());
 }
 
+juce::AudioBuffer<float> getOutputBus(FamaLamaJamAudioProcessor& processor,
+                                      juce::AudioBuffer<float>& buffer,
+                                      int busIndex)
+{
+    return processor.getBusBuffer(buffer, false, busIndex);
+}
+
 bool processUntil(FamaLamaJamAudioProcessor& processor,
                   juce::AudioBuffer<float>& buffer,
                   juce::MidiBuffer& midi,
@@ -194,12 +201,12 @@ TEST_CASE("plugin host multi io routing routes one selected remote source to the
     REQUIRE(sourcesActivated);
 
     const auto heardIsolatedRoute = processUntil(processor, outputBuffer, midi, [&](const juce::AudioBuffer<float>& output) {
-        auto mainOutput = processor.getBusBuffer(const_cast<juce::AudioBuffer<float>&>(output),
-                                                 false,
-                                                 FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
-        auto auxOutput = processor.getBusBuffer(const_cast<juce::AudioBuffer<float>&>(output),
-                                                false,
-                                                FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
+        auto mainOutput = getOutputBus(processor,
+                                       const_cast<juce::AudioBuffer<float>&>(output),
+                                       FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+        auto auxOutput = getOutputBus(processor,
+                                      const_cast<juce::AudioBuffer<float>&>(output),
+                                      FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
         return channelRms(mainOutput, 0) > 1.0e-4f
             && channelRms(mainOutput, 1) > 1.0e-4f
             && channelRms(auxOutput, 0) > 1.0e-4f
@@ -209,13 +216,113 @@ TEST_CASE("plugin host multi io routing routes one selected remote source to the
     REQUIRE(heardIsolatedRoute);
 
     const auto proof = processor.getHostRoutingProofForTesting();
-    auto mainOutput = processor.getBusBuffer(outputBuffer,
-                                             false,
-                                             FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
-    auto auxOutput = processor.getBusBuffer(outputBuffer,
-                                            false,
-                                            FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
+    auto mainOutput = getOutputBus(processor,
+                                   outputBuffer,
+                                   FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+    auto auxOutput = getOutputBus(processor,
+                                  outputBuffer,
+                                  FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
     CHECK(proof.selectedRoutedSourceId == "routed-user#0");
+    CHECK(channelRms(auxOutput, 0) > channelRms(mainOutput, 0));
+    CHECK(channelRms(auxOutput, 1) > channelRms(mainOutput, 1));
+}
+
+TEST_CASE("plugin host multi io routing clears the proof output when no source remains assigned",
+          "[plugin_host_multi_io_routing]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    REQUIRE(server.startServer());
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    connectProcessor(processor, server);
+
+    juce::AudioBuffer<float> timingBuffer(processor.getTotalNumOutputChannels(), 512);
+    juce::MidiBuffer midi;
+    REQUIRE(waitForAuthoritativeTiming(processor, timingBuffer, midi));
+
+    processor.selectHostRoutingProofSourceForTesting("routed-user#0");
+    processor.registerRemoteSourceForTesting("routed-user#0", "routed-user", "Keys", 0u);
+    processor.registerRemoteSourceForTesting("main-user#0", "main-user", "Keys", 0u);
+    processor.injectDecodedRemoteIntervalForTesting("routed-user#0", makeConstantBuffer(2, 24000, 0.30f), 48000.0);
+    processor.injectDecodedRemoteIntervalForTesting("main-user#0", makeConstantBuffer(2, 24000, 0.10f), 48000.0);
+
+    juce::AudioBuffer<float> outputBuffer(processor.getTotalNumOutputChannels(), 512);
+    REQUIRE(processUntil(processor, outputBuffer, midi, [&](const juce::AudioBuffer<float>&) {
+        return processor.isRemoteSourceActiveForTesting("routed-user#0")
+            && processor.isRemoteSourceActiveForTesting("main-user#0");
+    }));
+
+    REQUIRE(processUntil(processor, outputBuffer, midi, [&](const juce::AudioBuffer<float>& output) {
+        auto mainOutput = getOutputBus(processor,
+                                       const_cast<juce::AudioBuffer<float>&>(output),
+                                       FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+        auto auxOutput = getOutputBus(processor,
+                                      const_cast<juce::AudioBuffer<float>&>(output),
+                                      FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
+        return channelRms(mainOutput, 0) > 1.0e-4f && channelRms(auxOutput, 0) > 1.0e-4f;
+    }));
+
+    processor.selectHostRoutingProofSourceForTesting({});
+
+    const auto auxCleared = processUntil(processor, outputBuffer, midi, [&](const juce::AudioBuffer<float>& output) {
+        auto mainOutput = getOutputBus(processor,
+                                       const_cast<juce::AudioBuffer<float>&>(output),
+                                       FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+        auto auxOutput = getOutputBus(processor,
+                                      const_cast<juce::AudioBuffer<float>&>(output),
+                                      FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
+        return channelRms(mainOutput, 0) > 1.0e-4f
+            && channelRms(mainOutput, 1) > 1.0e-4f
+            && channelRms(auxOutput, 0) < 1.0e-6f
+            && channelRms(auxOutput, 1) < 1.0e-6f;
+    });
+
+    REQUIRE(auxCleared);
+}
+
+TEST_CASE("plugin host multi io routing applies the selected route to decoded voice chunks too",
+          "[plugin_host_multi_io_routing][plugin_voice_mode_transport]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    REQUIRE(server.startServer());
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    connectProcessor(processor, server);
+
+    juce::AudioBuffer<float> timingBuffer(processor.getTotalNumOutputChannels(), 512);
+    juce::MidiBuffer midi;
+    REQUIRE(waitForAuthoritativeTiming(processor, timingBuffer, midi));
+
+    processor.selectHostRoutingProofSourceForTesting("voice-user#1");
+    processor.registerRemoteSourceForTesting("voice-user#1", "voice-user", "Voice", 0x2u);
+    processor.registerRemoteSourceForTesting("main-user#0", "main-user", "Voice", 0x2u);
+    processor.injectDecodedRemoteVoiceForTesting("voice-user#1", makeConstantBuffer(2, 2048, 0.24f), 48000.0);
+    processor.injectDecodedRemoteVoiceForTesting("main-user#0", makeConstantBuffer(2, 2048, 0.08f), 48000.0);
+
+    juce::AudioBuffer<float> outputBuffer(processor.getTotalNumOutputChannels(), 512);
+    const auto heardRoutedVoice = processUntil(processor, outputBuffer, midi, [&](const juce::AudioBuffer<float>& output) {
+        auto mainOutput = getOutputBus(processor,
+                                       const_cast<juce::AudioBuffer<float>&>(output),
+                                       FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+        auto auxOutput = getOutputBus(processor,
+                                      const_cast<juce::AudioBuffer<float>&>(output),
+                                      FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
+        return channelRms(mainOutput, 0) > 1.0e-4f
+            && channelRms(mainOutput, 1) > 1.0e-4f
+            && channelRms(auxOutput, 0) > 1.0e-4f
+            && channelRms(auxOutput, 1) > 1.0e-4f;
+    });
+
+    REQUIRE(heardRoutedVoice);
+
+    auto mainOutput = getOutputBus(processor,
+                                   outputBuffer,
+                                   FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+    auto auxOutput = getOutputBus(processor,
+                                  outputBuffer,
+                                  FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
     CHECK(channelRms(auxOutput, 0) > channelRms(mainOutput, 0));
     CHECK(channelRms(auxOutput, 1) > channelRms(mainOutput, 1));
 }

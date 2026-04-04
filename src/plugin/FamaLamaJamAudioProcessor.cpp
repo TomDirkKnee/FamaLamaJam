@@ -835,17 +835,20 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     ++cpuDiagnosticSnapshot_.processBlockCalls;
     ensureLocalMonitorMixerStrip();
     resetMixerStripMeters();
-    auto mainInput = getBusBuffer(buffer, true, HostRoutingProof::kMainInputBusIndex);
-    auto auxInput = getBusCount(true) > HostRoutingProof::kAuxInputBusIndex
+    const auto expectedAggregateChannels = juce::jmax(getTotalNumInputChannels(), getTotalNumOutputChannels());
+    const bool hasFullBusLayout = buffer.getNumChannels() >= expectedAggregateChannels;
+    auto mainInput = hasFullBusLayout ? getBusBuffer(buffer, true, HostRoutingProof::kMainInputBusIndex) : buffer;
+    auto auxInput = hasFullBusLayout && getBusCount(true) > HostRoutingProof::kAuxInputBusIndex
         ? getBusBuffer(buffer, true, HostRoutingProof::kAuxInputBusIndex)
         : juce::AudioBuffer<float>();
-    auto mainOutput = getBusBuffer(buffer, false, HostRoutingProof::kMainOutputBusIndex);
-    auto auxOutput = getBusCount(false) > HostRoutingProof::kRoutedOutputBusIndex
+    auto mainOutput = hasFullBusLayout ? getBusBuffer(buffer, false, HostRoutingProof::kMainOutputBusIndex) : buffer;
+    auto auxOutput = hasFullBusLayout && getBusCount(false) > HostRoutingProof::kRoutedOutputBusIndex
         ? getBusBuffer(buffer, false, HostRoutingProof::kRoutedOutputBusIndex)
         : juce::AudioBuffer<float>();
 
     hostRoutingProof_.mainPathActive = bufferHasSignal(mainInput);
     hostRoutingProof_.auxInputActive = bufferHasSignal(auxInput);
+    hostRoutingProof_.selectedRoutedSourceId = hostRoutingProofRoute_.sourceId;
     copyBuffer(hostRoutingProofAuxSendBuffer_, auxInput);
 
     if (auxOutput.getNumChannels() > 0)
@@ -1326,7 +1329,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 {
                     auto* targetOutput = &mainOutput;
                     if (routedOutputAvailable
-                        && hostRoutingProof_.selectedRoutedSourceId == voiceIt->first)
+                        && hostRoutingProofRoute_.outputBusIndex == HostRoutingProof::kRoutedOutputBusIndex
+                        && hostRoutingProofRoute_.sourceId == voiceIt->first)
                     {
                         targetOutput = &auxOutput;
                     }
@@ -1367,7 +1371,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
                 auto* targetOutput = &mainOutput;
                 if (routedOutputAvailable
-                    && hostRoutingProof_.selectedRoutedSourceId == sourceEntry.first)
+                    && hostRoutingProofRoute_.outputBusIndex == HostRoutingProof::kRoutedOutputBusIndex
+                    && hostRoutingProofRoute_.sourceId == sourceEntry.first)
                 {
                     targetOutput = &auxOutput;
                 }
