@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08.3.4-01-PLAN.md
-last_updated: "2026-04-04T20:03:33.624Z"
-last_activity: 2026-04-04 - Completed 08.3.4 plan 01 with RED fixed-bus routing coverage, a manual Ableton proof matrix, and explicit per-user or no-follow-on fallback rules.
+stopped_at: Completed 08.3.4-02-PLAN.md
+last_updated: "2026-04-04T20:27:01.796Z"
+last_activity: 2026-04-04 - Completed plan 02 with the fixed-bus processor proof, selected-source routed output behavior, and focused routing plus voice-mode coverage.
 progress:
   total_phases: 17
   completed_phases: 11
   total_plans: 54
-  completed_plans: 47
-  percent: 87
+  completed_plans: 48
+  percent: 89
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.4 host multi-I/O routing research now moves to the fixed-bus processor proof in plan 02, while Phase 08.2 still carries the separate same-machine CPU repro concern.
+**Current focus:** Phase 08.3.4 host multi-I/O routing research now moves to the Ableton proof and verdict capture in plan 03, while Phase 08.2 still carries the separate same-machine CPU repro concern.
 
 ## Current Position
 
 Phase: 08.3.4 - Host Multi-I/O Routing Research  
-Plan: 02 - Fixed-bus Processor Proof  
+Plan: 03 - Ableton Fixed-Bus Verdict  
 Status: In Progress  
-Last activity: 2026-04-04 - Completed plan 01 with RED fixed-bus routing coverage and locked the Ableton fallback matrix for the later host verdict.
+Last activity: 2026-04-04 - Completed plan 02 with the fixed-bus processor proof, selected-source routed output behavior, and focused routing plus voice-mode coverage.
 
-Progress: 87%
+Progress: 89%
 
 ## Accumulated Context
 
@@ -87,6 +87,8 @@ Progress: 87%
 - [Phase 08.3.3]: Do not export voice chat stems. - Manual validation clarified that only musical interval contributions should be captured for later mixing; voice chat should be excluded even if the transport path supports it.
 - [Phase 08.3.4]: Keep plan 01 at RED only: expose a proof seam and failing fixed-bus coverage without starting processor routing implementation early.
 - [Phase 08.3.4]: Lock the Ableton verdict to explicit fallback outcomes: per-user output routing or no follow-on phase if host ergonomics are weak.
+- [Phase 08.3.4]: Keep the proof buses exposed by default while still accepting disabled aux layouts so the later Ableton pass sees a real stereo bus declaration.
+- [Phase 08.3.4]: Keep routed-output proof scope at one selected sourceId on output bus 1 and leave all other decoded sources on the main output until the Ableton verdict is recorded.
 
 ### Roadmap Evolution
 
@@ -129,9 +131,10 @@ Progress: 87%
 - 2026-03-21: Completed Phase 08.3 plan 06 in 13 min with 1 clean task commit plus verified working-tree integration changes; app-data remembered-server persistence, cross-instance recall, and wrapped/global merge automation now pass in the `build-vs-2026` validation tree.
 - 2026-03-21: Completed Phase 08.3 plan 07 by rerunning the focused 08.3 gate on `build-vs-2026` (`54` test cases / `626` assertions), rebuilding the Debug VST3, and recording the approved brand-new-instance private-room recall rerun in Ableton.
 - 2026-04-04: Completed Phase 08.3.4 plan 01 in 21 min across 2 task commits and 5 modified files; the phase now has RED fixed-bus routing coverage, a manual Ableton proof matrix, and explicit fallback criteria for per-user routing or no follow-on implementation phase.
+- 2026-04-04: Completed Phase 08.3.4 plan 02 in 23 min across 2 task commits and 4 modified files; the processor now exposes the fixed proof buses, routes one selected decoded source to `Remote Out 1`, and keeps focused routing plus voice-mode coverage green.
 
 ## Session Continuity
 
-Last session: 2026-04-04T20:03:33.618Z
-Stopped at: Completed 08.3.4-01-PLAN.md
+Last session: 2026-04-04T20:28:37.190Z
+Stopped at: Completed 08.3.4-02-PLAN.md
 Resume file: None

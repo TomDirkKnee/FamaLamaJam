@@ -77,7 +77,7 @@
 
 ### Host Routing Research
 
-- **ROUTE-01**: Project documents the practical JUCE/VST3/Ableton path for multiple local send inputs and per-stream output routing before implementation.
+- [x] **ROUTE-01**: Project documents the practical JUCE/VST3/Ableton path for multiple local send inputs and per-stream output routing before implementation.
 
 ## Later Requirements
 
@@ -137,7 +137,7 @@
 | VOICE-01 | Phase 08.3.2 - Voice Mode Research & Prototype | Planned |
 | VOICE-02 | Phase 08.3.2 - Voice Mode Research & Prototype | Planned |
 | REC-01 | Phase 08.3.3 - Stem Capture & Export | Planned |
-| ROUTE-01 | Phase 08.3.4 - Host Multi-I/O Routing Research | Planned |
+| ROUTE-01 | Phase 08.3.4 - Host Multi-I/O Routing Research | Complete |
 | PAR-01 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 | PAR-02 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 
