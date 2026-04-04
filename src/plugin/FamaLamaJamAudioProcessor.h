@@ -488,6 +488,7 @@ private:
     audio::CodecStreamBridge codecStreamBridge_;
     juce::AudioBuffer<float> localUploadIntervalBuffer_;
     juce::AudioBuffer<float> localVoiceUploadBuffer_;
+    juce::AudioBuffer<float> hostRoutingProofAuxSendBuffer_;
     int localUploadIntervalWritePosition_ { 0 };
     int localVoiceUploadWritePosition_ { 0 };
     int transmitWarmupIntervalsRemaining_ { 0 };

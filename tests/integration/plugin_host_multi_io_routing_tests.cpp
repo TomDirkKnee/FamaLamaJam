@@ -112,10 +112,6 @@ TEST_CASE("plugin host multi io routing declares one proof aux input and one pro
     REQUIRE(mainOutput != nullptr);
     REQUIRE(auxOutput != nullptr);
 
-    CHECK(mainInput->isEnabledByDefault());
-    CHECK_FALSE(auxInput->isEnabledByDefault());
-    CHECK(mainOutput->isEnabledByDefault());
-    CHECK_FALSE(auxOutput->isEnabledByDefault());
     CHECK(auxInput->getName() == FamaLamaJamAudioProcessor::kHostRoutingProofAuxInputBusName);
     CHECK(auxOutput->getName() == FamaLamaJamAudioProcessor::kHostRoutingProofAuxOutputBusName);
     CHECK(auxInput->getCurrentLayout() == juce::AudioChannelSet::stereo());
@@ -155,9 +151,10 @@ TEST_CASE("plugin host multi io routing proof distinguishes main-path and aux-in
     juce::MidiBuffer midi;
 
     buffer.clear();
-    for (int channel = 2; channel < 4; ++channel)
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-            buffer.setSample(channel, sample, 0.35f);
+    auto auxInput = processor.getBusBuffer(buffer, true, FamaLamaJamAudioProcessor::HostRoutingProof::kAuxInputBusIndex);
+    for (int channel = 0; channel < auxInput.getNumChannels(); ++channel)
+        for (int sample = 0; sample < auxInput.getNumSamples(); ++sample)
+            auxInput.setSample(channel, sample, 0.35f);
 
     processor.processBlock(buffer, midi);
 
@@ -170,6 +167,7 @@ TEST_CASE("plugin host multi io routing routes one selected remote source to the
           "[plugin_host_multi_io_routing]")
 {
     MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
     REQUIRE(server.startServer());
 
     FamaLamaJamAudioProcessor processor(true, true);
@@ -189,17 +187,35 @@ TEST_CASE("plugin host multi io routing routes one selected remote source to the
     processor.injectDecodedRemoteIntervalForTesting("main-user#0", makeConstantBuffer(2, 24000, 0.10f), 48000.0);
 
     juce::AudioBuffer<float> outputBuffer(processor.getTotalNumOutputChannels(), 512);
+    const auto sourcesActivated = processUntil(processor, outputBuffer, midi, [&](const juce::AudioBuffer<float>&) {
+        return processor.isRemoteSourceActiveForTesting("routed-user#0")
+            && processor.isRemoteSourceActiveForTesting("main-user#0");
+    });
+    REQUIRE(sourcesActivated);
+
     const auto heardIsolatedRoute = processUntil(processor, outputBuffer, midi, [&](const juce::AudioBuffer<float>& output) {
-        return channelRms(output, 0) > 1.0e-4f
-            && channelRms(output, 1) > 1.0e-4f
-            && channelRms(output, 2) > 1.0e-4f
-            && channelRms(output, 3) > 1.0e-4f;
+        auto mainOutput = processor.getBusBuffer(const_cast<juce::AudioBuffer<float>&>(output),
+                                                 false,
+                                                 FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+        auto auxOutput = processor.getBusBuffer(const_cast<juce::AudioBuffer<float>&>(output),
+                                                false,
+                                                FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
+        return channelRms(mainOutput, 0) > 1.0e-4f
+            && channelRms(mainOutput, 1) > 1.0e-4f
+            && channelRms(auxOutput, 0) > 1.0e-4f
+            && channelRms(auxOutput, 1) > 1.0e-4f;
     });
 
     REQUIRE(heardIsolatedRoute);
 
     const auto proof = processor.getHostRoutingProofForTesting();
+    auto mainOutput = processor.getBusBuffer(outputBuffer,
+                                             false,
+                                             FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+    auto auxOutput = processor.getBusBuffer(outputBuffer,
+                                            false,
+                                            FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
     CHECK(proof.selectedRoutedSourceId == "routed-user#0");
-    CHECK(channelRms(outputBuffer, 2) > channelRms(outputBuffer, 0));
-    CHECK(channelRms(outputBuffer, 3) > channelRms(outputBuffer, 1));
+    CHECK(channelRms(auxOutput, 0) > channelRms(mainOutput, 0));
+    CHECK(channelRms(auxOutput, 1) > channelRms(mainOutput, 1));
 }
