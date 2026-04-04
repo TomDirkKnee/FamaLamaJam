@@ -277,7 +277,12 @@ Plans:
 2. Project documents whether individual remote sources can be routed to distinct DAW outputs in a way Ableton users can actually use.
 3. Any recommended implementation path is based on validated host/bus behavior, not assumed UI abstractions.
 4. The outcome is concrete enough to decide whether routing work should become an implementation phase or remain out of scope.
-**Plans:** TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08.3.4-01-PLAN.md - Lock the one-extra-bus proof contract with RED coverage and an explicit Ableton matrix.
+- [ ] 08.3.4-02-PLAN.md - Implement the fixed-bus processor proof for one extra local stereo input and one extra routed stereo output pair.
+- [ ] 08.3.4-03-PLAN.md - Re-run the focused gate in Ableton and record the fixed-bus go or no-go plus fallback recommendation.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
