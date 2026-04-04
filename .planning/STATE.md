@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase Complete
-stopped_at: Closed Phase 08.3.3
-last_updated: "2026-04-04T00:00:00.000Z"
-last_activity: 2026-04-04 - Closed Phase 08.3.3 after the Ableton rerun passed: voice chat is excluded from stem export and the explicit new stem folder rollover works in the real host workflow.
+status: executing
+stopped_at: Completed 08.3.4-01-PLAN.md
+last_updated: "2026-04-04T20:03:33.624Z"
+last_activity: 2026-04-04 - Completed 08.3.4 plan 01 with RED fixed-bus routing coverage, a manual Ableton proof matrix, and explicit per-user or no-follow-on fallback rules.
 progress:
   total_phases: 17
-  completed_phases: 10
-  total_plans: 47
-  completed_plans: 41
-  percent: 91
+  completed_phases: 11
+  total_plans: 54
+  completed_plans: 47
+  percent: 87
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.3 is closed. Next planned work is Phase 08.3.4 host multi-I/O routing research, while Phase 08.2 still carries the separate same-machine CPU repro concern.
+**Current focus:** Phase 08.3.4 host multi-I/O routing research now moves to the fixed-bus processor proof in plan 02, while Phase 08.2 still carries the separate same-machine CPU repro concern.
 
 ## Current Position
 
-Phase: 08.3.3 - Stem Capture & Export  
-Plan: 08.3.3-06  
-Status: Complete  
-Last activity: 2026-04-04 - Final Ableton verification passed for voice exclusion, interval-only resume, and the explicit new stem folder rollover.
+Phase: 08.3.4 - Host Multi-I/O Routing Research  
+Plan: 02 - Fixed-bus Processor Proof  
+Status: In Progress  
+Last activity: 2026-04-04 - Completed plan 01 with RED fixed-bus routing coverage and locked the Ableton fallback matrix for the later host verdict.
 
-Progress: 91%
+Progress: 87%
 
 ## Accumulated Context
 
@@ -85,6 +85,8 @@ Progress: 91%
 - [Phase 08.3.3]: Keep the first export pass narrow: WAV only, dry/pre-mix, and one global record workflow. - This phase is about trustworthy alignment and usable files, not about format proliferation or per-source record UX.
 - [Phase 08.3.3]: Keep one recording run folder across disconnect/reconnect and reopen new files there on the next boundary. - This preserves a single jam-session export folder without pretending the reconnect audio belongs in the same already-written file.
 - [Phase 08.3.3]: Do not export voice chat stems. - Manual validation clarified that only musical interval contributions should be captured for later mixing; voice chat should be excluded even if the transport path supports it.
+- [Phase 08.3.4]: Keep plan 01 at RED only: expose a proof seam and failing fixed-bus coverage without starting processor routing implementation early.
+- [Phase 08.3.4]: Lock the Ableton verdict to explicit fallback outcomes: per-user output routing or no follow-on phase if host ergonomics are weak.
 
 ### Roadmap Evolution
 
@@ -126,9 +128,10 @@ Progress: 91%
 - 2026-03-21: Recorded the Phase 08.3 manual smoke pass; four checks passed, but `P8.3-RECALL-01` failed because remembered private-room recall is not yet global across new plugin instances.
 - 2026-03-21: Completed Phase 08.3 plan 06 in 13 min with 1 clean task commit plus verified working-tree integration changes; app-data remembered-server persistence, cross-instance recall, and wrapped/global merge automation now pass in the `build-vs-2026` validation tree.
 - 2026-03-21: Completed Phase 08.3 plan 07 by rerunning the focused 08.3 gate on `build-vs-2026` (`54` test cases / `626` assertions), rebuilding the Debug VST3, and recording the approved brand-new-instance private-room recall rerun in Ableton.
+- 2026-04-04: Completed Phase 08.3.4 plan 01 in 21 min across 2 task commits and 5 modified files; the phase now has RED fixed-bus routing coverage, a manual Ableton proof matrix, and explicit fallback criteria for per-user routing or no follow-on implementation phase.
 
 ## Session Continuity
 
-Last session: 2026-03-22T10:00:32.638Z
-Stopped at: Completed 08.3.1-01-PLAN.md
+Last session: 2026-04-04T20:03:33.618Z
+Stopped at: Completed 08.3.4-01-PLAN.md
 Resume file: None
