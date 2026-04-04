@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Planned
-stopped_at: Completed 08.3.1-01-PLAN.md
-last_updated: "2026-03-22T10:00:32.647Z"
-last_activity: 2026-03-22 - Planned urgent follow-up Phase 08.3.1 to preserve rich public discovery rows while compacting the current session/chat UI before the broader Phase 9 redesign.
+status: Phase Complete
+stopped_at: Closed Phase 08.3.3
+last_updated: "2026-04-04T00:00:00.000Z"
+last_activity: 2026-04-04 - Closed Phase 08.3.3 after the Ableton rerun passed: voice chat is excluded from stem export and the explicit new stem folder rollover works in the real host workflow.
 progress:
-  total_phases: 14
+  total_phases: 17
   completed_phases: 10
-  total_plans: 42
-  completed_plans: 39
-  percent: 93
+  total_plans: 47
+  completed_plans: 41
+  percent: 91
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.1 is planned and ready to execute for public-row credential overlay plus compact session/chat polish. Phase 08.2 still carries the separate same-machine CPU repro concern.
+**Current focus:** Phase 08.3.3 is closed. Next planned work is Phase 08.3.4 host multi-I/O routing research, while Phase 08.2 still carries the separate same-machine CPU repro concern.
 
 ## Current Position
 
-Phase: 08.3.1 - Private Server Recall + Compact Session UI Polish  
-Plan: Ready for execution  
-Status: Planned  
-Last activity: 2026-03-22 - Planned urgent follow-up Phase 08.3.1 to preserve rich public discovery rows while compacting the current session/chat UI before the broader Phase 9 redesign.
+Phase: 08.3.3 - Stem Capture & Export  
+Plan: 08.3.3-06  
+Status: Complete  
+Last activity: 2026-04-04 - Final Ableton verification passed for voice exclusion, interval-only resume, and the explicit new stem folder rollover.
 
-Progress: 93%
+Progress: 91%
 
 ## Accumulated Context
 
@@ -81,12 +81,20 @@ Progress: 93%
 - [Phase 08.3.1]: Keep credential overlay synthesis inside getServerDiscoveryUiState so cached public metadata stays untouched. — The editor already handles remembered password masking and draft hydration, so changing the merge layer preserves public-row metadata without adding a second credential path.
 - [Phase 08.3.1]: Use temp remembered-server stores in discovery tests so AppData history cannot leak into deterministic regressions. — The rebuilt discovery suite was reading shared remembered history from the real store, so the RED expectations needed isolated temp stores to represent this plan only.
 
+- [Phase 08.3.3]: Export stems on interval boundaries only, with mid-session arming deferred to the next boundary and no leading-silence backfill. - The user wants DAW-importable stems without manual timing nudging, but also does not want prefilled silence before late start points.
+- [Phase 08.3.3]: Keep the first export pass narrow: WAV only, dry/pre-mix, and one global record workflow. - This phase is about trustworthy alignment and usable files, not about format proliferation or per-source record UX.
+- [Phase 08.3.3]: Keep one recording run folder across disconnect/reconnect and reopen new files there on the next boundary. - This preserves a single jam-session export folder without pretending the reconnect audio belongs in the same already-written file.
+- [Phase 08.3.3]: Do not export voice chat stems. - Manual validation clarified that only musical interval contributions should be captured for later mixing; voice chat should be excluded even if the transport path supports it.
+
 ### Roadmap Evolution
 
 - Phase 08.1 inserted after Phase 8: Server Discovery Polish & JamTaba Parity Check (URGENT)
 - Phase 08.2 inserted after Phase 8: Pre-Layout CPU, Mixer, UI, and Auth Hardening (URGENT)
 - Phase 08.3 inserted after Phase 08.2: Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard (URGENT)
 - Phase 08.3.1 inserted after Phase 08.3: Private Server Recall + Compact Session UI Polish (URGENT)
+- Phase 08.3.2 inserted after Phase 08.3.1: Voice Mode Research & Prototype (URGENT)
+- Phase 08.3.3 inserted after Phase 08.3.2: Stem Capture & Export (URGENT)
+- Phase 08.3.4 inserted after Phase 08.3.3: Host Multi-I/O Routing Research (URGENT)
 
 ### Pending Todos
 

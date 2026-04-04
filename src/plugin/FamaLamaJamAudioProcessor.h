@@ -16,7 +16,9 @@
 #include "app/session/ServerDiscoveryModel.h"
 #include "app/session/SessionSettings.h"
 #include "app/session/SessionSettingsController.h"
+#include "app/session/StemCaptureSettings.h"
 #include "audio/CodecStreamBridge.h"
+#include "audio/StemCaptureWriter.h"
 #include "infra/net/PublicServerDiscoveryClient.h"
 #include "net/FramedSocketTransport.h"
 
@@ -178,6 +180,12 @@ public:
         Active,
     };
 
+    enum class LocalChannelMode
+    {
+        Interval,
+        Voice,
+    };
+
     struct MixerStripMixState
     {
         float gainDb { 0.0f };
@@ -212,6 +220,7 @@ public:
         MixerStripMixState mix;
         MixerStripMeter meter;
         TransmitState transmitState { TransmitState::Disabled };
+        bool voiceMode { false };
         bool unsupportedVoiceMode { false };
         std::string statusText;
     };
@@ -283,9 +292,13 @@ public:
                              app::session::SessionSettingsValidationResult* validation = nullptr);
 
     bool requestConnect();
-    bool requestDisconnect();
-    bool toggleTransmitEnabled();
-    void handleConnectionEvent(const app::session::ConnectionEvent& event);
+      bool requestDisconnect();
+      bool toggleTransmitEnabled();
+      bool toggleLocalVoiceMode();
+      [[nodiscard]] app::session::StemCaptureSettings getStemCaptureSettings() const;
+      bool applyStemCaptureSettings(app::session::StemCaptureSettings candidate);
+      bool requestNewStemCaptureRun();
+      void handleConnectionEvent(const app::session::ConnectionEvent& event);
 
     bool triggerScheduledReconnectForTesting();
     [[nodiscard]] int getScheduledReconnectDelayMs() const noexcept;
@@ -311,8 +324,19 @@ public:
     void injectDecodedRemoteIntervalForTesting(const std::string& sourceId,
                                                const juce::AudioBuffer<float>& audio,
                                                double sampleRate);
+    void injectDecodedRemoteVoiceForTesting(const std::string& sourceId,
+                                            const juce::AudioBuffer<float>& audio,
+                                            double sampleRate);
+    void registerRemoteSourceForTesting(const std::string& sourceId,
+                                        const std::string& userName,
+                                        const std::string& channelName,
+                                        std::uint8_t channelFlags);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
+    bool setStemCaptureDirectoryForTesting(const juce::File& directory, bool enabled);
+    [[nodiscard]] bool waitForStemCaptureFlushForTesting(int timeoutMs) const;
+    [[nodiscard]] juce::File getStemCaptureSessionDirectoryForTesting() const;
+    [[nodiscard]] std::vector<juce::File> getWrittenStemFilesForTesting() const;
     [[nodiscard]] TransportUiState getTransportUiState() const noexcept;
     [[nodiscard]] HostSyncAssistUiState getHostSyncAssistUiState() const noexcept;
     [[nodiscard]] RoomUiState getRoomUiState() const;
@@ -328,6 +352,7 @@ public:
     [[nodiscard]] float getMasterOutputGainDb() const noexcept;
     void setMasterOutputGainDb(float gainDb) noexcept;
     [[nodiscard]] TransmitState getTransmitState() const noexcept;
+    [[nodiscard]] bool isLocalVoiceModeEnabled() const noexcept;
     [[nodiscard]] std::vector<MixerStripSnapshot> getMixerStripSnapshots() const;
     [[nodiscard]] bool getMixerStripSnapshot(const std::string& sourceId, MixerStripSnapshot& snapshot) const;
     bool setMixerStripMixState(const std::string& sourceId, float gainDb, float pan, bool muted);
@@ -363,6 +388,20 @@ public:
         int playbackPosition { 0 };
     };
 
+    struct StemCaptureRuntimeState
+    {
+        app::session::StemCaptureSettings settings;
+        bool sessionPrepared { false };
+        bool activeRecording { false };
+        bool pendingStartAtBoundary { false };
+        bool pendingStopAtBoundary { false };
+        bool pendingNewRunAtBoundary { false };
+        bool suppressLocalIntervalStemUntilBoundary { false };
+        juce::Time sessionStartedAt;
+        int sessionBeatsPerMinute { 0 };
+        int sessionBeatsPerInterval { 0 };
+    };
+
 private:
     struct MixerStripRuntimeState
     {
@@ -396,6 +435,21 @@ private:
     void clearRoomUiState(bool connected);
     void refreshPendingRoomVotesFromTiming();
     void rememberSuccessfulServer();
+    void armStemCaptureForNextBoundary();
+    void requestStemCaptureStop();
+    void clearStemCaptureState(bool preserveArmedState);
+    void handleStemCaptureBoundary();
+    void retireStemCaptureSource(const audio::StemCaptureWriter::SourceConfig& sourceConfig);
+    void captureLocalIntervalStem(const juce::AudioBuffer<float>& intervalBuffer);
+    void captureLocalVoiceStem(const juce::AudioBuffer<float>& voiceChunk);
+    void captureRemoteStem(const std::string& sourceId,
+                           const juce::AudioBuffer<float>& audio,
+                           bool voiceMode);
+    [[nodiscard]] audio::StemCaptureWriter::SourceConfig makeLocalStemSourceConfig(bool voiceMode,
+                                                                                   double sampleRate) const;
+    [[nodiscard]] audio::StemCaptureWriter::SourceConfig makeRemoteStemSourceConfig(const std::string& sourceId,
+                                                                                    bool voiceMode,
+                                                                                    double sampleRate) const;
 
     app::session::SessionSettingsStore settingsStore_;
     app::session::SessionSettingsController settingsController_;
@@ -414,7 +468,9 @@ private:
     int currentSamplesPerBlock_ { 0 };
     audio::CodecStreamBridge codecStreamBridge_;
     juce::AudioBuffer<float> localUploadIntervalBuffer_;
+    juce::AudioBuffer<float> localVoiceUploadBuffer_;
     int localUploadIntervalWritePosition_ { 0 };
+    int localVoiceUploadWritePosition_ { 0 };
     int transmitWarmupIntervalsRemaining_ { 0 };
     std::atomic<std::size_t> lastCodecPayloadBytes_ { 0 };
     std::atomic<int> lastDecodedSamples_ { 0 };
@@ -464,6 +520,9 @@ private:
     std::string publicServerListStatusText_;
     std::unique_ptr<infra::net::PublicServerDiscoveryClient> publicServerDiscoveryClient_;
     std::unique_ptr<famalamajam::infra::state::RememberedServerStore> rememberedServerStore_;
+    std::unique_ptr<audio::StemCaptureWriter> stemCaptureWriter_;
+    mutable std::mutex stemCaptureMutex_;
+    StemCaptureRuntimeState stemCaptureState_;
     AuthoritativeTimingState authoritativeTiming_;
     std::uint64_t lastHandledIntervalBoundaryGeneration_ { 0 };
     bool intervalPhaseAnchoredFromDownloadBegin_ { false };
@@ -473,5 +532,7 @@ private:
     float metronomeClickGain_ { 0.0f };
     bool previousHostTransportPlaying_ { false };
     bool transmitEnabled_ { true };
+    LocalChannelMode localChannelMode_ { LocalChannelMode::Interval };
+    bool localVoiceTransitionPending_ { false };
 };
 } // namespace famalamajam::plugin

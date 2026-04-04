@@ -108,7 +108,7 @@ bool OggVorbisCodec::encode(const juce::AudioBuffer<float>& input,
                              .withSampleRate(sampleRate)
                              .withNumChannels(numChannels)
                              .withBitsPerSample(16)
-                             .withQualityOptionIndex(0);
+                             .withQualityOptionIndex(4);
 
     std::unique_ptr<juce::AudioFormatWriter> writer(format.createWriterFor(outputStream, options));
 

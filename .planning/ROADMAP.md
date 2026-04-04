@@ -21,6 +21,9 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 08.1: Server Discovery Polish & JamTaba Parity Check** - Correct discovery-count fidelity, ordering, and picker stability before the larger layout work. (completed 2026-03-19)
 - [ ] **Phase 08.2: Pre-Layout CPU, Mixer, UI, and Auth Hardening (INSERTED)** - Sidebar, mixer, and private-room auth reruns now pass in Ableton, but the original same-machine every-four-beat CPU repro is still unexercised, so Phase 9 remains blocked on that narrow host-evidence gap.
 - [x] **Phase 08.3: Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard (INSERTED)** - Completed 2026-03-21 after the brand-new-instance private-room recall rerun passed in Ableton, with the local `build-vs` NMake caveat still documented separately.
+- [ ] **Phase 08.3.2: Voice Mode Research & Prototype (INSERTED)** - Research JamTaba/ReaNINJAM mixed-room voice semantics and prototype true per-channel voice send/receive with a local strip toggle before broader routing and layout work.
+- [ ] **Phase 08.3.3: Stem Capture & Export (INSERTED)** - Add optional on-disk stem capture for local and remote recordings with user-controlled folder selection and practical naming/session rules.
+- [ ] **Phase 08.3.4: Host Multi-I/O Routing Research (INSERTED)** - Determine what JUCE/VST3/Ableton can expose for multiple local send inputs and per-stream DAW output routing before committing to implementation.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
@@ -234,9 +237,51 @@ Plans:
 - [ ] 08.3.1-02-PLAN.md - Compact the top/session area and room sidebar inside the existing single-page editor.
 - [ ] 08.3.1-03-PLAN.md - Run the focused gate, rebuild the VST3, and close the inserted polish phase.
 
+### Phase 08.3.2: Voice Mode Research & Prototype (INSERTED)
+
+**Goal:** Support true NINJAM voice-chat mode as a per-channel behavior, using JamTaba as the reference for mixed rooms where some channels remain interval-based and others run near-realtime voice passthrough.
+**Depends on:** Phase 08.3.1
+**Requirements:** VOICE-01, VOICE-02
+**Success Criteria** (what must be TRUE):
+1. Local strip exposes a clear voice-mode toggle that switches the channel between interval mode and voice mode without confusing the existing transmit lifecycle.
+2. The plugin can send and receive voice-mode channels while other channels in the same room continue using normal interval semantics.
+3. Voice-mode receive/playback is handled as chunked near-realtime audio rather than being misinterpreted as interval audio.
+4. UI state stays explicit and color-consistent: red for not transmitting, green for interval transmit, orange for voice mode.
+5. The phase ends with enough technical clarity to decide whether voice mode is production-ready or still needs a follow-up hardening pass.
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08.3.2-01-PLAN.md - Add mixed-room voice transport coverage and implement chunked per-channel voice send/receive foundations.
+- [ ] 08.3.2-02-PLAN.md - Wire the local voice toggle, live mode switching, and orange mixed-room strip semantics into the current mixer UI.
+- [ ] 08.3.2-03-PLAN.md - Run the focused automated gate, rebuild the VST3, and close the phase with a mixed-room Ableton validation matrix.
+
+### Phase 08.3.3: Stem Capture & Export (INSERTED)
+
+**Goal:** Let users optionally save transmitted and received recordings to disk as practical stems for later import, editing, and mixing.
+**Depends on:** Phase 08.3.2
+**Requirements:** REC-01
+**Success Criteria** (what must be TRUE):
+1. User can enable or disable stem capture from the plugin UI.
+2. User can choose a writable target folder for saved stems.
+3. Saved files are organized with predictable session/source naming that is usable for later DAW import.
+4. The recording path does not destabilize the live session or realtime audio path.
+**Plans:** TBD
+
+### Phase 08.3.4: Host Multi-I/O Routing Research (INSERTED)
+
+**Goal:** Research and validate what JUCE, VST3, and Ableton can support for multiple local send inputs and individual remote-output routing before committing to a large routing implementation.
+**Depends on:** Phase 08.3.3
+**Requirements:** ROUTE-01
+**Success Criteria** (what must be TRUE):
+1. Project documents whether the plugin can expose multiple meaningful host inputs for separate local transmit strips.
+2. Project documents whether individual remote sources can be routed to distinct DAW outputs in a way Ableton users can actually use.
+3. Any recommended implementation path is based on validated host/bus behavior, not assumed UI abstractions.
+4. The outcome is concrete enough to decide whether routing work should become an implementation phase or remain out of scope.
+**Plans:** TBD
+
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
-**Depends on**: Phase 08.3.1
+**Depends on**: Phase 08.3.4
 **Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03
 **Success Criteria** (what must be TRUE):
 1. Mixer strips are presented horizontally with the local monitor clearly distinguished and visually anchored.
@@ -295,7 +340,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 8.3 -> 8.3.1 -> 9 -> 10
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 8.3 -> 8.3.1 -> 8.3.2 -> 8.3.3 -> 8.3.4 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -311,6 +356,9 @@ Plans:
 | 8.2. Pre-Layout CPU, Mixer, UI, and Auth Hardening | 6/6 | Blocked | - |
 | 8.3. Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard | 7/7 | Complete | 2026-03-21 |
 | 8.3.1. Private Server Recall + Compact Session UI Polish | 0/3 | Planned | - |
+| 8.3.2. Voice Mode Research & Prototype | 0/3 | Planned | - |
+| 8.3.3. Stem Capture & Export | 0/TBD | Planned | - |
+| 8.3.4. Host Multi-I/O Routing Research | 0/TBD | Planned | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 

@@ -22,6 +22,8 @@ const juce::Identifier kPluginStateLastErrorContext("lastErrorContext");
 const juce::Identifier kPluginStateMetronomeEnabled("metronomeEnabled");
 const juce::Identifier kPluginStateMetronomeGainDb("metronomeGainDb");
 const juce::Identifier kPluginStateMasterOutputGainDb("masterOutputGainDb");
+const juce::Identifier kPluginStateStemCaptureEnabled("stemCaptureEnabled");
+const juce::Identifier kPluginStateStemCaptureOutputDirectory("stemCaptureOutputDirectory");
 const juce::Identifier kPluginStateMixerState("mixerState");
 const juce::Identifier kPluginStateMixerStrip("mixerStrip");
 const juce::Identifier kPluginStateMixerStripKind("kind");
@@ -108,6 +110,7 @@ constexpr float kMaxMetronomeGainDb = 12.0f;
 
 constexpr std::size_t kMaxQueuedIntervalsPerSource = 8;
 constexpr std::size_t kMaxQueuedVoiceChunksPerSource = 32;
+constexpr int kLocalVoiceChunkSamples = 2048;
 constexpr int kPreparedTransmitIntervals = 2;
 constexpr int kMinBpm = 20;
 constexpr int kMaxBpm = 400;
@@ -488,6 +491,37 @@ void activateRemoteIntervalsForBoundary(
     return (channelFlags & 0x2u) != 0;
 }
 
+[[nodiscard]] bool isLocalVoiceMode(FamaLamaJamAudioProcessor::LocalChannelMode mode)
+{
+    return mode == FamaLamaJamAudioProcessor::LocalChannelMode::Voice;
+}
+
+[[nodiscard]] std::string makeLocalTransmitStatus(FamaLamaJamAudioProcessor::LocalChannelMode mode,
+                                                  FamaLamaJamAudioProcessor::TransmitState state,
+                                                  bool voiceTransitionPending)
+{
+    if (isLocalVoiceMode(mode))
+    {
+        if (state == FamaLamaJamAudioProcessor::TransmitState::Disabled)
+            return "Voice mode ready";
+        if (voiceTransitionPending)
+            return "Switching to voice mode...";
+        return "Voice chat: low quality, near realtime";
+    }
+
+    switch (state)
+    {
+        case FamaLamaJamAudioProcessor::TransmitState::Disabled:
+            return "Not transmitting";
+        case FamaLamaJamAudioProcessor::TransmitState::WarmingUp:
+            return "Getting ready to transmit";
+        case FamaLamaJamAudioProcessor::TransmitState::Active:
+            return "Transmitting";
+    }
+
+    return {};
+}
+
 void queueDecodedRemoteVoiceChunk(
     std::unordered_map<std::string, std::deque<FamaLamaJamAudioProcessor::RemoteVoiceChunk>>& queuedBySource,
     const std::string& sourceId,
@@ -601,6 +635,7 @@ FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor(
     , experimentalStreamingEnabled_(enableExperimentalStreaming)
     , publicServerDiscoveryClient_(infra::net::makePublicServerDiscoveryClient())
     , rememberedServerStore_(std::move(rememberedServerStore))
+    , stemCaptureWriter_(std::make_unique<audio::StemCaptureWriter>())
 {
     loadRememberedServersFromStore();
     ensureLocalMonitorMixerStrip();
@@ -608,6 +643,7 @@ FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor(
 
 FamaLamaJamAudioProcessor::~FamaLamaJamAudioProcessor()
 {
+    stemCaptureWriter_->stop();
     codecStreamBridge_.stop();
     clearReconnectTimer();
     closeLiveSocket();
@@ -637,12 +673,16 @@ void FamaLamaJamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
 
     if (sampleRateChanged || blockSizeChanged)
     {
+        stemCaptureWriter_->stop();
+        stemCaptureWriter_->start();
         codecStreamBridge_.stop();
         if (isSessionConnected())
             codecStreamBridge_.start();
 
         localUploadIntervalBuffer_.setSize(0, 0);
+        localVoiceUploadBuffer_.setSize(0, 0);
         localUploadIntervalWritePosition_ = 0;
+        localVoiceUploadWritePosition_ = 0;
         lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
         lastDecodedSamples_.store(0, std::memory_order_relaxed);
         remoteQueuedIntervalsBySource_.clear();
@@ -669,9 +709,12 @@ void FamaLamaJamAudioProcessor::releaseResources()
     if (snapshot.hasPendingRetry())
         applyLifecycleTransition(lifecycleController_.resetToIdle());
 
+    stemCaptureWriter_->stop();
     codecStreamBridge_.stop();
     localUploadIntervalBuffer_.setSize(0, 0);
+    localVoiceUploadBuffer_.setSize(0, 0);
     localUploadIntervalWritePosition_ = 0;
+    localVoiceUploadWritePosition_ = 0;
     lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
     lastDecodedSamples_.store(0, std::memory_order_relaxed);
     remoteQueuedIntervalsBySource_.clear();
@@ -734,19 +777,11 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         localStrip.snapshot.descriptor.visible = true;
         localStrip.snapshot.descriptor.inactiveIntervals = 0;
         localStrip.snapshot.transmitState = computeTransmitState();
+        localStrip.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
         localStrip.snapshot.unsupportedVoiceMode = false;
-        switch (localStrip.snapshot.transmitState)
-        {
-            case TransmitState::Disabled:
-                localStrip.snapshot.statusText = "Not transmitting";
-                break;
-            case TransmitState::WarmingUp:
-                localStrip.snapshot.statusText = "Getting ready to transmit";
-                break;
-            case TransmitState::Active:
-                localStrip.snapshot.statusText = "Transmitting";
-                break;
-        }
+        localStrip.snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
+                                                                 localStrip.snapshot.transmitState,
+                                                                 localVoiceTransitionPending_);
         localStrip.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
         localStrip.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
     };
@@ -866,8 +901,74 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     if (experimentalStreamingEnabled_)
     {
-        if (authoritativeTiming_.hasTiming && authoritativeTiming_.activeIntervalSamples > 0)
+        if (isLocalVoiceMode(localChannelMode_))
         {
+            if (! transmitEnabled_)
+            {
+                localUploadIntervalBuffer_.setSize(0, 0);
+                localVoiceUploadBuffer_.setSize(0, 0);
+                localUploadIntervalWritePosition_ = 0;
+                localVoiceUploadWritePosition_ = 0;
+            }
+            else
+            {
+                if (localVoiceUploadBuffer_.getNumChannels() != 1
+                    || localVoiceUploadBuffer_.getNumSamples() != kLocalVoiceChunkSamples)
+                {
+                    localVoiceUploadBuffer_.setSize(1, kLocalVoiceChunkSamples, false, true, true);
+                    localVoiceUploadBuffer_.clear();
+                    localVoiceUploadWritePosition_ = 0;
+                }
+
+                int sourceOffset = 0;
+                while (sourceOffset < buffer.getNumSamples())
+                {
+                    const auto writableSamples = juce::jmin(buffer.getNumSamples() - sourceOffset,
+                                                            kLocalVoiceChunkSamples - localVoiceUploadWritePosition_);
+
+                    if (buffer.getNumChannels() == 1)
+                    {
+                        localVoiceUploadBuffer_.copyFrom(0,
+                                                         localVoiceUploadWritePosition_,
+                                                         buffer,
+                                                         0,
+                                                         sourceOffset,
+                                                         writableSamples);
+                    }
+                    else
+                    {
+                        for (int sample = 0; sample < writableSamples; ++sample)
+                        {
+                            float summed = 0.0f;
+                            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                                summed += buffer.getSample(channel, sourceOffset + sample);
+
+                            localVoiceUploadBuffer_.setSample(
+                                0,
+                                localVoiceUploadWritePosition_ + sample,
+                                summed / static_cast<float>(juce::jmax(1, buffer.getNumChannels())));
+                        }
+                    }
+
+                    localVoiceUploadWritePosition_ += writableSamples;
+                    sourceOffset += writableSamples;
+                    localVoiceTransitionPending_ = false;
+
+                    if (localVoiceUploadWritePosition_ >= kLocalVoiceChunkSamples)
+                    {
+                        codecStreamBridge_.submitInput(localVoiceUploadBuffer_, currentSampleRate_);
+                        localVoiceUploadBuffer_.clear();
+                        localVoiceUploadWritePosition_ = 0;
+                    }
+                }
+
+                localUploadIntervalWritePosition_ = localVoiceUploadWritePosition_;
+            }
+        }
+        else if (authoritativeTiming_.hasTiming && authoritativeTiming_.activeIntervalSamples > 0)
+        {
+            localVoiceUploadBuffer_.setSize(0, 0);
+            localVoiceUploadWritePosition_ = 0;
             if (! transmitEnabled_ || transmitWarmupIntervalsRemaining_ > 0)
             {
                 localUploadIntervalBuffer_.setSize(0, 0);
@@ -911,6 +1012,14 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
                     if (intervalWritePosition >= authoritativeTiming_.activeIntervalSamples)
                     {
+                        {
+                            const std::scoped_lock lock(stemCaptureMutex_);
+                            if (stemCaptureState_.activeRecording
+                                && ! stemCaptureState_.suppressLocalIntervalStemUntilBoundary)
+                            {
+                                captureLocalIntervalStem(localUploadIntervalBuffer_);
+                            }
+                        }
                         codecStreamBridge_.submitInput(localUploadIntervalBuffer_, currentSampleRate_);
                         localUploadIntervalBuffer_.clear();
                         intervalWritePosition = 0;
@@ -934,7 +1043,11 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         lastCodecPayloadBytes_.store(encoded.getSize(), std::memory_order_relaxed);
 
         if (experimentalStreamingEnabled_ && transmitEnabled_)
+        {
             framedTransport_.enqueueOutbound(encoded);
+            if (isLocalVoiceMode(localChannelMode_))
+                localVoiceTransitionPending_ = false;
+        }
     }
 
     if (experimentalStreamingEnabled_)
@@ -992,10 +1105,20 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         {
             diagnostics.lastCopiedSamples = decodedAtHostRate.getNumSamples();
             diagnostics.lastQueuedBoundary = authoritativeTiming_.intervalIndex;
+            {
+                const std::scoped_lock lock(stemCaptureMutex_);
+                retireStemCaptureSource(makeRemoteStemSourceConfig(sourceId, false, currentSampleRate_));
+                retireStemCaptureSource(makeRemoteStemSourceConfig(sourceId, true, currentSampleRate_));
+            }
             queueDecodedRemoteVoiceChunk(remoteVoiceChunksBySource_, sourceId, std::move(decodedAtHostRate));
         }
         else
         {
+            {
+                const std::scoped_lock lock(stemCaptureMutex_);
+                if (stemCaptureState_.activeRecording)
+                    captureRemoteStem(sourceId, decodedAtHostRate, false);
+            }
             queueDecodedRemoteInterval(remoteQueuedIntervalsBySource_,
                                        nextRemoteTargetBoundaryBySource_,
                                        remoteReceiveDiagnosticsBySource_,
@@ -1234,12 +1357,15 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 authoritativeTiming_.samplesIntoInterval = 0;
                 ++authoritativeTiming_.intervalIndex;
                 intervalIndexForUi_.store(authoritativeTiming_.intervalIndex, std::memory_order_relaxed);
+                handleStemCaptureBoundary();
 
                 if (transmitWarmupIntervalsRemaining_ > 0)
                 {
                     --transmitWarmupIntervalsRemaining_;
                     localUploadIntervalBuffer_.setSize(0, 0);
+                    localVoiceUploadBuffer_.setSize(0, 0);
                     localUploadIntervalWritePosition_ = 0;
+                    localVoiceUploadWritePosition_ = 0;
                 }
 
                 if (authoritativeTiming_.hasPendingTiming)
@@ -1250,7 +1376,9 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                                          authoritativeTiming_.pendingIntervalSamples,
                                          authoritativeTiming_.pendingBeatSamples);
                     localUploadIntervalBuffer_.setSize(0, 0);
+                    localVoiceUploadBuffer_.setSize(0, 0);
                     localUploadIntervalWritePosition_ = 0;
+                    localVoiceUploadWritePosition_ = 0;
                     remoteQueuedIntervalsBySource_.clear();
                     remoteVoiceChunksBySource_.clear();
                     nextRemoteTargetBoundaryBySource_.clear();
@@ -1446,6 +1574,10 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                 .meterLeft = snapshot.meter.left,
                 .meterRight = snapshot.meter.right,
                 .transmitState = static_cast<FamaLamaJamAudioProcessorEditor::TransmitState>(snapshot.transmitState),
+                .localChannelMode = isLocalVoiceMode(localChannelMode_)
+                    ? FamaLamaJamAudioProcessorEditor::LocalChannelMode::Voice
+                    : FamaLamaJamAudioProcessorEditor::LocalChannelMode::Interval,
+                .voiceMode = snapshot.voiceMode,
                 .unsupportedVoiceMode = snapshot.unsupportedVoiceMode,
                 .statusText = snapshot.statusText,
                 .active = snapshot.descriptor.active,
@@ -1464,10 +1596,32 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
     auto metronomeSetter = [this](bool enabled) { setMetronomeEnabled(enabled); };
     auto metronomeGainGetter = [this]() { return getMetronomeGainDb(); };
     auto metronomeGainSetter = [this](float gainDb) { setMetronomeGainDb(gainDb); };
+    auto stemCaptureSettingsGetter = [this]() {
+        const auto settings = getStemCaptureSettings();
+        std::string statusText;
+        bool canRequestNewRun = false;
+        {
+            const std::scoped_lock lock(stemCaptureMutex_);
+            canRequestNewRun = settings.enabled && ! settings.outputDirectory.empty();
+            if (stemCaptureState_.pendingNewRunAtBoundary)
+                statusText = "New stem folder starts on the next interval.";
+        }
+        return FamaLamaJamAudioProcessorEditor::StemCaptureUiState {
+            .enabled = settings.enabled,
+            .outputDirectory = settings.outputDirectory,
+            .statusText = std::move(statusText),
+            .canRequestNewRun = canRequestNewRun,
+        };
+    };
+    auto stemCaptureSettingsSetter = [this](app::session::StemCaptureSettings settings) {
+        return applyStemCaptureSettings(std::move(settings));
+    };
+    auto stemCaptureNewRunHandler = [this]() { return requestNewStemCaptureRun(); };
     auto diagnosticsTextGetter = [this]() { return getRemoteReceiveDiagnosticsText(); };
     auto masterOutputGainGetter = [this]() { return getMasterOutputGainDb(); };
     auto masterOutputGainSetter = [this](float gainDb) { setMasterOutputGainDb(gainDb); };
     auto transmitToggleHandler = [this]() { return toggleTransmitEnabled(); };
+    auto voiceModeToggleHandler = [this]() { return toggleLocalVoiceMode(); };
 
     return new FamaLamaJamAudioProcessorEditor(*this,
                                                std::move(settingsGetter),
@@ -1492,7 +1646,11 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(masterOutputGainSetter),
                                                std::move(metronomeGainGetter),
                                                std::move(metronomeGainSetter),
+                                               std::move(stemCaptureSettingsGetter),
+                                               std::move(stemCaptureSettingsSetter),
+                                               std::move(stemCaptureNewRunHandler),
                                                std::move(transmitToggleHandler),
+                                               std::move(voiceModeToggleHandler),
                                                std::move(mixerStripSoloSetter));
 }
 
@@ -1532,6 +1690,13 @@ void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     stateTree.setProperty(kPluginStateMasterOutputGainDb,
                           masterOutputGainDb_.load(std::memory_order_relaxed),
                           nullptr);
+    {
+        const std::scoped_lock lock(stemCaptureMutex_);
+        stateTree.setProperty(kPluginStateStemCaptureEnabled, stemCaptureState_.settings.enabled, nullptr);
+        stateTree.setProperty(kPluginStateStemCaptureOutputDirectory,
+                              juce::String(stemCaptureState_.settings.outputDirectory),
+                              nullptr);
+    }
 
     juce::ValueTree mixerStateTree(kPluginStateMixerState);
     for (const auto& [sourceId, runtimeState] : mixerStripsBySourceId_)
@@ -1567,6 +1732,7 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     bool restoredMetronomeEnabled = false;
     float restoredMetronomeGainDb = 0.0f;
     float restoredMasterOutputGainDb = 0.0f;
+    app::session::StemCaptureSettings restoredStemCaptureSettings = app::session::makeDefaultStemCaptureSettings();
     std::vector<MixerStripSnapshot> restoredMixerStrips;
     std::vector<app::session::RememberedServerEntry> restoredRememberedServers;
 
@@ -1594,6 +1760,11 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
             = normalizeMetronomeGainDb(static_cast<float>(stateTree.getProperty(kPluginStateMetronomeGainDb, 0.0f)));
         restoredMasterOutputGainDb
             = normalizeMasterOutputGainDb(static_cast<float>(stateTree.getProperty(kPluginStateMasterOutputGainDb, 0.0f)));
+        restoredStemCaptureSettings.enabled
+            = static_cast<bool>(stateTree.getProperty(kPluginStateStemCaptureEnabled, false));
+        restoredStemCaptureSettings.outputDirectory
+            = stateTree.getProperty(kPluginStateStemCaptureOutputDirectory, juce::String()).toString().toStdString();
+        restoredStemCaptureSettings = app::session::normalizeStemCaptureSettings(restoredStemCaptureSettings);
 
         if (const auto rememberedServerHistoryTree = stateTree.getChildWithName(kPluginStateRememberedServerHistory);
             rememberedServerHistoryTree.isValid())
@@ -1728,6 +1899,7 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
         publicServerListStatusText_.clear();
     }
     persistRememberedServers();
+    applyStemCaptureSettings(restoredStemCaptureSettings);
     lastStatusMessage_ = makeRestoreStatusMessage(usedFallback, restoredLastErrorContext);
 }
 
@@ -1785,6 +1957,41 @@ bool FamaLamaJamAudioProcessor::requestDisconnect()
     return transition.changed;
 }
 
+app::session::StemCaptureSettings FamaLamaJamAudioProcessor::getStemCaptureSettings() const
+{
+    const std::scoped_lock lock(stemCaptureMutex_);
+    return stemCaptureState_.settings;
+}
+
+bool FamaLamaJamAudioProcessor::applyStemCaptureSettings(app::session::StemCaptureSettings candidate)
+{
+    candidate = app::session::normalizeStemCaptureSettings(candidate);
+
+    {
+        std::scoped_lock lock(stemCaptureMutex_);
+        stemCaptureState_.settings = candidate;
+    }
+
+    if (candidate.enabled && ! candidate.outputDirectory.empty())
+    {
+        armStemCaptureForNextBoundary();
+        return true;
+    }
+
+    requestStemCaptureStop();
+    return true;
+}
+
+bool FamaLamaJamAudioProcessor::requestNewStemCaptureRun()
+{
+    std::scoped_lock lock(stemCaptureMutex_);
+    if (! stemCaptureState_.settings.enabled || stemCaptureState_.settings.outputDirectory.empty())
+        return false;
+
+    stemCaptureState_.pendingNewRunAtBoundary = true;
+    return true;
+}
+
 bool FamaLamaJamAudioProcessor::toggleTransmitEnabled()
 {
     transmitEnabled_ = ! transmitEnabled_;
@@ -1793,17 +2000,65 @@ bool FamaLamaJamAudioProcessor::toggleTransmitEnabled()
     {
         transmitWarmupIntervalsRemaining_ = 0;
         localUploadIntervalBuffer_.setSize(0, 0);
+        localVoiceUploadBuffer_.setSize(0, 0);
         localUploadIntervalWritePosition_ = 0;
+        localVoiceUploadWritePosition_ = 0;
     }
     else if (isSessionConnected())
     {
-        transmitWarmupIntervalsRemaining_ = authoritativeTiming_.hasTiming && experimentalStreamingEnabled_
+        transmitWarmupIntervalsRemaining_ = isLocalVoiceMode(localChannelMode_) ? 0
+            : (authoritativeTiming_.hasTiming && experimentalStreamingEnabled_
             ? kPreparedTransmitIntervals
-            : 0;
+            : 0);
+        localVoiceTransitionPending_ = isLocalVoiceMode(localChannelMode_);
     }
 
     ensureLocalMonitorMixerStrip();
     return transmitEnabled_;
+}
+
+bool FamaLamaJamAudioProcessor::toggleLocalVoiceMode()
+{
+    const auto wasVoiceMode = isLocalVoiceMode(localChannelMode_);
+    localChannelMode_ = isLocalVoiceMode(localChannelMode_) ? LocalChannelMode::Interval : LocalChannelMode::Voice;
+
+    if (isLocalVoiceMode(localChannelMode_))
+    {
+        {
+            const std::scoped_lock lock(stemCaptureMutex_);
+            stemCaptureState_.suppressLocalIntervalStemUntilBoundary = true;
+            retireStemCaptureSource(makeLocalStemSourceConfig(false, currentSampleRate_));
+            retireStemCaptureSource(makeLocalStemSourceConfig(true, currentSampleRate_));
+        }
+        transmitWarmupIntervalsRemaining_ = 0;
+        localUploadIntervalBuffer_.setSize(0, 0);
+        localVoiceUploadBuffer_.setSize(0, 0);
+        localUploadIntervalWritePosition_ = 0;
+        localVoiceUploadWritePosition_ = 0;
+        localVoiceTransitionPending_ = transmitEnabled_;
+        framedTransport_.setLocalChannelInfo("Voice Chat", 0x2u);
+    }
+    else
+    {
+        {
+            const std::scoped_lock lock(stemCaptureMutex_);
+            stemCaptureState_.suppressLocalIntervalStemUntilBoundary = true;
+            if (wasVoiceMode)
+                retireStemCaptureSource(makeLocalStemSourceConfig(false, currentSampleRate_));
+        }
+        localVoiceTransitionPending_ = false;
+        localUploadIntervalBuffer_.setSize(0, 0);
+        localVoiceUploadBuffer_.setSize(0, 0);
+        localUploadIntervalWritePosition_ = 0;
+        localVoiceUploadWritePosition_ = 0;
+        transmitWarmupIntervalsRemaining_ = (transmitEnabled_ && authoritativeTiming_.hasTiming && experimentalStreamingEnabled_)
+            ? kPreparedTransmitIntervals
+            : 0;
+        framedTransport_.setLocalChannelInfo({}, 0u);
+    }
+
+    ensureLocalMonitorMixerStrip();
+    return isLocalVoiceMode(localChannelMode_);
 }
 
 void FamaLamaJamAudioProcessor::handleConnectionEvent(const app::session::ConnectionEvent& event)
@@ -2089,24 +2344,66 @@ void FamaLamaJamAudioProcessor::injectDecodedRemoteIntervalForTesting(const std:
     if (sourceId.empty())
         return;
 
-    net::FramedSocketTransport::RemoteSourceInfo sourceInfo;
-    sourceInfo.sourceId = sourceId;
-    sourceInfo.groupId = sourceId;
-    sourceInfo.userName = sourceId;
-    sourceInfo.displayName = sourceId;
-    syncRemoteMixerStrip(sourceInfo, true);
+    registerRemoteSourceForTesting(sourceId, sourceId, "Channel 1", 0u);
 
     const auto decodedAtHostRate = audio::resampleAudioBuffer(audio, sampleRate, currentSampleRate_);
     auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
     diagnostics.lastEncodedBytes = 0;
     diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
     diagnostics.lastDecodedSampleRate = sampleRate;
+    {
+        const std::scoped_lock lock(stemCaptureMutex_);
+        if (stemCaptureState_.activeRecording)
+            captureRemoteStem(sourceId, decodedAtHostRate, false);
+    }
     queueDecodedRemoteInterval(remoteQueuedIntervalsBySource_,
                                nextRemoteTargetBoundaryBySource_,
                                remoteReceiveDiagnosticsBySource_,
                                authoritativeTiming_,
                                sourceId,
                                decodedAtHostRate);
+}
+
+void FamaLamaJamAudioProcessor::injectDecodedRemoteVoiceForTesting(const std::string& sourceId,
+                                                                   const juce::AudioBuffer<float>& audio,
+                                                                   double sampleRate)
+{
+    if (sourceId.empty())
+        return;
+
+    registerRemoteSourceForTesting(sourceId, sourceId, "Voice Chat", 0x2u);
+
+    const auto decodedAtHostRate = audio::resampleAudioBuffer(audio, sampleRate, currentSampleRate_);
+    auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
+    diagnostics.lastEncodedBytes = 0;
+    diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
+    diagnostics.lastDecodedSampleRate = sampleRate;
+    diagnostics.lastCopiedSamples = decodedAtHostRate.getNumSamples();
+    diagnostics.lastQueuedBoundary = authoritativeTiming_.intervalIndex;
+    {
+        const std::scoped_lock lock(stemCaptureMutex_);
+        retireStemCaptureSource(makeRemoteStemSourceConfig(sourceId, false, currentSampleRate_));
+        retireStemCaptureSource(makeRemoteStemSourceConfig(sourceId, true, currentSampleRate_));
+    }
+    queueDecodedRemoteVoiceChunk(remoteVoiceChunksBySource_, sourceId, std::move(decodedAtHostRate));
+}
+
+void FamaLamaJamAudioProcessor::registerRemoteSourceForTesting(const std::string& sourceId,
+                                                               const std::string& userName,
+                                                               const std::string& channelName,
+                                                               std::uint8_t channelFlags)
+{
+    if (sourceId.empty())
+        return;
+
+    net::FramedSocketTransport::RemoteSourceInfo sourceInfo;
+    sourceInfo.sourceId = sourceId;
+    sourceInfo.groupId = userName.empty() ? sourceId : userName;
+    sourceInfo.userName = userName.empty() ? sourceId : userName;
+    sourceInfo.channelName = channelName;
+    sourceInfo.displayName = sourceInfo.userName + " - " + channelName;
+    sourceInfo.channelFlags = channelFlags;
+    syncRemoteMixerStrip(sourceInfo, false);
 }
 
 FamaLamaJamAudioProcessor::CpuDiagnosticSnapshot FamaLamaJamAudioProcessor::getCpuDiagnosticSnapshotForTesting() const noexcept
@@ -2117,6 +2414,29 @@ FamaLamaJamAudioProcessor::CpuDiagnosticSnapshot FamaLamaJamAudioProcessor::getC
 void FamaLamaJamAudioProcessor::resetCpuDiagnosticSnapshotForTesting() noexcept
 {
     cpuDiagnosticSnapshot_ = {};
+}
+
+bool FamaLamaJamAudioProcessor::setStemCaptureDirectoryForTesting(const juce::File& directory, bool enabled)
+{
+    app::session::StemCaptureSettings settings = getStemCaptureSettings();
+    settings.outputDirectory = directory.getFullPathName().toStdString();
+    settings.enabled = enabled;
+    return applyStemCaptureSettings(std::move(settings));
+}
+
+bool FamaLamaJamAudioProcessor::waitForStemCaptureFlushForTesting(int timeoutMs) const
+{
+    return stemCaptureWriter_->flushForTesting(timeoutMs);
+}
+
+juce::File FamaLamaJamAudioProcessor::getStemCaptureSessionDirectoryForTesting() const
+{
+    return stemCaptureWriter_->getCurrentSessionDirectoryForTesting();
+}
+
+std::vector<juce::File> FamaLamaJamAudioProcessor::getWrittenStemFilesForTesting() const
+{
+    return stemCaptureWriter_->getWrittenFilesForTesting();
 }
 
 FamaLamaJamAudioProcessor::TransportUiState FamaLamaJamAudioProcessor::getTransportUiState() const noexcept
@@ -2360,10 +2680,18 @@ FamaLamaJamAudioProcessor::TransmitState FamaLamaJamAudioProcessor::getTransmitS
     if (! transmitEnabled_ || ! isSessionConnected())
         return TransmitState::Disabled;
 
+    if (isLocalVoiceMode(localChannelMode_))
+        return TransmitState::Active;
+
     if (! authoritativeTiming_.hasTiming || transmitWarmupIntervalsRemaining_ > 0)
         return TransmitState::WarmingUp;
 
     return TransmitState::Active;
+}
+
+bool FamaLamaJamAudioProcessor::isLocalVoiceModeEnabled() const noexcept
+{
+    return isLocalVoiceMode(localChannelMode_);
 }
 
 std::vector<FamaLamaJamAudioProcessor::MixerStripSnapshot> FamaLamaJamAudioProcessor::getMixerStripSnapshots() const
@@ -2378,19 +2706,11 @@ std::vector<FamaLamaJamAudioProcessor::MixerStripSnapshot> FamaLamaJamAudioProce
         if (snapshot.descriptor.kind == MixerStripKind::LocalMonitor)
         {
             snapshot.transmitState = getTransmitState();
+            snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
             snapshot.unsupportedVoiceMode = false;
-            switch (snapshot.transmitState)
-            {
-                case TransmitState::Disabled:
-                    snapshot.statusText = "Not transmitting";
-                    break;
-                case TransmitState::WarmingUp:
-                    snapshot.statusText = "Getting ready to transmit";
-                    break;
-                case TransmitState::Active:
-                    snapshot.statusText = "Transmitting";
-                    break;
-            }
+            snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
+                                                          snapshot.transmitState,
+                                                          localVoiceTransitionPending_);
         }
         snapshots.push_back(std::move(snapshot));
     }
@@ -2418,19 +2738,11 @@ bool FamaLamaJamAudioProcessor::getMixerStripSnapshot(const std::string& sourceI
         if (snapshot.descriptor.kind == MixerStripKind::LocalMonitor)
         {
             snapshot.transmitState = getTransmitState();
+            snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
             snapshot.unsupportedVoiceMode = false;
-            switch (snapshot.transmitState)
-            {
-                case TransmitState::Disabled:
-                    snapshot.statusText = "Not transmitting";
-                    break;
-                case TransmitState::WarmingUp:
-                    snapshot.statusText = "Getting ready to transmit";
-                    break;
-                case TransmitState::Active:
-                    snapshot.statusText = "Transmitting";
-                    break;
-            }
+            snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
+                                                          snapshot.transmitState,
+                                                          localVoiceTransitionPending_);
         }
         return true;
     }
@@ -2521,7 +2833,9 @@ void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::Con
     {
         codecStreamBridge_.stop();
         localUploadIntervalBuffer_.setSize(0, 0);
+        localVoiceUploadBuffer_.setSize(0, 0);
         localUploadIntervalWritePosition_ = 0;
+        localVoiceUploadWritePosition_ = 0;
         lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
         lastDecodedSamples_.store(0, std::memory_order_relaxed);
         remoteQueuedIntervalsBySource_.clear();
@@ -2583,7 +2897,9 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     lastHandledIntervalBoundaryGeneration_ = 0;
     intervalPhaseAnchoredFromDownloadBegin_ = false;
     localUploadIntervalBuffer_.setSize(0, 0);
+    localVoiceUploadBuffer_.setSize(0, 0);
     localUploadIntervalWritePosition_ = 0;
+    localVoiceUploadWritePosition_ = 0;
     transmitWarmupIntervalsRemaining_ = 0;
     nextRemoteTargetBoundaryBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
@@ -2610,6 +2926,7 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     }
 
     previousHostTransportPlaying_ = false;
+    clearStemCaptureState(true);
 }
 
 void FamaLamaJamAudioProcessor::clearHostTransportSnapshot() noexcept
@@ -2633,6 +2950,222 @@ void FamaLamaJamAudioProcessor::clearHostSyncAssistState() noexcept
     hostSyncAssistWaitingForHost_.store(false, std::memory_order_relaxed);
     hostSyncAssistFailed_.store(false, std::memory_order_relaxed);
     hostSyncAssistFailureReason_.store(HostSyncAssistFailureReason::None, std::memory_order_relaxed);
+}
+
+void FamaLamaJamAudioProcessor::armStemCaptureForNextBoundary()
+{
+    std::scoped_lock lock(stemCaptureMutex_);
+    if (! stemCaptureState_.settings.enabled || stemCaptureState_.settings.outputDirectory.empty())
+        return;
+
+    stemCaptureState_.pendingNewRunAtBoundary = false;
+
+    if (! authoritativeTiming_.hasTiming || authoritativeTiming_.activeBpm <= 0 || authoritativeTiming_.activeBpi <= 0)
+    {
+        stemCaptureState_.sessionPrepared = false;
+        stemCaptureState_.activeRecording = false;
+        stemCaptureState_.pendingStartAtBoundary = true;
+        stemCaptureState_.pendingStopAtBoundary = false;
+        return;
+    }
+
+    if (! stemCaptureState_.sessionPrepared)
+    {
+        const audio::StemCaptureWriter::SessionConfig sessionConfig {
+            .baseDirectory = juce::File(stemCaptureState_.settings.outputDirectory),
+            .beatsPerMinute = authoritativeTiming_.activeBpm,
+            .beatsPerInterval = authoritativeTiming_.activeBpi,
+            .startedAt = juce::Time::getCurrentTime(),
+        };
+        stemCaptureWriter_->beginSession(sessionConfig);
+        stemCaptureState_.sessionPrepared = true;
+        stemCaptureState_.sessionStartedAt = sessionConfig.startedAt;
+        stemCaptureState_.sessionBeatsPerMinute = sessionConfig.beatsPerMinute;
+        stemCaptureState_.sessionBeatsPerInterval = sessionConfig.beatsPerInterval;
+    }
+
+    stemCaptureState_.activeRecording = false;
+    stemCaptureState_.pendingStartAtBoundary = true;
+    stemCaptureState_.pendingStopAtBoundary = false;
+}
+
+void FamaLamaJamAudioProcessor::requestStemCaptureStop()
+{
+    std::scoped_lock lock(stemCaptureMutex_);
+    stemCaptureState_.pendingNewRunAtBoundary = false;
+    if (stemCaptureState_.activeRecording)
+    {
+        stemCaptureState_.pendingStopAtBoundary = true;
+    }
+    else
+    {
+        stemCaptureState_.pendingStartAtBoundary = false;
+        stemCaptureState_.pendingStopAtBoundary = false;
+        stemCaptureState_.sessionPrepared = false;
+        stemCaptureWriter_->endSession();
+    }
+}
+
+void FamaLamaJamAudioProcessor::clearStemCaptureState(bool preserveArmedState)
+{
+    std::scoped_lock lock(stemCaptureMutex_);
+    stemCaptureWriter_->pauseSession();
+    stemCaptureState_.activeRecording = false;
+    stemCaptureState_.pendingStopAtBoundary = false;
+    stemCaptureState_.pendingNewRunAtBoundary = false;
+    stemCaptureState_.suppressLocalIntervalStemUntilBoundary = false;
+
+    if (! preserveArmedState)
+    {
+        stemCaptureState_.pendingStartAtBoundary = false;
+        stemCaptureState_.sessionPrepared = false;
+        stemCaptureState_.settings.enabled = false;
+        stemCaptureWriter_->endSession();
+        return;
+    }
+
+    const bool canResume = stemCaptureState_.settings.enabled
+        && ! stemCaptureState_.settings.outputDirectory.empty();
+    stemCaptureState_.pendingStartAtBoundary = canResume;
+}
+
+void FamaLamaJamAudioProcessor::handleStemCaptureBoundary()
+{
+    std::scoped_lock lock(stemCaptureMutex_);
+
+    stemCaptureState_.suppressLocalIntervalStemUntilBoundary = false;
+
+    if (stemCaptureState_.pendingStopAtBoundary)
+    {
+        stemCaptureState_.activeRecording = false;
+        stemCaptureState_.pendingStopAtBoundary = false;
+        stemCaptureState_.pendingStartAtBoundary = false;
+        stemCaptureState_.pendingNewRunAtBoundary = false;
+        stemCaptureState_.sessionPrepared = false;
+        stemCaptureWriter_->endSession();
+        return;
+    }
+
+    if (stemCaptureState_.pendingNewRunAtBoundary && stemCaptureState_.settings.enabled)
+    {
+        stemCaptureWriter_->endSession();
+        stemCaptureState_.sessionPrepared = false;
+        stemCaptureState_.activeRecording = false;
+        stemCaptureState_.pendingStartAtBoundary = false;
+        stemCaptureState_.pendingNewRunAtBoundary = false;
+
+        if (! stemCaptureState_.settings.outputDirectory.empty()
+            && authoritativeTiming_.activeBpm > 0
+            && authoritativeTiming_.activeBpi > 0)
+        {
+            const audio::StemCaptureWriter::SessionConfig sessionConfig {
+                .baseDirectory = juce::File(stemCaptureState_.settings.outputDirectory),
+                .beatsPerMinute = authoritativeTiming_.activeBpm,
+                .beatsPerInterval = authoritativeTiming_.activeBpi,
+                .startedAt = juce::Time::getCurrentTime(),
+            };
+            stemCaptureWriter_->beginSession(sessionConfig);
+            stemCaptureState_.sessionPrepared = true;
+            stemCaptureState_.sessionStartedAt = sessionConfig.startedAt;
+            stemCaptureState_.sessionBeatsPerMinute = sessionConfig.beatsPerMinute;
+            stemCaptureState_.sessionBeatsPerInterval = sessionConfig.beatsPerInterval;
+            stemCaptureState_.activeRecording = true;
+        }
+        return;
+    }
+
+    if (stemCaptureState_.pendingStartAtBoundary && stemCaptureState_.settings.enabled)
+    {
+        if (! stemCaptureState_.sessionPrepared
+            && ! stemCaptureState_.settings.outputDirectory.empty()
+            && authoritativeTiming_.activeBpm > 0
+            && authoritativeTiming_.activeBpi > 0)
+        {
+            const audio::StemCaptureWriter::SessionConfig sessionConfig {
+                .baseDirectory = juce::File(stemCaptureState_.settings.outputDirectory),
+                .beatsPerMinute = authoritativeTiming_.activeBpm,
+                .beatsPerInterval = authoritativeTiming_.activeBpi,
+                .startedAt = juce::Time::getCurrentTime(),
+            };
+            stemCaptureWriter_->beginSession(sessionConfig);
+            stemCaptureState_.sessionPrepared = true;
+            stemCaptureState_.sessionStartedAt = sessionConfig.startedAt;
+            stemCaptureState_.sessionBeatsPerMinute = sessionConfig.beatsPerMinute;
+            stemCaptureState_.sessionBeatsPerInterval = sessionConfig.beatsPerInterval;
+        }
+
+        stemCaptureState_.activeRecording = true;
+        stemCaptureState_.pendingStartAtBoundary = false;
+    }
+}
+
+void FamaLamaJamAudioProcessor::captureLocalIntervalStem(const juce::AudioBuffer<float>& intervalBuffer)
+{
+    stemCaptureWriter_->submitFrame(audio::StemCaptureWriter::Frame {
+        .source = makeLocalStemSourceConfig(false, currentSampleRate_),
+        .audio = intervalBuffer,
+    });
+}
+
+void FamaLamaJamAudioProcessor::captureLocalVoiceStem(const juce::AudioBuffer<float>& voiceChunk)
+{
+    juce::ignoreUnused(voiceChunk);
+}
+
+void FamaLamaJamAudioProcessor::captureRemoteStem(const std::string& sourceId,
+                                                  const juce::AudioBuffer<float>& audio,
+                                                  bool voiceMode)
+{
+    if (voiceMode)
+    {
+        retireStemCaptureSource(makeRemoteStemSourceConfig(sourceId, false, currentSampleRate_));
+        retireStemCaptureSource(makeRemoteStemSourceConfig(sourceId, true, currentSampleRate_));
+        return;
+    }
+
+    stemCaptureWriter_->submitFrame(audio::StemCaptureWriter::Frame {
+        .source = makeRemoteStemSourceConfig(sourceId, voiceMode, currentSampleRate_),
+        .audio = audio,
+    });
+}
+
+void FamaLamaJamAudioProcessor::retireStemCaptureSource(const audio::StemCaptureWriter::SourceConfig& sourceConfig)
+{
+    stemCaptureWriter_->retireSource(sourceConfig.sourceKey);
+}
+
+audio::StemCaptureWriter::SourceConfig FamaLamaJamAudioProcessor::makeLocalStemSourceConfig(bool voiceMode,
+                                                                                             double sampleRate) const
+{
+    const auto settings = settingsStore_.getActiveSettings();
+    return {
+        .sourceKey = std::string(kLocalMonitorSourceId) + (voiceMode ? "#voice" : "#interval"),
+        .userName = settings.username.empty() ? std::string("local") : settings.username,
+        .channelName = voiceMode ? std::string("Voice Chat") : std::string("Monitor"),
+        .mode = voiceMode ? audio::StemCaptureWriter::Mode::Voice : audio::StemCaptureWriter::Mode::Interval,
+        .sampleRate = sampleRate,
+    };
+}
+
+audio::StemCaptureWriter::SourceConfig FamaLamaJamAudioProcessor::makeRemoteStemSourceConfig(const std::string& sourceId,
+                                                                                              bool voiceMode,
+                                                                                              double sampleRate) const
+{
+    const auto sourceIt = knownRemoteSourcesById_.find(sourceId);
+    const auto userName = sourceIt != knownRemoteSourcesById_.end() && ! sourceIt->second.userName.empty()
+        ? sourceIt->second.userName
+        : sourceId;
+    const auto channelName = sourceIt != knownRemoteSourcesById_.end() && ! sourceIt->second.channelName.empty()
+        ? sourceIt->second.channelName
+        : std::string("Channel 1");
+
+    return {
+        .sourceKey = sourceId + (voiceMode ? "#voice" : "#interval"),
+        .userName = userName,
+        .channelName = channelName,
+        .mode = voiceMode ? audio::StemCaptureWriter::Mode::Voice : audio::StemCaptureWriter::Mode::Interval,
+        .sampleRate = sampleRate,
+    };
 }
 
 void FamaLamaJamAudioProcessor::drainRoomTransportEvents()
@@ -2852,7 +3385,10 @@ void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
         snapshot.descriptor.visible = true;
         snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
         snapshot.transmitState = transmitEnabled_ ? TransmitState::WarmingUp : TransmitState::Disabled;
-        snapshot.statusText = transmitEnabled_ ? "Getting ready to transmit" : "Not transmitting";
+        snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
+        snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
+                                                      snapshot.transmitState,
+                                                      localVoiceTransitionPending_);
 
         it = mixerStripsBySourceId_.emplace(kLocalMonitorSourceId,
                                             MixerStripRuntimeState {
@@ -2872,6 +3408,7 @@ void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
     it->second.snapshot.descriptor.active = true;
     it->second.snapshot.descriptor.visible = true;
     it->second.snapshot.descriptor.inactiveIntervals = 0;
+    it->second.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
     it->second.snapshot.unsupportedVoiceMode = false;
     it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
     it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
@@ -2900,6 +3437,7 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
         snapshot.descriptor.active = true;
         snapshot.descriptor.visible = true;
         snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
+        snapshot.voiceMode = isVoiceMode(sourceInfo.channelFlags);
         snapshot.unsupportedVoiceMode = false;
         snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice chat: near realtime" : std::string {};
 
@@ -2923,6 +3461,7 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
     descriptor.active = true;
     descriptor.visible = true;
     descriptor.inactiveIntervals = 0;
+    it->second.snapshot.voiceMode = isVoiceMode(sourceInfo.channelFlags);
     it->second.snapshot.unsupportedVoiceMode = false;
     it->second.snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice chat: near realtime"
                                                                           : std::string {};
@@ -2993,6 +3532,10 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
             descriptor.active = true;
             descriptor.visible = true;
             descriptor.inactiveIntervals = 0;
+            runtimeState.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
+            runtimeState.snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
+                                                                       getTransmitState(),
+                                                                       localVoiceTransitionPending_);
             runtimeState.lastPresenceIntervalIndex = currentIntervalIndex;
             runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
             continue;
@@ -3011,12 +3554,14 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
             descriptor.active = true;
             descriptor.visible = true;
             descriptor.inactiveIntervals = 0;
+            runtimeState.snapshot.voiceMode = voiceMode;
             runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
-            runtimeState.snapshot.statusText = voiceMode ? "Receiving voice chat audio" : "Receiving interval audio";
+            runtimeState.snapshot.statusText = voiceMode ? "Voice chat: near realtime" : "Receiving interval audio";
             continue;
         }
 
         descriptor.active = false;
+        runtimeState.snapshot.voiceMode = voiceMode;
 
         const auto referenceIntervalIndex = runtimeState.lastAudioIntervalIndex > 0
             ? runtimeState.lastAudioIntervalIndex

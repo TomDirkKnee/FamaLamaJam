@@ -298,3 +298,37 @@ TEST_CASE("plugin mixer ui removes dead default-strip controls and keeps local m
                        stripLabels.end(),
                        [](const juce::String& label) { return label == "Master Output"; }));
 }
+
+TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with orange explanatory status",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = "local-monitor",
+          .groupId = "local",
+          .groupLabel = "Local Monitor",
+          .displayName = "Local Monitor",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "voice-user#1",
+          .groupId = "voice-user",
+          .groupLabel = "voice-user",
+          .displayName = "voice-user - voice",
+          .subtitle = "Voice chat",
+          .voiceMode = true,
+          .statusText = "Receiving voice chat audio",
+          .active = true,
+          .visible = true },
+    });
+
+    const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
+    REQUIRE(stripLabels.size() == 2);
+    CHECK(stripLabels[1] == "voice-user - voice");
+    CHECK(harness.editor->getMixerStripStatusTextForTesting("voice-user#1") == "Receiving voice chat audio");
+    CHECK(harness.editor->getMixerStripStatusColourForTesting("voice-user#1")
+          == juce::Colour::fromRGB(230, 181, 120));
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("voice-user#1").isEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("voice-user#1").isEmpty());
+}

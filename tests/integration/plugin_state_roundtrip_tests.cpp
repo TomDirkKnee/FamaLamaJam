@@ -158,6 +158,31 @@ TEST_CASE("plugin_state_roundtrip restores saved settings in fresh instance", "[
     CHECK(restored.getLastStatusMessage() == "Settings restored");
 }
 
+TEST_CASE("plugin_state_roundtrip restores saved stem capture settings in fresh instance", "[plugin_state_roundtrip]")
+{
+    auto tempDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getNonexistentChildFile("famalamajam-stem-roundtrip", {}, false);
+    REQUIRE(tempDirectory.createDirectory());
+
+    FamaLamaJamAudioProcessor source;
+    REQUIRE(source.applyStemCaptureSettings({
+        .enabled = true,
+        .outputDirectory = tempDirectory.getFullPathName().toStdString(),
+    }));
+
+    juce::MemoryBlock state;
+    source.getStateInformation(state);
+
+    FamaLamaJamAudioProcessor restored;
+    restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+
+    const auto stemSettings = restored.getStemCaptureSettings();
+    CHECK(stemSettings.enabled);
+    CHECK(stemSettings.outputDirectory == tempDirectory.getFullPathName().toStdString());
+
+    tempDirectory.deleteRecursively();
+}
+
 TEST_CASE("plugin_state_roundtrip preserves remembered server history while clearing transient discovery state",
           "[plugin_state_roundtrip]")
 {

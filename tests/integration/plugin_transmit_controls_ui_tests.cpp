@@ -33,6 +33,18 @@ constexpr bool hasUnsupportedVoiceModeField<T,
                                             std::void_t<decltype(std::declval<T&>().unsupportedVoiceMode)>> = true;
 
 template <typename T, typename = void>
+constexpr bool hasVoiceModeField = false;
+
+template <typename T>
+constexpr bool hasVoiceModeField<T, std::void_t<decltype(std::declval<T&>().voiceMode)>> = true;
+
+template <typename T, typename = void>
+constexpr bool hasLocalChannelModeField = false;
+
+template <typename T>
+constexpr bool hasLocalChannelModeField<T, std::void_t<decltype(std::declval<T&>().localChannelMode)>> = true;
+
+template <typename T, typename = void>
 constexpr bool hasSoloedField = false;
 
 template <typename T>
@@ -131,6 +143,8 @@ TEST_CASE("plugin transmit controls ui reserves unsupported-voice badges in norm
 {
     CHECK(hasUnsupportedVoiceModeField<FamaLamaJamAudioProcessorEditor::MixerStripState>);
     CHECK(hasTransmitStateField<FamaLamaJamAudioProcessorEditor::MixerStripState>);
+    CHECK(hasVoiceModeField<FamaLamaJamAudioProcessorEditor::MixerStripState>);
+    CHECK(hasLocalChannelModeField<FamaLamaJamAudioProcessorEditor::MixerStripState>);
 }
 
 TEST_CASE("plugin transmit controls ui keeps transmit off the transport row and on the local strip",
@@ -144,5 +158,7 @@ TEST_CASE("plugin transmit controls ui keeps transmit off the transport row and 
     CHECK(stripLabels[0] == "Local Monitor");
     CHECK(stripLabels[1] == "alice - guitar");
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("local-monitor") == "Not transmitting");
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("local-monitor") == "Voice Off");
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("alice#0").isEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("alice#0").isEmpty());
 }

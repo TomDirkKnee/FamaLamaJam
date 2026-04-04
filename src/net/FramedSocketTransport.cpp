@@ -340,6 +340,21 @@ bool FramedSocketTransport::waitForAuthentication(int timeoutMs,
     return false;
 }
 
+void FramedSocketTransport::setLocalChannelInfo(std::string channelName, std::uint8_t channelFlags)
+{
+    bool shouldSend = false;
+
+    {
+        const juce::ScopedLock lock(stateLock_);
+        localChannelName_ = std::move(channelName);
+        localChannelFlags_ = channelFlags;
+        shouldSend = socket_ != nullptr && authenticated_ && ! socketFailed_;
+    }
+
+    if (shouldSend)
+        sendCurrentChannelInfo();
+}
+
 void FramedSocketTransport::stop()
 {
     signalThreadShouldExit();
@@ -993,7 +1008,7 @@ void FramedSocketTransport::handleAuthReply(const juce::MemoryBlock& payload)
 
     authEvent_.signal();
 
-    sendDefaultChannelInfo();
+    sendCurrentChannelInfo();
 }
 
 
@@ -1278,18 +1293,35 @@ void FramedSocketTransport::sendUserMask(const std::string& username, std::uint3
     subscribedUserMasks_[username] = channelMask;
 }
 
-void FramedSocketTransport::sendDefaultChannelInfo()
+void FramedSocketTransport::sendCurrentChannelInfo()
 {
-    std::array<std::uint8_t, 7> payload {};
+    std::string channelName;
+    std::uint8_t channelFlags = 0;
+
+    {
+        const juce::ScopedLock lock(stateLock_);
+        channelName = localChannelName_;
+        channelFlags = localChannelFlags_;
+    }
+
+    std::vector<std::uint8_t> payload(2 + channelName.size() + 1 + 4);
     payload[0] = 4;
     payload[1] = 0;
-    payload[2] = 0;
-    payload[3] = 0;
-    payload[4] = 0;
-    payload[5] = 0;
-    payload[6] = 0;
 
-    if (! writeMessage(kMessageClientSetChannelInfo, payload.data(), payload.size()))
+    std::size_t offset = 2;
+    if (! channelName.empty())
+    {
+        std::memcpy(payload.data() + offset, channelName.data(), channelName.size());
+        offset += channelName.size();
+    }
+
+    payload[offset++] = 0;
+    payload[offset++] = 0;
+    payload[offset++] = 0;
+    payload[offset++] = 0;
+    payload[offset++] = channelFlags;
+
+    if (! writeMessage(kMessageClientSetChannelInfo, payload.data(), offset))
         socketFailed_ = true;
 }
 

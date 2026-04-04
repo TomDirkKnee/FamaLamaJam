@@ -358,6 +358,31 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
     CHECK(harness.editor->getTransportStatusTextForTesting() == "120 BPM | 16 BPI");
 }
 
+TEST_CASE("plugin rehearsal ui flow exposes the new stem-run control only once stem capture is armed",
+          "[plugin_rehearsal_ui_flow]")
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+    FamaLamaJamAudioProcessor processor(true, true);
+    auto editor = std::unique_ptr<FamaLamaJamAudioProcessorEditor>(
+        dynamic_cast<FamaLamaJamAudioProcessorEditor*>(processor.createEditor()));
+    REQUIRE(editor != nullptr);
+
+    CHECK_FALSE(editor->canClickNewStemRunForTesting());
+
+    const auto tempDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                   .getNonexistentChildFile("famalamajam-stem-run-ui", {}, false);
+    REQUIRE(tempDirectory.createDirectory());
+
+    editor->setStemCaptureDirectoryForTesting(tempDirectory.getFullPathName());
+    editor->clickStemCaptureToggleForTesting();
+    editor->refreshForTesting();
+
+    CHECK(editor->isStemCaptureEnabledForTesting());
+    CHECK(editor->canClickNewStemRunForTesting());
+
+    tempDirectory.deleteRecursively();
+}
+
 TEST_CASE("plugin rehearsal ui flow places host tempo mismatch guidance on the sync assist button",
           "[plugin_rehearsal_ui_flow]")
 {

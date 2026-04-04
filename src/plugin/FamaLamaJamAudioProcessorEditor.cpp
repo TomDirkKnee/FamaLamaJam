@@ -313,7 +313,23 @@ constexpr auto kRememberedPasswordMask = "********";
 [[nodiscard]] juce::Colour stripAccentColour(const FamaLamaJamAudioProcessorEditor::MixerStripState& strip)
 {
     if (strip.kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
-        return strip.active ? juce::Colour::fromRGB(214, 141, 72) : juce::Colour::fromRGB(132, 102, 74);
+    {
+        if (strip.localChannelMode == FamaLamaJamAudioProcessorEditor::LocalChannelMode::Voice)
+            return juce::Colour::fromRGB(214, 141, 72);
+
+        switch (strip.transmitState)
+        {
+            case FamaLamaJamAudioProcessorEditor::TransmitState::Disabled:
+                return juce::Colour::fromRGB(196, 92, 92);
+            case FamaLamaJamAudioProcessorEditor::TransmitState::WarmingUp:
+                return juce::Colour::fromRGB(214, 141, 72);
+            case FamaLamaJamAudioProcessorEditor::TransmitState::Active:
+                return juce::Colour::fromRGB(88, 168, 102);
+        }
+    }
+
+    if (strip.voiceMode)
+        return juce::Colour::fromRGB(214, 141, 72);
 
     if (strip.unsupportedVoiceMode)
         return juce::Colour::fromRGB(214, 141, 72);
@@ -330,7 +346,23 @@ constexpr auto kRememberedPasswordMask = "********";
 [[nodiscard]] juce::Colour stripStatusColour(const FamaLamaJamAudioProcessorEditor::MixerStripState& strip)
 {
     if (strip.kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
-        return juce::Colour::fromRGB(188, 196, 210);
+    {
+        if (strip.localChannelMode == FamaLamaJamAudioProcessorEditor::LocalChannelMode::Voice)
+            return juce::Colour::fromRGB(230, 181, 120);
+
+        switch (strip.transmitState)
+        {
+            case FamaLamaJamAudioProcessorEditor::TransmitState::Disabled:
+                return juce::Colour::fromRGB(214, 122, 122);
+            case FamaLamaJamAudioProcessorEditor::TransmitState::WarmingUp:
+                return juce::Colour::fromRGB(230, 181, 120);
+            case FamaLamaJamAudioProcessorEditor::TransmitState::Active:
+                return juce::Colour::fromRGB(131, 198, 152);
+        }
+    }
+
+    if (strip.voiceMode)
+        return juce::Colour::fromRGB(230, 181, 120);
 
     if (strip.unsupportedVoiceMode)
         return juce::Colour::fromRGB(214, 141, 72);
@@ -461,6 +493,8 @@ constexpr auto kRememberedPasswordMask = "********";
         && lhs.muted == rhs.muted
         && lhs.soloed == rhs.soloed
         && lhs.transmitState == rhs.transmitState
+        && lhs.localChannelMode == rhs.localChannelMode
+        && lhs.voiceMode == rhs.voiceMode
         && lhs.unsupportedVoiceMode == rhs.unsupportedVoiceMode
         && lhs.statusText == rhs.statusText
         && lhs.active == rhs.active
@@ -491,7 +525,11 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  FloatSetter masterOutputGainSetter,
                                                                  FloatGetter metronomeGainGetter,
                                                                  FloatSetter metronomeGainSetter,
+                                                                 StemCaptureUiGetter stemCaptureUiGetter,
+                                                                 StemCaptureSettingsSetter stemCaptureSettingsSetter,
+                                                                 StemCaptureNewRunHandler stemCaptureNewRunHandler,
                                                                  CommandHandler transmitToggleHandler,
+                                                                 VoiceModeToggleHandler voiceModeToggleHandler,
                                                                  MixerStripSoloSetter mixerStripSoloSetter)
     : juce::AudioProcessorEditor(processor)
     , settingsGetter_(std::move(settingsGetter))
@@ -519,7 +557,12 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , masterOutputGainSetter_(masterOutputGainSetter ? std::move(masterOutputGainSetter) : [](float) {})
     , metronomeGainGetter_(metronomeGainGetter ? std::move(metronomeGainGetter) : []() { return 0.0f; })
     , metronomeGainSetter_(metronomeGainSetter ? std::move(metronomeGainSetter) : [](float) {})
+    , stemCaptureUiGetter_(stemCaptureUiGetter ? std::move(stemCaptureUiGetter) : []() { return StemCaptureUiState {}; })
+    , stemCaptureSettingsSetter_(stemCaptureSettingsSetter ? std::move(stemCaptureSettingsSetter)
+                                                           : [](app::session::StemCaptureSettings) { return false; })
+    , stemCaptureNewRunHandler_(stemCaptureNewRunHandler ? std::move(stemCaptureNewRunHandler) : []() { return false; })
     , transmitToggleHandler_(transmitToggleHandler ? std::move(transmitToggleHandler) : []() { return false; })
+    , voiceModeToggleHandler_(voiceModeToggleHandler ? std::move(voiceModeToggleHandler) : []() { return false; })
 {
     titleLabel_.setText("Session", juce::dontSendNotification);
     titleLabel_.setJustificationType(juce::Justification::centredLeft);
@@ -547,6 +590,35 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     addAndMakeVisible(usernameLabel_);
     addAndMakeVisible(passwordLabel_);
     addAndMakeVisible(serverPickerLabel_);
+
+    stemCaptureToggle_.setButtonText("Record stems");
+    stemCaptureToggle_.onClick = [this]() {
+        (void) applyStemCaptureSettingsFromUi(stemCaptureToggle_.getToggleState());
+    };
+    addAndMakeVisible(stemCaptureToggle_);
+
+    stemCaptureBrowseButton_.setButtonText("Choose Folder");
+    stemCaptureBrowseButton_.onClick = [this]() { launchStemCaptureFolderChooser(); };
+    addAndMakeVisible(stemCaptureBrowseButton_);
+
+    stemCaptureNewRunButton_.setButtonText("New stem folder");
+    stemCaptureNewRunButton_.onClick = [this]() {
+        if (stemCaptureNewRunHandler_())
+        {
+            stemCaptureInlineStatusText_.clear();
+            refreshStemCaptureUi();
+        }
+    };
+    addAndMakeVisible(stemCaptureNewRunButton_);
+
+    stemCapturePathLabel_.setText("Stem folder", juce::dontSendNotification);
+    addAndMakeVisible(stemCapturePathLabel_);
+
+    stemCapturePathValueLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(stemCapturePathValueLabel_);
+
+    stemCaptureStatusLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(stemCaptureStatusLabel_);
 
     serverPickerCombo_.setTextWhenNothingSelected("No servers listed yet");
     serverPickerCombo_.onChange = [this]() {
@@ -750,6 +822,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     loadFromSettings(settingsGetter_());
     metronomeToggle_.setToggleState(metronomeGetter_(), juce::dontSendNotification);
     metronomeVolumeSlider_.setValue(metronomeGainGetter_(), juce::dontSendNotification);
+    refreshStemCaptureUi();
     (void) serverDiscoveryRefreshHandler_(false);
     refreshLifecycleStatus();
     refreshTransportStatus();
@@ -764,10 +837,14 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
 {
     stopTimer();
+    stemCaptureFolderChooser_.reset();
 
     serverSettingsToggle_.onClick = {};
     serverPickerCombo_.onChange = {};
     refreshServersButton_.onClick = {};
+    stemCaptureToggle_.onClick = {};
+    stemCaptureBrowseButton_.onClick = {};
+    stemCaptureNewRunButton_.onClick = {};
     metronomeToggle_.onClick = {};
     metronomeVolumeSlider_.onValueChange = {};
     connectButton_.onClick = {};
@@ -792,6 +869,7 @@ FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
         widgets->panSlider.onValueChange = {};
         widgets->muteToggle.onClick = {};
         widgets->transmitButton.onClick = {};
+        widgets->voiceModeToggle.onClick = {};
     }
 }
 
@@ -816,7 +894,11 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  FloatSetter masterOutputGainSetter,
                                                                  FloatGetter metronomeGainGetter,
                                                                  FloatSetter metronomeGainSetter,
+                                                                 StemCaptureUiGetter stemCaptureUiGetter,
+                                                                 StemCaptureSettingsSetter stemCaptureSettingsSetter,
+                                                                 StemCaptureNewRunHandler stemCaptureNewRunHandler,
                                                                  CommandHandler transmitToggleHandler,
+                                                                 VoiceModeToggleHandler voiceModeToggleHandler,
                                                                  MixerStripSoloSetter mixerStripSoloSetter)
     : FamaLamaJamAudioProcessorEditor(processor,
                                       std::move(settingsGetter),
@@ -836,13 +918,17 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                       std::move(roomUiGetter),
                                       std::move(roomMessageHandler),
                                       std::move(roomVoteHandler),
-                                      std::move(diagnosticsTextGetter),
-                                      std::move(masterOutputGainGetter),
-                                      std::move(masterOutputGainSetter),
-                                      std::move(metronomeGainGetter),
-                                      std::move(metronomeGainSetter),
-                                      std::move(transmitToggleHandler),
-                                      std::move(mixerStripSoloSetter))
+                                        std::move(diagnosticsTextGetter),
+                                        std::move(masterOutputGainGetter),
+                                        std::move(masterOutputGainSetter),
+                                        std::move(metronomeGainGetter),
+                                        std::move(metronomeGainSetter),
+                                        std::move(stemCaptureUiGetter),
+                                        std::move(stemCaptureSettingsSetter),
+                                        std::move(stemCaptureNewRunHandler),
+                                        std::move(transmitToggleHandler),
+                                        std::move(voiceModeToggleHandler),
+                                        std::move(mixerStripSoloSetter))
 {
 }
 
@@ -888,10 +974,16 @@ void FamaLamaJamAudioProcessorEditor::resized()
     hostEditor_.setVisible(serverSettingsExpanded_);
     portLabel_.setVisible(serverSettingsExpanded_);
     portEditor_.setVisible(serverSettingsExpanded_);
-    usernameLabel_.setVisible(serverSettingsExpanded_);
-    usernameEditor_.setVisible(serverSettingsExpanded_);
-    passwordLabel_.setVisible(serverSettingsExpanded_);
-    passwordEditor_.setVisible(serverSettingsExpanded_);
+      usernameLabel_.setVisible(serverSettingsExpanded_);
+      usernameEditor_.setVisible(serverSettingsExpanded_);
+      passwordLabel_.setVisible(serverSettingsExpanded_);
+      passwordEditor_.setVisible(serverSettingsExpanded_);
+      stemCaptureToggle_.setVisible(serverSettingsExpanded_);
+      stemCaptureBrowseButton_.setVisible(serverSettingsExpanded_);
+      stemCaptureNewRunButton_.setVisible(serverSettingsExpanded_);
+      stemCapturePathLabel_.setVisible(serverSettingsExpanded_);
+      stemCapturePathValueLabel_.setVisible(serverSettingsExpanded_);
+      stemCaptureStatusLabel_.setVisible(serverSettingsExpanded_ && stemCaptureStatusLabel_.getText().trim().isNotEmpty());
 
     const auto discoveryStatusText = serverDiscoveryStatusLabel_.getText().trim();
     const bool showDiscoveryStatus = serverSettingsExpanded_ && discoveryStatusText.isNotEmpty();
@@ -912,12 +1004,32 @@ void FamaLamaJamAudioProcessorEditor::resized()
             left.removeFromTop(6);
         }
 
-        settingsRow(hostLabel_, hostEditor_);
-        settingsRow(portLabel_, portEditor_);
-        settingsRow(usernameLabel_, usernameEditor_);
-        settingsRow(passwordLabel_, passwordEditor_);
-        left.removeFromTop(2);
-    }
+          settingsRow(hostLabel_, hostEditor_);
+          settingsRow(portLabel_, portEditor_);
+          settingsRow(usernameLabel_, usernameEditor_);
+          settingsRow(passwordLabel_, passwordEditor_);
+
+          auto stemRow = left.removeFromTop(28);
+          stemCaptureToggle_.setBounds(stemRow.removeFromLeft(130));
+          stemRow.removeFromLeft(8);
+          stemCaptureBrowseButton_.setBounds(stemRow.removeFromRight(126));
+          stemRow.removeFromRight(8);
+          stemCaptureNewRunButton_.setBounds(stemRow.removeFromRight(114));
+          left.removeFromTop(4);
+
+          auto stemPathRow = left.removeFromTop(22);
+          stemCapturePathLabel_.setBounds(stemPathRow.removeFromLeft(96));
+          stemCapturePathValueLabel_.setBounds(stemPathRow);
+          left.removeFromTop(2);
+
+          if (stemCaptureStatusLabel_.isVisible())
+          {
+              stemCaptureStatusLabel_.setBounds(left.removeFromTop(20));
+              left.removeFromTop(4);
+          }
+
+          left.removeFromTop(2);
+      }
 
     auto controls = left.removeFromTop(34);
     connectButton_.setBounds(controls.removeFromLeft(98));
@@ -1082,34 +1194,31 @@ void FamaLamaJamAudioProcessorEditor::resized()
         const auto muteWidth = 76;
         const auto soloWidth = 70;
         const auto transmitWidth = 150;
+        const auto voiceWidth = 96;
         const auto meterWidth = juce::jlimit(120, 220, mixerContentWidth / 3);
         widget->meter.setBounds(controlRow.removeFromLeft(meterWidth));
         controlRow.removeFromLeft(8);
-        widget->gainSlider.setBounds(
-            controlRow.removeFromLeft(juce::jmax(120,
-                                                 (controlRow.getWidth()
-                                                  - muteWidth
-                                                  - soloWidth
-                                                  - (widget->hasTransmitControl ? transmitWidth : 0)
-                                                  - 24)
-                                                     / 2)));
-        controlRow.removeFromLeft(8);
-        widget->panSlider.setBounds(
-            controlRow.removeFromLeft(juce::jmax(100,
-                                                 controlRow.getWidth()
-                                                     - muteWidth
-                                                     - soloWidth
-                                                     - (widget->hasTransmitControl ? transmitWidth : 0)
-                                                     - 16)));
-        controlRow.removeFromLeft(8);
-        widget->soloToggle.setBounds(controlRow.removeFromLeft(soloWidth));
-        controlRow.removeFromLeft(8);
-        widget->muteToggle.setBounds(controlRow.removeFromLeft(muteWidth));
+
+        auto rightControls = controlRow;
+        if (widget->hasVoiceModeControl)
+        {
+            widget->voiceModeToggle.setBounds(rightControls.removeFromRight(voiceWidth));
+            rightControls.removeFromRight(8);
+        }
         if (widget->hasTransmitControl)
         {
-            controlRow.removeFromLeft(8);
-            widget->transmitButton.setBounds(controlRow.removeFromLeft(transmitWidth));
+            widget->transmitButton.setBounds(rightControls.removeFromRight(transmitWidth));
+            rightControls.removeFromRight(8);
         }
+        widget->muteToggle.setBounds(rightControls.removeFromRight(muteWidth));
+        rightControls.removeFromRight(8);
+        widget->soloToggle.setBounds(rightControls.removeFromRight(soloWidth));
+        rightControls.removeFromRight(8);
+
+        const auto panWidth = juce::jlimit(100, 180, rightControls.getWidth() / 2);
+        widget->panSlider.setBounds(rightControls.removeFromRight(panWidth));
+        rightControls.removeFromRight(8);
+        widget->gainSlider.setBounds(rightControls);
         y += 50;
     }
 
@@ -1143,6 +1252,9 @@ void FamaLamaJamAudioProcessorEditor::timerCallback()
     if (beatPulse || (! hasHealthyTiming && uiRefreshTick_ % 10 == 0))
         refreshRoomUi();
 
+    if (beatPulse || uiRefreshTick_ % 10 == 0)
+        refreshStemCaptureUi();
+
     if (uiRefreshTick_ % 10 == 0)
         refreshServerDiscoveryUi();
 
@@ -1167,6 +1279,62 @@ app::session::SessionSettings FamaLamaJamAudioProcessorEditor::makeDraftFromUi()
     }
 
     return draft;
+}
+
+bool FamaLamaJamAudioProcessorEditor::applyStemCaptureSettingsFromUi(bool enabled)
+{
+    const auto pathText = stemCapturePathValueLabel_.getText().trim();
+    const auto outputDirectory = pathText == "No folder selected" ? juce::String {} : pathText;
+
+    if (enabled && outputDirectory.isEmpty())
+    {
+        stemCaptureInlineStatusText_ = "Choose a stem folder before recording.";
+        refreshStemCaptureUi();
+        resized();
+        return false;
+    }
+
+    if (! stemCaptureSettingsSetter_(app::session::StemCaptureSettings {
+            .enabled = enabled,
+            .outputDirectory = outputDirectory.toStdString(),
+        }))
+    {
+        stemCaptureInlineStatusText_ = "Couldn't update stem recording settings.";
+        refreshStemCaptureUi();
+        resized();
+        return false;
+    }
+
+    stemCaptureInlineStatusText_.clear();
+    refreshStemCaptureUi();
+    resized();
+    return true;
+}
+
+void FamaLamaJamAudioProcessorEditor::launchStemCaptureFolderChooser()
+{
+    auto safeThis = juce::Component::SafePointer<FamaLamaJamAudioProcessorEditor>(this);
+    stemCaptureFolderChooser_ = std::make_unique<juce::FileChooser>(
+        "Choose stem export folder",
+        currentStemCaptureUiState_.outputDirectory.empty() ? juce::File {}
+                                                          : juce::File(currentStemCaptureUiState_.outputDirectory),
+        juce::String {});
+
+    const auto chooserFlags
+        = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories;
+    stemCaptureFolderChooser_->launchAsync(chooserFlags, [safeThis](const juce::FileChooser& chooser) {
+        if (safeThis == nullptr)
+            return;
+
+        const auto result = chooser.getResult();
+        safeThis->stemCaptureFolderChooser_.reset();
+
+        if (result == juce::File())
+            return;
+
+        safeThis->stemCapturePathValueLabel_.setText(result.getFullPathName(), juce::dontSendNotification);
+        (void) safeThis->applyStemCaptureSettingsFromUi(safeThis->stemCaptureToggle_.getToggleState());
+    });
 }
 
 void FamaLamaJamAudioProcessorEditor::loadFromSettings(const app::session::SessionSettings& settings)
@@ -1267,6 +1435,19 @@ void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripW
     widgets.transmitButton.setButtonText(text);
     widgets.transmitButton.setColour(juce::TextButton::buttonColourId, colour);
     widgets.transmitButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+}
+
+void FamaLamaJamAudioProcessorEditor::updateVoiceModeButtonAppearance(MixerStripWidgets& widgets,
+                                                                      const MixerStripState& strip)
+{
+    if (! widgets.hasVoiceModeControl)
+        return;
+
+    const bool enabled = strip.localChannelMode == LocalChannelMode::Voice;
+    widgets.voiceModeToggle.setToggleState(enabled, juce::dontSendNotification);
+    widgets.voiceModeToggle.setButtonText(enabled ? "Voice On" : "Voice Off");
+    widgets.voiceModeToggle.setColour(juce::ToggleButton::textColourId,
+                                      enabled ? juce::Colour::fromRGB(230, 181, 120) : juce::Colours::white);
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getCollapsedServerSummary() const
@@ -1506,6 +1687,28 @@ void FamaLamaJamAudioProcessorEditor::refreshRoomUi()
         scrollRoomFeedToBottom();
 }
 
+void FamaLamaJamAudioProcessorEditor::refreshStemCaptureUi()
+{
+    currentStemCaptureUiState_ = stemCaptureUiGetter_();
+    stemCaptureToggle_.setToggleState(currentStemCaptureUiState_.enabled, juce::dontSendNotification);
+    stemCaptureNewRunButton_.setEnabled(currentStemCaptureUiState_.canRequestNewRun);
+    stemCapturePathValueLabel_.setText(currentStemCaptureUiState_.outputDirectory.empty()
+                                           ? juce::String("No folder selected")
+                                           : juce::String(currentStemCaptureUiState_.outputDirectory),
+                                       juce::dontSendNotification);
+    stemCapturePathValueLabel_.setTooltip(currentStemCaptureUiState_.outputDirectory.empty()
+                                              ? juce::String {}
+                                              : juce::String(currentStemCaptureUiState_.outputDirectory));
+    const auto statusText = stemCaptureInlineStatusText_.isNotEmpty()
+        ? stemCaptureInlineStatusText_
+        : juce::String(currentStemCaptureUiState_.statusText);
+    stemCaptureStatusLabel_.setText(statusText, juce::dontSendNotification);
+    stemCaptureStatusLabel_.setColour(juce::Label::textColourId,
+                                      stemCaptureInlineStatusText_.isEmpty()
+                                          ? juce::Colour::fromRGB(188, 196, 210)
+                                          : juce::Colour::fromRGB(214, 122, 122));
+}
+
 void FamaLamaJamAudioProcessorEditor::refreshDiagnosticsUi()
 {
     ++cpuDiagnosticSnapshot_.diagnosticsRefreshCalls;
@@ -1704,8 +1907,11 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         widgets.soloToggle.setButtonText(strip.soloed ? "Soloed" : "Solo");
         widgets.soloToggle.setAlpha(strip.active || strip.kind == MixerStripKind::LocalMonitor ? 1.0f : 0.7f);
         widgets.hasTransmitControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets.hasVoiceModeControl = strip.kind == MixerStripKind::LocalMonitor;
         widgets.transmitButton.setVisible(widgets.hasTransmitControl);
+        widgets.voiceModeToggle.setVisible(widgets.hasVoiceModeControl);
         updateTransmitButtonAppearance(widgets, strip);
+        updateVoiceModeButtonAppearance(widgets, strip);
     }
 
     if (! masterOutputSlider_.isMouseButtonDown())
@@ -1725,6 +1931,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->panSlider.onValueChange = {};
         widgets->muteToggle.onClick = {};
         widgets->transmitButton.onClick = {};
+        widgets->voiceModeToggle.onClick = {};
     }
 
     mixerStripWidgets_.clear();
@@ -1798,6 +2005,13 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         mixerContent_.addAndMakeVisible(widgets->soloToggle);
 
         widgets->hasTransmitControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets->hasVoiceModeControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets->voiceModeToggle.setClickingTogglesState(true);
+        widgets->voiceModeToggle.onClick = [this]() {
+            (void) voiceModeToggleHandler_();
+            refreshMixerStrips();
+        };
+        widgets->voiceModeToggle.setVisible(widgets->hasVoiceModeControl);
         widgets->transmitButton.onClick = [this]() {
             (void) transmitToggleHandler_();
             refreshMixerStrips();
@@ -1806,6 +2020,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->lastMeterLeft = strip.meterLeft;
         widgets->lastMeterRight = strip.meterRight;
         widgets->meter.setLevels(strip.meterLeft, strip.meterRight);
+        mixerContent_.addAndMakeVisible(widgets->voiceModeToggle);
         mixerContent_.addAndMakeVisible(widgets->transmitButton);
 
         visibleMixerStripOrder_.push_back(strip.sourceId);
@@ -2029,6 +2244,32 @@ juce::String FamaLamaJamAudioProcessorEditor::getMixerStripTransmitButtonTextFor
     return {};
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getMixerStripVoiceButtonTextForTesting(const juce::String& sourceId) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString() && widgets->hasVoiceModeControl)
+            return widgets->voiceModeToggle.getButtonText();
+    }
+
+    return {};
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMixerStripVoiceToggleStateForTesting(const juce::String& sourceId,
+                                                                              bool& enabled) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString() && widgets->hasVoiceModeControl)
+        {
+            enabled = widgets->voiceModeToggle.getToggleState();
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool FamaLamaJamAudioProcessorEditor::getMixerStripSoloStateForTesting(const juce::String& sourceId, bool& soloed) const
 {
     for (const auto& widgets : mixerStripWidgets_)
@@ -2080,6 +2321,17 @@ bool FamaLamaJamAudioProcessorEditor::getMixerStripMeterLevelsForTesting(const j
     return false;
 }
 
+juce::Colour FamaLamaJamAudioProcessorEditor::getMixerStripStatusColourForTesting(const juce::String& sourceId) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString())
+            return widgets->statusLabel.findColour(juce::Label::textColourId);
+    }
+
+    return {};
+}
+
 bool FamaLamaJamAudioProcessorEditor::setMixerStripControlStateForTesting(const juce::String& sourceId,
                                                                           double gain,
                                                                           double pan,
@@ -2102,6 +2354,25 @@ bool FamaLamaJamAudioProcessorEditor::clickMixerStripTransmitForTesting(const ju
                 return false;
 
             widgets->transmitButton.onClick();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessorEditor::clickMixerStripVoiceToggleForTesting(const juce::String& sourceId)
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString() && widgets->hasVoiceModeControl)
+        {
+            if (widgets->voiceModeToggle.onClick == nullptr)
+                return false;
+
+            widgets->voiceModeToggle.setToggleState(! widgets->voiceModeToggle.getToggleState(),
+                                                    juce::dontSendNotification);
+            widgets->voiceModeToggle.onClick();
             return true;
         }
     }
@@ -2153,6 +2424,26 @@ juce::String FamaLamaJamAudioProcessorEditor::getServerSettingsSummaryForTesting
     return serverSettingsSummaryLabel_.getText();
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getStemCaptureDirectoryForTesting() const
+{
+    return stemCapturePathValueLabel_.getText();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getStemCaptureStatusTextForTesting() const
+{
+    return stemCaptureStatusLabel_.getText();
+}
+
+bool FamaLamaJamAudioProcessorEditor::isStemCaptureEnabledForTesting() const noexcept
+{
+    return stemCaptureToggle_.getToggleState();
+}
+
+bool FamaLamaJamAudioProcessorEditor::canClickNewStemRunForTesting() const noexcept
+{
+    return stemCaptureNewRunButton_.isEnabled();
+}
+
 void FamaLamaJamAudioProcessorEditor::setSettingsDraftForTesting(const app::session::SessionSettings& settings)
 {
     loadFromSettings(settings);
@@ -2163,6 +2454,11 @@ void FamaLamaJamAudioProcessorEditor::setPasswordTextForTesting(const juce::Stri
     passwordEditor_.setText(text, juce::dontSendNotification);
     if (passwordEditor_.onTextChange != nullptr)
         passwordEditor_.onTextChange();
+}
+
+void FamaLamaJamAudioProcessorEditor::setStemCaptureDirectoryForTesting(const juce::String& text)
+{
+    stemCapturePathValueLabel_.setText(text, juce::dontSendNotification);
 }
 
 void FamaLamaJamAudioProcessorEditor::clickConnectForTesting()
@@ -2183,6 +2479,19 @@ void FamaLamaJamAudioProcessorEditor::clickDiagnosticsToggleForTesting()
         diagnosticsToggle_.onClick();
 }
 
+void FamaLamaJamAudioProcessorEditor::clickStemCaptureToggleForTesting()
+{
+    stemCaptureToggle_.setToggleState(! stemCaptureToggle_.getToggleState(), juce::dontSendNotification);
+    if (stemCaptureToggle_.onClick != nullptr)
+        stemCaptureToggle_.onClick();
+}
+
+void FamaLamaJamAudioProcessorEditor::clickNewStemRunForTesting()
+{
+    if (stemCaptureNewRunButton_.onClick != nullptr)
+        stemCaptureNewRunButton_.onClick();
+}
+
 void FamaLamaJamAudioProcessorEditor::runTimerTickForTesting()
 {
     timerCallback();
@@ -2194,6 +2503,7 @@ void FamaLamaJamAudioProcessorEditor::refreshForTesting()
     refreshTransportStatus();
     refreshServerDiscoveryUi();
     refreshRoomUi();
+    refreshStemCaptureUi();
     refreshDiagnosticsUi();
     refreshMixerStrips();
 }

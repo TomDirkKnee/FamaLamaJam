@@ -86,6 +86,7 @@ public:
     bool getServerTimingConfig(ServerTimingConfig& config) const;
     bool getLatestIntervalBoundaryEvent(IntervalBoundaryEvent& event) const;
     bool getSubscribedUserMask(const std::string& username, std::uint32_t& channelMask) const;
+    void setLocalChannelInfo(std::string channelName, std::uint8_t channelFlags);
 
     [[nodiscard]] std::size_t getSentFrameCount() const;
     [[nodiscard]] std::size_t getReceivedFrameCount() const;
@@ -106,7 +107,7 @@ private:
     void handleDownloadBegin(const juce::MemoryBlock& payload);
     void handleDownloadWrite(const juce::MemoryBlock& payload);
     void sendUserMask(const std::string& username, std::uint32_t channelMask);
-    void sendDefaultChannelInfo();
+    void sendCurrentChannelInfo();
     void failAuthentication(const std::string& reason);
 
     [[nodiscard]] std::array<std::uint8_t, 20> buildAuthPassHash(const std::array<std::uint8_t, 8>& challenge) const;
@@ -158,6 +159,8 @@ private:
     std::string authFailureReason_;
     ServerTimingConfig serverTimingConfig_;
     bool hasServerTimingConfig_ { false };
+    std::string localChannelName_;
+    std::uint8_t localChannelFlags_ { 0 };
     std::unordered_map<std::string, RemoteSourceInfo> knownRemoteSourcesById_;
     IntervalBoundaryEvent latestIntervalBoundaryEvent_;
 

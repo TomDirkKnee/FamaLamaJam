@@ -9,6 +9,7 @@ add_executable(famalamajam_tests
     unit/codec_stream_bridge_tests.cpp
     unit/ogg_vorbis_codec_tests.cpp
     unit/remembered_server_store_tests.cpp
+    unit/stem_capture_writer_tests.cpp
     # Phase 2 lifecycle recovery integration coverage
     integration/plugin_apply_flow_tests.cpp
     integration/plugin_connection_command_flow_tests.cpp
@@ -27,6 +28,7 @@ add_executable(famalamajam_tests
     integration/plugin_mixer_ui_tests.cpp
     integration/plugin_transmit_controls_tests.cpp
     integration/plugin_transmit_controls_ui_tests.cpp
+    integration/plugin_voice_mode_toggle_tests.cpp
     integration/plugin_voice_mode_guard_tests.cpp
     integration/plugin_voice_mode_transport_tests.cpp
     integration/plugin_pre_layout_cpu_diagnostics_tests.cpp
@@ -34,7 +36,8 @@ add_executable(famalamajam_tests
     integration/plugin_room_chat_tests.cpp
     integration/plugin_server_discovery_tests.cpp
     integration/plugin_server_discovery_ui_tests.cpp
-    integration/plugin_remote_interval_alignment_tests.cpp)
+    integration/plugin_remote_interval_alignment_tests.cpp
+    integration/plugin_stem_capture_tests.cpp)
 
 target_link_libraries(famalamajam_tests
     PRIVATE

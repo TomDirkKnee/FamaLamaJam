@@ -27,10 +27,12 @@ target_sources(famalamajam_core
         src/app/session/ConnectionLifecycleController.cpp
         src/app/session/RetryPolicy.cpp
         src/app/session/ConnectionFailureClassifier.cpp
+        src/app/session/StemCaptureSettings.cpp
         src/infra/net/PublicServerDiscoveryClient.cpp
         src/audio/AudioBufferResampler.cpp
         src/audio/CodecStreamBridge.cpp
         src/audio/OggVorbisCodec.cpp
+        src/audio/StemCaptureWriter.cpp
         src/net/FramedSocketTransport.cpp
         src/infra/state/SessionSettingsSerializer.cpp
         src/infra/state/RememberedServerStore.cpp)

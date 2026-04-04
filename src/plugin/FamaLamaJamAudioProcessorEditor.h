@@ -12,6 +12,7 @@
 #include "app/session/ConnectionLifecycle.h"
 #include "app/session/SessionSettings.h"
 #include "app/session/SessionSettingsController.h"
+#include "app/session/StemCaptureSettings.h"
 
 namespace famalamajam::plugin
 {
@@ -163,6 +164,14 @@ public:
         std::vector<ServerDiscoveryEntry> combinedEntries;
     };
 
+    struct StemCaptureUiState
+    {
+        bool enabled { false };
+        std::string outputDirectory;
+        std::string statusText;
+        bool canRequestNewRun { false };
+    };
+
     enum class MixerStripKind
     {
         LocalMonitor,
@@ -174,6 +183,12 @@ public:
         Disabled,
         WarmingUp,
         Active,
+    };
+
+    enum class LocalChannelMode
+    {
+        Interval,
+        Voice,
     };
 
     struct MixerStripState
@@ -191,6 +206,8 @@ public:
         float meterLeft { 0.0f };
         float meterRight { 0.0f };
         TransmitState transmitState { TransmitState::Disabled };
+        LocalChannelMode localChannelMode { LocalChannelMode::Interval };
+        bool voiceMode { false };
         bool unsupportedVoiceMode { false };
         std::string statusText;
         bool active { false };
@@ -233,6 +250,10 @@ public:
     using FloatSetter = std::function<void(float)>;
     using BoolGetter = std::function<bool()>;
     using BoolSetter = std::function<void(bool)>;
+    using StemCaptureUiGetter = std::function<StemCaptureUiState()>;
+    using StemCaptureSettingsSetter = std::function<bool(app::session::StemCaptureSettings)>;
+    using StemCaptureNewRunHandler = std::function<bool()>;
+    using VoiceModeToggleHandler = std::function<bool()>;
 
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
@@ -257,7 +278,11 @@ public:
                                     FloatSetter masterOutputGainSetter = {},
                                     FloatGetter metronomeGainGetter = {},
                                     FloatSetter metronomeGainSetter = {},
+                                    StemCaptureUiGetter stemCaptureUiGetter = {},
+                                    StemCaptureSettingsSetter stemCaptureSettingsSetter = {},
+                                    StemCaptureNewRunHandler stemCaptureNewRunHandler = {},
                                     CommandHandler transmitToggleHandler = {},
+                                    VoiceModeToggleHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
@@ -280,7 +305,11 @@ public:
                                     FloatSetter masterOutputGainSetter = {},
                                     FloatGetter metronomeGainGetter = {},
                                     FloatSetter metronomeGainSetter = {},
+                                    StemCaptureUiGetter stemCaptureUiGetter = {},
+                                    StemCaptureSettingsSetter stemCaptureSettingsSetter = {},
+                                    StemCaptureNewRunHandler stemCaptureNewRunHandler = {},
                                     CommandHandler transmitToggleHandler = {},
+                                    VoiceModeToggleHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
     ~FamaLamaJamAudioProcessorEditor() override;
 
@@ -319,25 +348,36 @@ public:
     [[nodiscard]] std::vector<juce::String> getVisibleMixerStripLabelsForTesting() const;
     [[nodiscard]] juce::String getMixerStripStatusTextForTesting(const juce::String& sourceId) const;
     [[nodiscard]] juce::String getMixerStripTransmitButtonTextForTesting(const juce::String& sourceId) const;
+    [[nodiscard]] juce::String getMixerStripVoiceButtonTextForTesting(const juce::String& sourceId) const;
+    [[nodiscard]] bool getMixerStripVoiceToggleStateForTesting(const juce::String& sourceId, bool& enabled) const;
     [[nodiscard]] bool getMixerStripSoloStateForTesting(const juce::String& sourceId, bool& soloed) const;
     [[nodiscard]] bool getMixerStripControlStateForTesting(const juce::String& sourceId,
                                                            double& gain,
                                                            double& pan,
                                                            bool& muted) const;
     [[nodiscard]] bool getMixerStripMeterLevelsForTesting(const juce::String& sourceId, float& left, float& right) const;
+    [[nodiscard]] juce::Colour getMixerStripStatusColourForTesting(const juce::String& sourceId) const;
     bool setMixerStripControlStateForTesting(const juce::String& sourceId, double gain, double pan, bool muted);
     bool clickMixerStripTransmitForTesting(const juce::String& sourceId);
+    bool clickMixerStripVoiceToggleForTesting(const juce::String& sourceId);
     bool setMixerStripSoloStateForTesting(const juce::String& sourceId, bool soloed);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] juce::String getDiagnosticsTextForTesting() const;
     [[nodiscard]] bool isDiagnosticsExpandedForTesting() const noexcept;
     [[nodiscard]] juce::String getServerSettingsSummaryForTesting() const;
+    [[nodiscard]] juce::String getStemCaptureDirectoryForTesting() const;
+    [[nodiscard]] juce::String getStemCaptureStatusTextForTesting() const;
+    [[nodiscard]] bool isStemCaptureEnabledForTesting() const noexcept;
+    [[nodiscard]] bool canClickNewStemRunForTesting() const noexcept;
     void setSettingsDraftForTesting(const app::session::SessionSettings& settings);
     void setPasswordTextForTesting(const juce::String& text);
+    void setStemCaptureDirectoryForTesting(const juce::String& text);
     void clickConnectForTesting();
     void clickHostSyncAssistForTesting();
     void clickDiagnosticsToggleForTesting();
+    void clickStemCaptureToggleForTesting();
+    void clickNewStemRunForTesting();
     void runTimerTickForTesting();
     void refreshForTesting();
 
@@ -371,7 +411,9 @@ private:
         juce::ToggleButton soloToggle;
         juce::ToggleButton muteToggle;
         juce::TextButton transmitButton;
+        juce::ToggleButton voiceModeToggle;
         bool hasTransmitControl { false };
+        bool hasVoiceModeControl { false };
         bool showsGroupLabel { false };
         float lastMeterLeft { 0.0f };
         float lastMeterRight { 0.0f };
@@ -389,6 +431,7 @@ private:
     void refreshHostSyncAssistStatus();
     void refreshServerDiscoveryUi();
     void refreshRoomUi();
+    void refreshStemCaptureUi();
     void refreshDiagnosticsUi();
     void rebuildRoomFeedWidgets(const std::vector<RoomFeedEntry>& entries);
     bool submitRoomComposerMessage();
@@ -396,9 +439,12 @@ private:
     void refreshMixerStrips();
     void rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips);
     void updateTransmitButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
+    void updateVoiceModeButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
     [[nodiscard]] RoomVoteKind getActiveRoomVoteKind() const noexcept;
     [[nodiscard]] bool isRoomFeedNearBottom() const noexcept;
     void scrollRoomFeedToBottom();
+    bool applyStemCaptureSettingsFromUi(bool enabled);
+    void launchStemCaptureFolderChooser();
     [[nodiscard]] juce::String getCollapsedServerSummary() const;
     [[nodiscard]] juce::String getCollapsedServerSummaryAscii() const;
     [[nodiscard]] juce::String getDiagnosticsToggleText() const;
@@ -427,7 +473,11 @@ private:
     FloatSetter masterOutputGainSetter_;
     FloatGetter metronomeGainGetter_;
     FloatSetter metronomeGainSetter_;
+    StemCaptureUiGetter stemCaptureUiGetter_;
+    StemCaptureSettingsSetter stemCaptureSettingsSetter_;
+    StemCaptureNewRunHandler stemCaptureNewRunHandler_;
     CommandHandler transmitToggleHandler_;
+    VoiceModeToggleHandler voiceModeToggleHandler_;
 
     juce::Label titleLabel_;
     juce::TextButton serverSettingsToggle_;
@@ -447,6 +497,12 @@ private:
     juce::TextEditor portEditor_;
     juce::TextEditor usernameEditor_;
     juce::TextEditor passwordEditor_;
+    juce::ToggleButton stemCaptureToggle_;
+    juce::TextButton stemCaptureBrowseButton_;
+    juce::TextButton stemCaptureNewRunButton_;
+    juce::Label stemCapturePathLabel_;
+    juce::Label stemCapturePathValueLabel_;
+    juce::Label stemCaptureStatusLabel_;
     juce::Slider gainSlider_;
     juce::Slider panSlider_;
     juce::ToggleButton muteToggle_;
@@ -493,6 +549,7 @@ private:
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::string selectedServerDiscoveryEndpointKey_;
     std::string recalledPassword_;
+    StemCaptureUiState currentStemCaptureUiState_;
     bool showingRememberedPasswordMask_ { false };
     bool updatingPasswordEditor_ { false };
     ServerDiscoveryUiState currentServerDiscoveryUiState_;
@@ -503,6 +560,8 @@ private:
     bool serverSettingsExpanded_ { true };
     bool diagnosticsExpanded_ { false };
     bool updatingRoomVoteInputs_ { false };
+    std::unique_ptr<juce::FileChooser> stemCaptureFolderChooser_;
+    juce::String stemCaptureInlineStatusText_;
     std::uint64_t uiRefreshTick_ { 0 };
     bool lastTransportUiInitialized_ { false };
     SyncHealth lastTransportSyncHealth_ { SyncHealth::Disconnected };

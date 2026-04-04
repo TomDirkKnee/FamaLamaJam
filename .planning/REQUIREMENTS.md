@@ -66,6 +66,19 @@
 - **PAR-01**: Project documents the practical feasibility and protocol implications of room-listen/live-feed features.
 - **PAR-02**: Project documents the feasibility and desired UX model for NINJAM voice chat mode before implementation.
 
+### Voice Mode
+
+- **VOICE-01**: User can toggle the local channel between interval mode and voice mode from the plugin UI.
+- **VOICE-02**: Plugin can send and receive voice-mode channels while other room channels remain in normal interval mode.
+
+### Stem Capture
+
+- **REC-01**: User can save transmitted and received stems to a chosen folder for later DAW import.
+
+### Host Routing Research
+
+- **ROUTE-01**: Project documents the practical JUCE/VST3/Ableton path for multiple local send inputs and per-stream output routing before implementation.
+
 ## Later Requirements
 
 ### Platform Expansion
@@ -121,6 +134,10 @@
 | LAYOUT-01 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Planned |
 | LAYOUT-02 | Phase 08.3 / Phase 9 - Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / JamTaba-Inspired Layout & Mixer Parity | Planned |
 | LAYOUT-03 | Phase 08.2 / Phase 08.3 / Phase 08.3.1 / Phase 9 - Pre-Layout CPU, Mixer, UI, and Auth Hardening / Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / Private Server Recall + Compact Session UI Polish / JamTaba-Inspired Layout & Mixer Parity | Planned |
+| VOICE-01 | Phase 08.3.2 - Voice Mode Research & Prototype | Planned |
+| VOICE-02 | Phase 08.3.2 - Voice Mode Research & Prototype | Planned |
+| REC-01 | Phase 08.3.3 - Stem Capture & Export | Planned |
+| ROUTE-01 | Phase 08.3.4 - Host Multi-I/O Routing Research | Planned |
 | PAR-01 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 | PAR-02 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 
