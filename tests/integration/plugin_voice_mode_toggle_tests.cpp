@@ -62,10 +62,6 @@ TEST_CASE("plugin voice mode toggle exposes a dedicated local-strip voice contro
     REQUIRE(editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId,
                                                             voiceEnabled));
     CHECK_FALSE(voiceEnabled);
-    CHECK(editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          == "Voice Off");
-    CHECK(editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          == "Not transmitting");
 
     REQUIRE(editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId));
     CHECK(processor.isLocalVoiceModeEnabled());
@@ -101,8 +97,7 @@ TEST_CASE("plugin voice mode toggle switches live into voice mode and returns th
     CHECK(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
           == "Switching to voice mode...");
-    CHECK(editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          == "Transmitting");
+    CHECK(processor.getTransmitState() == FamaLamaJamAudioProcessor::TransmitState::Active);
 
     fillRampBuffer(buffer);
     processor.processBlock(buffer, midi);

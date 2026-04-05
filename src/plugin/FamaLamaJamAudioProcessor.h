@@ -418,6 +418,9 @@ public:
     [[nodiscard]] bool getMixerStripSnapshot(const std::string& sourceId, MixerStripSnapshot& snapshot) const;
     bool setMixerStripMixState(const std::string& sourceId, float gainDb, float pan, bool muted);
     bool setMixerStripSoloState(const std::string& sourceId, bool soloed);
+    bool setLocalMonitorVisibility(const std::string& sourceId, bool visible);
+    bool setLocalMonitorDisplayName(const std::string& sourceId, std::string displayName);
+    bool setFixedRemoteOutputAssignment(const std::string& sourceId, int outputBusIndex);
     void setPublicServerDiscoveryClientForTesting(std::unique_ptr<infra::net::PublicServerDiscoveryClient> client);
     bool requestPublicServerDiscoveryRefreshForTesting(bool manual);
 

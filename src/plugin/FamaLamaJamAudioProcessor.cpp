@@ -33,6 +33,8 @@ const juce::Identifier kPluginStateMixerStripUserName("userName");
 const juce::Identifier kPluginStateMixerStripChannelName("channelName");
 const juce::Identifier kPluginStateMixerStripDisplayName("displayName");
 const juce::Identifier kPluginStateMixerStripChannelIndex("channelIndex");
+const juce::Identifier kPluginStateMixerStripVisible("visible");
+const juce::Identifier kPluginStateMixerStripRemoteOutputBus("remoteOutputBus");
 const juce::Identifier kPluginStateMixerStripGainDb("gainDb");
 const juce::Identifier kPluginStateMixerStripPan("pan");
 const juce::Identifier kPluginStateMixerStripMuted("muted");
@@ -43,6 +45,10 @@ const juce::Identifier kPluginStateRememberedServerHost("host");
 const juce::Identifier kPluginStateRememberedServerPort("port");
 const juce::Identifier kPluginStateRememberedServerUsername("username");
 const juce::Identifier kPluginStateRememberedServerPassword("password");
+const juce::Identifier kPluginStateRemoteOutputAssignments("remoteOutputAssignments");
+const juce::Identifier kPluginStateRemoteOutputAssignment("remoteOutputAssignment");
+const juce::Identifier kPluginStateRemoteOutputSourceId("sourceId");
+const juce::Identifier kPluginStateRemoteOutputBus("outputBus");
 const juce::Identifier kSessionSettingsStateType("famalamajam.session.settings");
 constexpr int kPluginStateSchema = 1;
 constexpr std::size_t kMaxLastErrorContextLength = 64;
@@ -1722,11 +1728,12 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                 .sourceId = snapshot.descriptor.sourceId,
                 .groupId = snapshot.descriptor.groupId,
                 .groupLabel = snapshot.descriptor.kind == MixerStripKind::LocalMonitor
-                    ? std::string("Local Monitor")
+                    ? std::string(FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle)
                     : snapshot.descriptor.userName,
                 .displayName = snapshot.descriptor.displayName,
                 .subtitle = snapshot.descriptor.kind == MixerStripKind::LocalMonitor
-                    ? std::string("Live monitor")
+                    ? (snapshot.descriptor.sourceId == kLocalMainSourceId ? std::string("Live monitor")
+                                                                          : snapshot.descriptor.channelName)
                     : (snapshot.descriptor.channelName.empty() ? std::string("Delayed return")
                                                                : snapshot.descriptor.channelName),
                 .gainDb = snapshot.mix.gainDb,
@@ -1744,12 +1751,25 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                 .statusText = snapshot.statusText,
                 .active = snapshot.descriptor.active,
                 .visible = snapshot.descriptor.visible,
+                .editableName = snapshot.descriptor.kind == MixerStripKind::LocalMonitor,
+                .outputAssignmentIndex = getFixedRemoteOutputAssignmentForTesting(snapshot.descriptor.sourceId),
+                .outputAssignmentLabels = snapshot.descriptor.kind == MixerStripKind::RemoteDelayed
+                    ? std::vector<std::string> { kFixedRemoteOutputRoutes[0].hostLabel,
+                                                 kFixedRemoteOutputRoutes[1].hostLabel,
+                                                 kFixedRemoteOutputRoutes[2].hostLabel }
+                    : std::vector<std::string> {},
             });
         }
         return strips;
     };
     auto mixerStripSetter = [this](const std::string& sourceId, float gainDb, float pan, bool muted) {
         return setMixerStripMixState(sourceId, gainDb, pan, muted);
+    };
+    auto mixerStripNameSetter = [this](const std::string& sourceId, std::string displayName) {
+        return setLocalMonitorDisplayName(sourceId, std::move(displayName));
+    };
+    auto mixerStripOutputAssignmentSetter = [this](const std::string& sourceId, int outputAssignmentIndex) {
+        return setFixedRemoteOutputAssignment(sourceId, outputAssignmentIndex);
     };
     auto mixerStripSoloSetter = [this](const std::string& sourceId, bool soloed) {
         return setMixerStripSoloState(sourceId, soloed);
@@ -1782,6 +1802,7 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
     auto diagnosticsTextGetter = [this]() { return getRemoteReceiveDiagnosticsText(); };
     auto masterOutputGainGetter = [this]() { return getMasterOutputGainDb(); };
     auto masterOutputGainSetter = [this](float gainDb) { setMasterOutputGainDb(gainDb); };
+    auto addLocalChannelHandler = [this]() { return setLocalMonitorVisibility(kLocalSend2SourceId, true); };
     auto transmitToggleHandler = [this]() { return toggleTransmitEnabled(); };
     auto voiceModeToggleHandler = [this]() { return toggleLocalVoiceMode(); };
 
@@ -1811,6 +1832,9 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(stemCaptureSettingsGetter),
                                                std::move(stemCaptureSettingsSetter),
                                                std::move(stemCaptureNewRunHandler),
+                                               std::move(mixerStripNameSetter),
+                                               std::move(mixerStripOutputAssignmentSetter),
+                                               std::move(addLocalChannelHandler),
                                                std::move(transmitToggleHandler),
                                                std::move(voiceModeToggleHandler),
                                                std::move(mixerStripSoloSetter));
@@ -1843,6 +1867,16 @@ void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     }
     stateTree.addChild(rememberedServerHistoryTree, -1, nullptr);
 
+    juce::ValueTree remoteOutputAssignmentsTree(kPluginStateRemoteOutputAssignments);
+    for (const auto& [sourceId, outputBusIndex] : fixedRemoteOutputAssignments_)
+    {
+        juce::ValueTree assignmentTree(kPluginStateRemoteOutputAssignment);
+        assignmentTree.setProperty(kPluginStateRemoteOutputSourceId, juce::String(sourceId), nullptr);
+        assignmentTree.setProperty(kPluginStateRemoteOutputBus, outputBusIndex, nullptr);
+        remoteOutputAssignmentsTree.addChild(assignmentTree, -1, nullptr);
+    }
+    stateTree.addChild(remoteOutputAssignmentsTree, -1, nullptr);
+
     const auto lastErrorContext = shortenLastErrorContext(lifecycleController_.getSnapshot().lastError);
     if (! lastErrorContext.empty())
         stateTree.setProperty(kPluginStateLastErrorContext, juce::String(lastErrorContext), nullptr);
@@ -1874,6 +1908,10 @@ void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         stripTree.setProperty(kPluginStateMixerStripChannelName, juce::String(runtimeState.snapshot.descriptor.channelName), nullptr);
         stripTree.setProperty(kPluginStateMixerStripDisplayName, juce::String(runtimeState.snapshot.descriptor.displayName), nullptr);
         stripTree.setProperty(kPluginStateMixerStripChannelIndex, runtimeState.snapshot.descriptor.channelIndex, nullptr);
+        stripTree.setProperty(kPluginStateMixerStripVisible, runtimeState.snapshot.descriptor.visible, nullptr);
+        stripTree.setProperty(kPluginStateMixerStripRemoteOutputBus,
+                              getFixedRemoteOutputAssignmentForTesting(runtimeState.snapshot.descriptor.sourceId),
+                              nullptr);
         stripTree.setProperty(kPluginStateMixerStripGainDb, runtimeState.snapshot.mix.gainDb, nullptr);
         stripTree.setProperty(kPluginStateMixerStripPan, runtimeState.snapshot.mix.pan, nullptr);
         stripTree.setProperty(kPluginStateMixerStripMuted, runtimeState.snapshot.mix.muted, nullptr);
@@ -1896,6 +1934,7 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     float restoredMasterOutputGainDb = 0.0f;
     app::session::StemCaptureSettings restoredStemCaptureSettings = app::session::makeDefaultStemCaptureSettings();
     std::vector<MixerStripSnapshot> restoredMixerStrips;
+    std::vector<std::pair<std::string, int>> restoredRemoteOutputAssignments;
     std::vector<app::session::RememberedServerEntry> restoredRememberedServers;
 
     const auto stateTree = parseValueTree(data, sizeInBytes);
@@ -1958,6 +1997,26 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
             }
         }
 
+        if (const auto remoteOutputAssignmentsTree = stateTree.getChildWithName(kPluginStateRemoteOutputAssignments);
+            remoteOutputAssignmentsTree.isValid())
+        {
+            for (int childIndex = 0; childIndex < remoteOutputAssignmentsTree.getNumChildren(); ++childIndex)
+            {
+                const auto assignmentTree = remoteOutputAssignmentsTree.getChild(childIndex);
+                if (! assignmentTree.hasType(kPluginStateRemoteOutputAssignment))
+                    continue;
+
+                const auto sourceId
+                    = assignmentTree.getProperty(kPluginStateRemoteOutputSourceId, juce::String()).toString().toStdString();
+                if (sourceId.empty())
+                    continue;
+
+                restoredRemoteOutputAssignments.emplace_back(
+                    sourceId,
+                    static_cast<int>(assignmentTree.getProperty(kPluginStateRemoteOutputBus, 0)));
+            }
+        }
+
         if (const auto mixerStateTree = stateTree.getChildWithName(kPluginStateMixerState); mixerStateTree.isValid())
         {
             for (int childIndex = 0; childIndex < mixerStateTree.getNumChildren(); ++childIndex)
@@ -1983,6 +2042,9 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
                     = stripTree.getProperty(kPluginStateMixerStripDisplayName, juce::String()).toString().toStdString();
                 snapshot.descriptor.channelIndex
                     = static_cast<int>(stripTree.getProperty(kPluginStateMixerStripChannelIndex, -1));
+                snapshot.descriptor.visible
+                    = static_cast<bool>(stripTree.getProperty(kPluginStateMixerStripVisible, false));
+                snapshot.descriptor.active = snapshot.descriptor.visible;
                 snapshot.mix.gainDb = static_cast<float>(stripTree.getProperty(kPluginStateMixerStripGainDb, 0.0f));
                 snapshot.mix.pan = static_cast<float>(stripTree.getProperty(kPluginStateMixerStripPan, 0.0f));
                 snapshot.mix.muted = static_cast<bool>(stripTree.getProperty(kPluginStateMixerStripMuted, false));
@@ -1990,7 +2052,12 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
                 snapshot.mix = normalizeMixState(snapshot.mix);
 
                 if (! snapshot.descriptor.sourceId.empty())
+                {
+                    restoredRemoteOutputAssignments.emplace_back(
+                        snapshot.descriptor.sourceId,
+                        static_cast<int>(stripTree.getProperty(kPluginStateMixerStripRemoteOutputBus, 0)));
                     restoredMixerStrips.push_back(std::move(snapshot));
+                }
             }
         }
     }
@@ -2019,6 +2086,9 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     closeLiveSocket();
     applyLifecycleTransition(lifecycleController_.resetToIdle());
     mixerStripsBySourceId_.clear();
+    fixedRemoteOutputAssignments_.clear();
+    for (const auto& [sourceId, outputBusIndex] : restoredRemoteOutputAssignments)
+        setFixedRemoteOutputAssignment(sourceId, outputBusIndex);
 
     std::vector<app::session::RememberedServerEntry> mergedRememberedServers;
     {
@@ -2041,8 +2111,15 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     {
         auto snapshot = restoredStrip;
         snapshot.meter = {};
-        snapshot.descriptor.active = snapshot.descriptor.kind == MixerStripKind::LocalMonitor;
-        snapshot.descriptor.visible = snapshot.descriptor.kind == MixerStripKind::LocalMonitor;
+        if (snapshot.descriptor.kind == MixerStripKind::LocalMonitor)
+        {
+            if (const auto* slot = findFixedLocalRoutingSlot(snapshot.descriptor.sourceId); slot != nullptr)
+            {
+                if (slot->visibleByDefault)
+                    snapshot.descriptor.visible = true;
+                snapshot.descriptor.active = slot->visibleByDefault || snapshot.descriptor.visible;
+            }
+        }
         snapshot.descriptor.inactiveIntervals = 0;
 
         auto& runtimeState = mixerStripsBySourceId_[snapshot.descriptor.sourceId];
@@ -2603,7 +2680,7 @@ void FamaLamaJamAudioProcessor::resetCpuDiagnosticSnapshotForTesting() noexcept
 
 void FamaLamaJamAudioProcessor::selectHostRoutingProofSourceForTesting(std::string sourceId)
 {
-    setFixedRemoteOutputAssignmentForTesting(std::move(sourceId), HostRoutingProof::kRoutedOutputBusIndex);
+    setFixedRemoteOutputAssignment(std::move(sourceId), HostRoutingProof::kRoutedOutputBusIndex);
 }
 
 void FamaLamaJamAudioProcessor::setFixedRemoteOutputAssignmentForTesting(std::string sourceId, int outputBusIndex)
@@ -2615,13 +2692,7 @@ void FamaLamaJamAudioProcessor::setFixedRemoteOutputAssignmentForTesting(std::st
         return;
     }
 
-    const auto normalizedOutputBusIndex = normalizeFixedRemoteOutputBusIndex(outputBusIndex);
-    if (normalizedOutputBusIndex == kFixedRemoteOutputRoutes.front().outputBusIndex)
-        fixedRemoteOutputAssignments_.erase(sourceId);
-    else
-        fixedRemoteOutputAssignments_[sourceId] = normalizedOutputBusIndex;
-
-    hostRoutingProof_.selectedRoutedSourceId = sourceId;
+    (void) setFixedRemoteOutputAssignment(sourceId, outputBusIndex);
 }
 
 int FamaLamaJamAudioProcessor::getFixedRemoteOutputAssignmentForTesting(const std::string& sourceId) const
@@ -3002,6 +3073,62 @@ bool FamaLamaJamAudioProcessor::setMixerStripSoloState(const std::string& source
     }
 
     return false;
+}
+
+bool FamaLamaJamAudioProcessor::setLocalMonitorVisibility(const std::string& sourceId, bool visible)
+{
+    if (const auto* slot = findFixedLocalRoutingSlot(sourceId); slot == nullptr)
+        return false;
+    else if (slot->visibleByDefault)
+        visible = true;
+
+    ensureLocalMonitorMixerStrip();
+    if (const auto it = mixerStripsBySourceId_.find(sourceId); it != mixerStripsBySourceId_.end())
+    {
+        it->second.snapshot.descriptor.visible = visible;
+        it->second.snapshot.descriptor.active = visible;
+        return true;
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessor::setLocalMonitorDisplayName(const std::string& sourceId, std::string displayName)
+{
+    const auto* slot = findFixedLocalRoutingSlot(sourceId);
+    if (slot == nullptr)
+        return false;
+
+    displayName = juce::String(displayName).trim().toStdString();
+    if (displayName.empty())
+        displayName = slot->fallbackLabel;
+
+    ensureLocalMonitorMixerStrip();
+    if (const auto it = mixerStripsBySourceId_.find(sourceId); it != mixerStripsBySourceId_.end())
+    {
+        it->second.snapshot.descriptor.displayName = std::move(displayName);
+        updateLocalTransportChannelInfo();
+        return true;
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessor::setFixedRemoteOutputAssignment(const std::string& sourceId, int outputBusIndex)
+{
+    if (sourceId.empty())
+        return false;
+
+    const auto normalizedOutputBusIndex = normalizeFixedRemoteOutputBusIndex(outputBusIndex);
+    if (normalizedOutputBusIndex == kFixedRemoteOutputRoutes.front().outputBusIndex)
+        fixedRemoteOutputAssignments_.erase(sourceId);
+    else
+        fixedRemoteOutputAssignments_[sourceId] = normalizedOutputBusIndex;
+
+    hostRoutingProof_.selectedRoutedSourceId = fixedRemoteOutputAssignments_.empty()
+        ? std::string {}
+        : fixedRemoteOutputAssignments_.begin()->first;
+    return true;
 }
 
 void FamaLamaJamAudioProcessor::setPublicServerDiscoveryClientForTesting(

@@ -254,6 +254,8 @@ public:
     using MixerStripsGetter = std::function<std::vector<MixerStripState>()>;
     using MixerStripSetter = std::function<bool(const std::string&, float, float, bool)>;
     using MixerStripSoloSetter = std::function<bool(const std::string&, bool)>;
+    using MixerStripNameSetter = std::function<bool(const std::string&, std::string)>;
+    using MixerStripOutputAssignmentSetter = std::function<bool(const std::string&, int)>;
     using DiagnosticsTextGetter = std::function<std::string()>;
     using FloatGetter = std::function<float()>;
     using FloatSetter = std::function<void(float)>;
@@ -290,6 +292,9 @@ public:
                                     StemCaptureUiGetter stemCaptureUiGetter = {},
                                     StemCaptureSettingsSetter stemCaptureSettingsSetter = {},
                                     StemCaptureNewRunHandler stemCaptureNewRunHandler = {},
+                                    MixerStripNameSetter mixerStripNameSetter = {},
+                                    MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
+                                    CommandHandler addLocalChannelHandler = {},
                                     CommandHandler transmitToggleHandler = {},
                                     VoiceModeToggleHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
@@ -317,6 +322,9 @@ public:
                                     StemCaptureUiGetter stemCaptureUiGetter = {},
                                     StemCaptureSettingsSetter stemCaptureSettingsSetter = {},
                                     StemCaptureNewRunHandler stemCaptureNewRunHandler = {},
+                                    MixerStripNameSetter mixerStripNameSetter = {},
+                                    MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
+                                    CommandHandler addLocalChannelHandler = {},
                                     CommandHandler transmitToggleHandler = {},
                                     VoiceModeToggleHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
@@ -419,8 +427,11 @@ private:
         juce::Slider panSlider;
         juce::ToggleButton soloToggle;
         juce::ToggleButton muteToggle;
+        juce::TextEditor nameEditor;
         juce::TextButton transmitButton;
         juce::ToggleButton voiceModeToggle;
+        juce::ComboBox outputSelector;
+        bool editableName { false };
         bool hasTransmitControl { false };
         bool hasVoiceModeControl { false };
         bool showsGroupLabel { false };
@@ -470,6 +481,8 @@ private:
     MixerStripsGetter mixerStripsGetter_;
     MixerStripSetter mixerStripSetter_;
     MixerStripSoloSetter mixerStripSoloSetter_;
+    MixerStripNameSetter mixerStripNameSetter_;
+    MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter_;
     BoolGetter metronomeGetter_;
     BoolSetter metronomeSetter_;
     ServerDiscoveryUiGetter serverDiscoveryUiGetter_;
@@ -485,6 +498,7 @@ private:
     StemCaptureUiGetter stemCaptureUiGetter_;
     StemCaptureSettingsSetter stemCaptureSettingsSetter_;
     StemCaptureNewRunHandler stemCaptureNewRunHandler_;
+    CommandHandler addLocalChannelHandler_;
     CommandHandler transmitToggleHandler_;
     VoiceModeToggleHandler voiceModeToggleHandler_;
 
@@ -550,6 +564,10 @@ private:
     juce::Label mixerSectionLabel_;
     juce::Viewport mixerViewport_;
     juce::Component mixerContent_;
+    juce::Label localHeaderLabel_;
+    juce::ToggleButton localHeaderTransmitToggle_;
+    juce::ToggleButton localHeaderVoiceToggle_;
+    juce::TextButton addLocalChannelButton_;
     juce::Label masterOutputLabel_;
     juce::Slider masterOutputSlider_;
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;

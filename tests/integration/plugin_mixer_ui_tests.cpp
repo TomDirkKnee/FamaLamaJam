@@ -415,7 +415,7 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
 
     REQUIRE(outputSelector != nullptr);
     CHECK(outputSelector->getNumItems() == 3);
-    CHECK(outputSelector->getItemText(1) == FamaLamaJamAudioProcessorEditor::kMainOutputLabel);
-    CHECK(outputSelector->getItemText(2) == "Remote Out 1");
-    CHECK(outputSelector->getItemText(3) == "Remote Out 2");
+    CHECK(outputSelector->getItemText(0) == FamaLamaJamAudioProcessorEditor::kMainOutputLabel);
+    CHECK(outputSelector->getItemText(1) == "Remote Out 1");
+    CHECK(outputSelector->getItemText(2) == "Remote Out 2");
 }
