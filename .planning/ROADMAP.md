@@ -23,7 +23,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 08.3: Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard (INSERTED)** - Completed 2026-03-21 after the brand-new-instance private-room recall rerun passed in Ableton, with the local `build-vs` NMake caveat still documented separately.
 - [ ] **Phase 08.3.2: Voice Mode Research & Prototype (INSERTED)** - Research JamTaba/ReaNINJAM mixed-room voice semantics and prototype true per-channel voice send/receive with a local strip toggle before broader routing and layout work.
 - [ ] **Phase 08.3.3: Stem Capture & Export (INSERTED)** - Add optional on-disk stem capture for local and remote recordings with user-controlled folder selection and practical naming/session rules.
-- [ ] **Phase 08.3.4: Host Multi-I/O Routing Research (INSERTED)** - Determine what JUCE/VST3/Ableton can expose for multiple local send inputs and per-stream DAW output routing before committing to implementation.
+- [x] **Phase 08.3.4: Host Multi-I/O Routing Research (INSERTED)** - Determine what JUCE/VST3/Ableton can expose for multiple local send inputs and per-stream DAW output routing before committing to implementation. (completed 2026-04-05)
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
@@ -277,12 +277,12 @@ Plans:
 2. Project documents whether individual remote sources can be routed to distinct DAW outputs in a way Ableton users can actually use.
 3. Any recommended implementation path is based on validated host/bus behavior, not assumed UI abstractions.
 4. The outcome is concrete enough to decide whether routing work should become an implementation phase or remain out of scope.
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 08.3.4-01-PLAN.md - Lock the one-extra-bus proof contract with RED coverage and an explicit Ableton matrix.
 - [x] 08.3.4-02-PLAN.md - Implement the fixed-bus processor proof for one extra local stereo input and one extra routed stereo output pair.
-- [ ] 08.3.4-03-PLAN.md - Re-run the focused gate in Ableton and record the fixed-bus go or no-go plus fallback recommendation.
+- [x] 08.3.4-03-PLAN.md - Re-ran the focused gate in Ableton, recorded the approved fixed-bus verdict, and locked the follow-on architecture to host-owned plugin-bus routing.
 
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
@@ -363,7 +363,7 @@ Plans:
 | 8.3.1. Private Server Recall + Compact Session UI Polish | 0/3 | Planned | - |
 | 8.3.2. Voice Mode Research & Prototype | 0/3 | Planned | - |
 | 8.3.3. Stem Capture & Export | 0/TBD | Planned | - |
-| 8.3.4. Host Multi-I/O Routing Research | 2/3 | In Progress | - |
+| 8.3.4. Host Multi-I/O Routing Research | 3/3 | Complete | 2026-04-05 |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08.3.4-02-PLAN.md
-last_updated: "2026-04-04T20:27:01.796Z"
-last_activity: 2026-04-04 - Completed plan 02 with the fixed-bus processor proof, selected-source routed output behavior, and focused routing plus voice-mode coverage.
+stopped_at: Completed 08.3.4-03-PLAN.md
+last_updated: "2026-04-05T07:47:42.434Z"
+last_activity: 2026-04-05 - Completed plan 03 with an approved Ableton fixed-bus verdict and a host-owned routing recommendation.
 progress:
   total_phases: 17
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 54
-  completed_plans: 48
-  percent: 89
+  completed_plans: 49
+  percent: 91
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.4 host multi-I/O routing research now moves to the Ableton proof and verdict capture in plan 03, while Phase 08.2 still carries the separate same-machine CPU repro concern.
+**Current focus:** Phase 08.3.4 host multi-I/O routing research is complete with an approved fixed-bus follow-on recommendation, while Phase 08.2 still carries the separate same-machine CPU repro concern.
 
 ## Current Position
 
 Phase: 08.3.4 - Host Multi-I/O Routing Research  
 Plan: 03 - Ableton Fixed-Bus Verdict  
-Status: In Progress  
-Last activity: 2026-04-04 - Completed plan 02 with the fixed-bus processor proof, selected-source routed output behavior, and focused routing plus voice-mode coverage.
+Status: Completed  
+Last activity: 2026-04-05 - Completed plan 03 with an approved Ableton fixed-bus verdict and a host-owned routing recommendation.
 
-Progress: 89%
+Progress: 91%
 
 ## Accumulated Context
 
@@ -89,6 +89,9 @@ Progress: 89%
 - [Phase 08.3.4]: Lock the Ableton verdict to explicit fallback outcomes: per-user output routing or no follow-on phase if host ergonomics are weak.
 - [Phase 08.3.4]: Keep the proof buses exposed by default while still accepting disabled aux layouts so the later Ableton pass sees a real stereo bus declaration.
 - [Phase 08.3.4]: Keep routed-output proof scope at one selected sourceId on output bus 1 and leave all other decoded sources on the main output until the Ableton verdict is recorded.
+- [Phase 08.3.4]: Approve a follow-on fixed-bus implementation phase because Ableton exposes both proof buses in normal host routing UI.
+- [Phase 08.3.4]: Use host-owned track-to-bus routing in Live rather than plugin-owned Ableton track enumeration.
+- [Phase 08.3.4]: Start implementation with Main plus Local Send 2 and fixed extra remote output pairs; defer broader bus counts.
 
 ### Roadmap Evolution
 
@@ -132,9 +135,10 @@ Progress: 89%
 - 2026-03-21: Completed Phase 08.3 plan 07 by rerunning the focused 08.3 gate on `build-vs-2026` (`54` test cases / `626` assertions), rebuilding the Debug VST3, and recording the approved brand-new-instance private-room recall rerun in Ableton.
 - 2026-04-04: Completed Phase 08.3.4 plan 01 in 21 min across 2 task commits and 5 modified files; the phase now has RED fixed-bus routing coverage, a manual Ableton proof matrix, and explicit fallback criteria for per-user routing or no follow-on implementation phase.
 - 2026-04-04: Completed Phase 08.3.4 plan 02 in 23 min across 2 task commits and 4 modified files; the processor now exposes the fixed proof buses, routes one selected decoded source to `Remote Out 1`, and keeps focused routing plus voice-mode coverage green.
+- 2026-04-05: Completed Phase 08.3.4 plan 03 in 11h 12m elapsed across 2 task commits and 4 modified files; Ableton exposed both proof buses in normal routing UI, so the phase closed with an approved host-owned fixed-bus follow-on recommendation.
 
 ## Session Continuity
 
-Last session: 2026-04-04T20:28:37.190Z
-Stopped at: Completed 08.3.4-02-PLAN.md
+Last session: 2026-04-05T07:47:42.407Z
+Stopped at: Completed 08.3.4-03-PLAN.md
 Resume file: None
