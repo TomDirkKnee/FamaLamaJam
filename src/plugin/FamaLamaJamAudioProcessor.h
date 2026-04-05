@@ -383,11 +383,7 @@ public:
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] HostRoutingProof getHostRoutingProofForTesting() const { return hostRoutingProof_; }
-    void selectHostRoutingProofSourceForTesting(std::string sourceId)
-    {
-        hostRoutingProofRoute_.sourceId = std::move(sourceId);
-        hostRoutingProof_.selectedRoutedSourceId = hostRoutingProofRoute_.sourceId;
-    }
+    void selectHostRoutingProofSourceForTesting(std::string sourceId);
     void upsertMixerStripSnapshotForTesting(MixerStripSnapshot snapshot)
     {
         if (snapshot.descriptor.sourceId.empty())
@@ -396,19 +392,8 @@ public:
         auto& runtimeState = mixerStripsBySourceId_[snapshot.descriptor.sourceId];
         runtimeState.snapshot = std::move(snapshot);
     }
-    void setFixedRemoteOutputAssignmentForTesting(std::string sourceId, int outputBusIndex)
-    {
-        hostRoutingProofRoute_.sourceId = std::move(sourceId);
-        hostRoutingProofRoute_.outputBusIndex = outputBusIndex;
-        hostRoutingProof_.selectedRoutedSourceId = hostRoutingProofRoute_.sourceId;
-    }
-    [[nodiscard]] int getFixedRemoteOutputAssignmentForTesting(const std::string& sourceId) const
-    {
-        if (hostRoutingProofRoute_.sourceId == sourceId)
-            return hostRoutingProofRoute_.outputBusIndex;
-
-        return kFixedRemoteOutputRoutes.front().outputBusIndex;
-    }
+    void setFixedRemoteOutputAssignmentForTesting(std::string sourceId, int outputBusIndex);
+    [[nodiscard]] int getFixedRemoteOutputAssignmentForTesting(const std::string& sourceId) const;
     bool setStemCaptureDirectoryForTesting(const juce::File& directory, bool enabled);
     [[nodiscard]] bool waitForStemCaptureFlushForTesting(int timeoutMs) const;
     [[nodiscard]] juce::File getStemCaptureSessionDirectoryForTesting() const;
@@ -565,9 +550,9 @@ private:
     std::unordered_map<std::string, RemoteReceiveDiagnosticRuntime> remoteReceiveDiagnosticsBySource_;
     std::unordered_map<std::string, net::FramedSocketTransport::RemoteSourceInfo> knownRemoteSourcesById_;
     std::unordered_map<std::string, MixerStripRuntimeState> mixerStripsBySourceId_;
+    std::unordered_map<std::string, int> fixedRemoteOutputAssignments_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     HostRoutingProof hostRoutingProof_;
-    HostRoutingProofRoute hostRoutingProofRoute_;
     std::atomic<bool> hasServerTimingForUi_ { false };
     std::atomic<int> serverBpmForUi_ { 0 };
     std::atomic<int> beatsPerIntervalForUi_ { 0 };

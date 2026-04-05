@@ -628,6 +628,20 @@ void applyMixToBuffer(juce::AudioBuffer<float>& buffer,
     return it != FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.end() ? &(*it) : nullptr;
 }
 
+[[nodiscard]] bool isValidFixedRemoteOutputBusIndex(int outputBusIndex)
+{
+    return std::any_of(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.begin(),
+                       FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.end(),
+                       [outputBusIndex](const auto& route) { return route.outputBusIndex == outputBusIndex; });
+}
+
+[[nodiscard]] int normalizeFixedRemoteOutputBusIndex(int outputBusIndex)
+{
+    return isValidFixedRemoteOutputBusIndex(outputBusIndex)
+        ? outputBusIndex
+        : FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.front().outputBusIndex;
+}
+
 void copyBuffer(juce::AudioBuffer<float>& destination, const juce::AudioBuffer<float>& source)
 {
     if (source.getNumChannels() <= 0 || source.getNumSamples() <= 0)
@@ -857,7 +871,9 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     hostRoutingProof_.mainPathActive = bufferHasSignal(mainInput);
     hostRoutingProof_.auxInputActive = bufferHasSignal(auxInput);
-    hostRoutingProof_.selectedRoutedSourceId = hostRoutingProofRoute_.sourceId;
+    hostRoutingProof_.selectedRoutedSourceId = fixedRemoteOutputAssignments_.empty()
+        ? std::string {}
+        : fixedRemoteOutputAssignments_.begin()->first;
     copyBuffer(hostRoutingProofAuxSendBuffer_, auxInput);
 
     if (auxOutput.getNumChannels() > 0)
@@ -1385,7 +1401,14 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                                                                       * static_cast<float>(currentSampleRate_)));
         const bool renderMetronome = metronomeEnabled_.load(std::memory_order_relaxed)
             && authoritativeTiming_.activeBeatSamples > 0;
-        const bool routedOutputAvailable = auxOutput.getNumChannels() > 0;
+        auto selectRemoteOutputBuffer = [&](const std::string& sourceId) -> juce::AudioBuffer<float>* {
+            const auto assignment = getFixedRemoteOutputAssignmentForTesting(sourceId);
+            if (assignment == 1 && auxOutput.getNumChannels() > 0)
+                return &auxOutput;
+            if (assignment == 2 && auxOutput2.getNumChannels() > 0)
+                return &auxOutput2;
+            return &mainOutput;
+        };
 
         hasServerTimingForUi_.store(true, std::memory_order_relaxed);
         serverBpmForUi_.store(authoritativeTiming_.activeBpm, std::memory_order_relaxed);
@@ -1418,17 +1441,9 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 if (stripAudible && sourceChannels > 0
                     && voiceChunk.playbackPosition < voiceChunk.audio.getNumSamples())
                 {
-                    auto* targetOutput = &mainOutput;
-                    if (routedOutputAvailable
-                        && hostRoutingProofRoute_.outputBusIndex == HostRoutingProof::kRoutedOutputBusIndex
-                        && hostRoutingProofRoute_.sourceId == voiceIt->first)
-                    {
-                        targetOutput = &auxOutput;
-                    }
-
                     mixSourceSampleToOutput(voiceChunk.audio,
                                             voiceChunk.playbackPosition,
-                                            *targetOutput,
+                                            *selectRemoteOutputBuffer(voiceIt->first),
                                             sample,
                                             stripIt->second.snapshot.mix,
                                             stripIt->second.snapshot.meter,
@@ -1460,17 +1475,9 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 if (sourceBuffer.getNumChannels() <= 0)
                     continue;
 
-                auto* targetOutput = &mainOutput;
-                if (routedOutputAvailable
-                    && hostRoutingProofRoute_.outputBusIndex == HostRoutingProof::kRoutedOutputBusIndex
-                    && hostRoutingProofRoute_.sourceId == sourceEntry.first)
-                {
-                    targetOutput = &auxOutput;
-                }
-
                 mixSourceSampleToOutput(sourceBuffer,
                                         authoritativeTiming_.samplesIntoInterval,
-                                        *targetOutput,
+                                        *selectRemoteOutputBuffer(sourceEntry.first),
                                         sample,
                                         stripIt->second.snapshot.mix,
                                         stripIt->second.snapshot.meter,
@@ -2592,6 +2599,37 @@ FamaLamaJamAudioProcessor::CpuDiagnosticSnapshot FamaLamaJamAudioProcessor::getC
 void FamaLamaJamAudioProcessor::resetCpuDiagnosticSnapshotForTesting() noexcept
 {
     cpuDiagnosticSnapshot_ = {};
+}
+
+void FamaLamaJamAudioProcessor::selectHostRoutingProofSourceForTesting(std::string sourceId)
+{
+    setFixedRemoteOutputAssignmentForTesting(std::move(sourceId), HostRoutingProof::kRoutedOutputBusIndex);
+}
+
+void FamaLamaJamAudioProcessor::setFixedRemoteOutputAssignmentForTesting(std::string sourceId, int outputBusIndex)
+{
+    if (sourceId.empty())
+    {
+        fixedRemoteOutputAssignments_.clear();
+        hostRoutingProof_.selectedRoutedSourceId.clear();
+        return;
+    }
+
+    const auto normalizedOutputBusIndex = normalizeFixedRemoteOutputBusIndex(outputBusIndex);
+    if (normalizedOutputBusIndex == kFixedRemoteOutputRoutes.front().outputBusIndex)
+        fixedRemoteOutputAssignments_.erase(sourceId);
+    else
+        fixedRemoteOutputAssignments_[sourceId] = normalizedOutputBusIndex;
+
+    hostRoutingProof_.selectedRoutedSourceId = sourceId;
+}
+
+int FamaLamaJamAudioProcessor::getFixedRemoteOutputAssignmentForTesting(const std::string& sourceId) const
+{
+    if (const auto it = fixedRemoteOutputAssignments_.find(sourceId); it != fixedRemoteOutputAssignments_.end())
+        return it->second;
+
+    return kFixedRemoteOutputRoutes.front().outputBusIndex;
 }
 
 bool FamaLamaJamAudioProcessor::setStemCaptureDirectoryForTesting(const juce::File& directory, bool enabled)
