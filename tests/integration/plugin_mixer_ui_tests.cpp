@@ -112,6 +112,11 @@ juce::ToggleButton* findToggleWithText(juce::Component& parent, const juce::Stri
     return findComponent<juce::ToggleButton>(parent,
                                              [&](const juce::ToggleButton& toggle) { return toggle.getButtonText() == text; });
 }
+
+juce::Button* findButtonWithText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::Button>(parent, [&](const juce::Button& button) { return button.getButtonText() == text; });
+}
 } // namespace
 
 TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[plugin_mixer_ui]")
@@ -331,4 +336,86 @@ TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with ora
           == juce::Colour::fromRGB(230, 181, 120));
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("voice-user#1").isEmpty());
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("voice-user#1").isEmpty());
+}
+
+TEST_CASE("plugin mixer ui expects one local header for global transmit voice add-channel and inline rename",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = "Local Sends",
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = "local",
+          .groupLabel = "Local Sends",
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+    });
+
+    REQUIRE(findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle) != nullptr);
+    REQUIRE(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTransmitLabel) != nullptr);
+    REQUIRE(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderVoiceLabel) != nullptr);
+    REQUIRE(findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kAddLocalChannelLabel) != nullptr);
+    REQUIRE(findComponent<juce::TextEditor>(*harness.editor,
+                                            [](const juce::TextEditor& editor) { return editor.getText() == "Bass"; })
+            != nullptr);
+
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
+}
+
+TEST_CASE("plugin mixer ui expects inline remote output routing choices on remote strips", "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = "Local Sends",
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true,
+          .outputAssignmentIndex = 2,
+          .outputAssignmentLabels = {
+              FamaLamaJamAudioProcessorEditor::kMainOutputLabel,
+              "Remote Out 1",
+              "Remote Out 2",
+          } },
+    });
+
+    auto* outputSelector = findComponent<juce::ComboBox>(*harness.editor, [](const juce::ComboBox& comboBox) {
+        for (int itemIndex = 1; itemIndex <= comboBox.getNumItems(); ++itemIndex)
+        {
+            if (comboBox.getItemText(itemIndex) == "Remote Out 2")
+                return true;
+        }
+
+        return false;
+    });
+
+    REQUIRE(outputSelector != nullptr);
+    CHECK(outputSelector->getNumItems() == 3);
+    CHECK(outputSelector->getItemText(1) == FamaLamaJamAudioProcessorEditor::kMainOutputLabel);
+    CHECK(outputSelector->getItemText(2) == "Remote Out 1");
+    CHECK(outputSelector->getItemText(3) == "Remote Out 2");
 }

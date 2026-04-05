@@ -438,4 +438,42 @@ TEST_CASE("plugin_state_roundtrip restores saved mixer state without reviving li
     CHECK_FALSE(remoteSnapshot.descriptor.visible);
 }
 
+TEST_CASE("plugin_state_roundtrip expects hidden extra local slots and remote output assignments to restore",
+          "[plugin_state_roundtrip]")
+{
+    FamaLamaJamAudioProcessor source(true, true);
+
+    FamaLamaJamAudioProcessor::MixerStripSnapshot extraLocalSnapshot;
+    extraLocalSnapshot.descriptor.kind = FamaLamaJamAudioProcessor::MixerStripKind::LocalMonitor;
+    extraLocalSnapshot.descriptor.sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId;
+    extraLocalSnapshot.descriptor.groupId = "local";
+    extraLocalSnapshot.descriptor.displayName = "Bass";
+    extraLocalSnapshot.descriptor.channelName = "Bass";
+    extraLocalSnapshot.descriptor.active = false;
+    extraLocalSnapshot.descriptor.visible = false;
+    extraLocalSnapshot.mix.gainDb = -5.0f;
+    extraLocalSnapshot.mix.pan = -0.4f;
+    extraLocalSnapshot.mix.muted = true;
+    extraLocalSnapshot.mix.soloed = true;
+    source.upsertMixerStripSnapshotForTesting(extraLocalSnapshot);
+    source.setFixedRemoteOutputAssignmentForTesting("alice#0", 2);
+
+    juce::MemoryBlock state;
+    source.getStateInformation(state);
+
+    FamaLamaJamAudioProcessor restored(true, true);
+    restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+
+    FamaLamaJamAudioProcessor::MixerStripSnapshot restoredExtraLocal;
+    REQUIRE(restored.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalSend2SourceId, restoredExtraLocal));
+    CHECK(restoredExtraLocal.descriptor.displayName == "Bass");
+    CHECK_FALSE(restoredExtraLocal.descriptor.active);
+    CHECK_FALSE(restoredExtraLocal.descriptor.visible);
+    CHECK(restoredExtraLocal.mix.gainDb == Catch::Approx(-5.0f));
+    CHECK(restoredExtraLocal.mix.pan == Catch::Approx(-0.4f));
+    CHECK(restoredExtraLocal.mix.muted);
+    CHECK(restoredExtraLocal.mix.soloed);
+    CHECK(restored.getFixedRemoteOutputAssignmentForTesting("alice#0") == 2);
+}
+
 

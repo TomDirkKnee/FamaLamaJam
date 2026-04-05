@@ -47,6 +47,12 @@ private:
 class FamaLamaJamAudioProcessorEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
+    static constexpr const char* kLocalHeaderTitle = "Local Sends";
+    static constexpr const char* kLocalHeaderTransmitLabel = "Transmit";
+    static constexpr const char* kLocalHeaderVoiceLabel = "Voice";
+    static constexpr const char* kAddLocalChannelLabel = "Add channel";
+    static constexpr const char* kMainOutputLabel = "FLJ Main Output";
+
     enum class SyncHealth
     {
         Disconnected,
@@ -212,6 +218,9 @@ public:
         std::string statusText;
         bool active { false };
         bool visible { false };
+        bool editableName { false };
+        int outputAssignmentIndex { 0 };
+        std::vector<std::string> outputAssignmentLabels;
     };
 
     struct CpuDiagnosticSnapshot
