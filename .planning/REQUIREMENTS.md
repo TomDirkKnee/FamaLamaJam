@@ -78,6 +78,8 @@
 ### Host Routing Research
 
 - [x] **ROUTE-01**: Project documents the practical JUCE/VST3/Ableton path for multiple local send inputs and per-stream output routing before implementation.
+- **ROUTE-02**: User can transmit at least two separate local NINJAM channels from one plugin instance using host-routed fixed input buses (`Main` plus `Local Send 2`).
+- **ROUTE-03**: User can route selected remote returns to fixed extra FLJ output pairs while leaving unrouted returns on the main FLJ output.
 
 ## Later Requirements
 
@@ -138,6 +140,8 @@
 | VOICE-02 | Phase 08.3.2 - Voice Mode Research & Prototype | Planned |
 | REC-01 | Phase 08.3.3 - Stem Capture & Export | Planned |
 | ROUTE-01 | Phase 08.3.4 - Host Multi-I/O Routing Research | Complete |
+| ROUTE-02 | Phase 08.3.4.1 - Fixed-Bus Multi-Input And NINJAM Channel Implementation | Blocked |
+| ROUTE-03 | Phase 08.3.4.1 - Fixed-Bus Multi-Input And NINJAM Channel Implementation | Blocked |
 | PAR-01 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 | PAR-02 | Phase 10 - Advanced NINJAM Parity Research | Planned |
 
@@ -149,4 +153,4 @@
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-04-05 after Phase 08.3.4 plan 03 close-out*
+*Last updated: 2026-04-05 after Phase 08.3.4.1 plan 03 blocked close-out*

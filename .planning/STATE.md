@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08.3.4.1-01-PLAN.md
-last_updated: "2026-04-05T08:56:12.190Z"
-last_activity: 2026-04-05 - Completed 08.3.4.1 plan 01 with fixed-slot routing contracts, RED coverage for missing multi-local upload or UI/restore behavior, and the Ableton fixed-bus matrix.
+stopped_at: Completed 08.3.4.1-03-PLAN.md
+last_updated: "2026-04-05T10:10:49.332Z"
+last_activity: 2026-04-05 - Completed plan 03 with a green focused fixed-bus gate, but real Ableton evidence showed only one receiving source (`jim#0`) after `Main` plus `Local Send 2`, so Phase 08.3.4.1 remains blocked.
 progress:
   total_phases: 18
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 57
-  completed_plans: 50
-  percent: 88
+  completed_plans: 52
+  percent: 91
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.4.1 fixed-bus multi-input and NINJAM channel implementation now moves into plan 02 runtime work with explicit RED coverage and a locked Ableton validation matrix, while Phase 08.2 still carries the separate same-machine CPU repro concern.
+**Current focus:** Phase 08.3.4.1 fixed-bus multi-input and NINJAM channel implementation is now blocked by the failed second-local-channel Ableton checkpoint, while Phase 08.2 still carries the separate same-machine CPU repro concern.
 
 ## Current Position
 
 Phase: 08.3.4.1 - Fixed-Bus Multi-Input And NINJAM Channel Implementation  
-Plan: 02  
-Status: In Progress  
-Last activity: 2026-04-05 - Completed plan 01 with fixed-slot contracts, RED transport/UI/restore coverage, and the manual Ableton routing matrix.
+Plan: 03  
+Status: Blocked  
+Last activity: 2026-04-05 - Completed plan 03 as a blocked closeout after the receiver exposed only `jim#0` instead of a second local NINJAM channel.
 
-Progress: 88%
+Progress: 91%
 
 ## Accumulated Context
 
@@ -98,6 +98,8 @@ Progress: 88%
 - [Phase 08.3.4.1]: Remote output assignment should live directly on each remote strip as a dropdown using explicit host-facing labels like `FLJ Main Output` and `Remote Out 1`.
 - [Phase 08.3.4.1]: Lock Wave 0 to two local send slots and three fixed host-facing output labels before runtime work begins.
 - [Phase 08.3.4.1]: Use header-level compatibility shims and captured transport metadata so RED coverage can compile against the new contracts without implementing the runtime early.
+- [Phase 08.3.4.1]: Do not treat the missing second receiving channel as residual risk; the phase stays blocked until a second remote source appears for the extra local bus.
+- [Phase 08.3.4.1]: Leave routed-remote host rows unverified when the second-local-channel proof fails early instead of inferring pass from automation.
 
 ### Roadmap Evolution
 
@@ -122,6 +124,7 @@ Progress: 88%
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
 - Phase 08.2 still carries forward unresolved same-machine CPU evidence, but it is now treated as a documented carry-forward concern rather than the active execution step.
 - Phase 08.3 is closed, but the local `build-vs` NMake tree still fails with `U1076 name too long`; continue using `build-vs-2026` until that environment issue is resolved.
+- Phase 08.3.4.1 is blocked: Ableton showed two transmitting local sends in the sender UI, but the receiving client exposed only one remote source (`jim#0`) and no second local NINJAM channel.
 
 ### Performance Metrics
 
@@ -144,9 +147,10 @@ Progress: 88%
 - 2026-04-04: Completed Phase 08.3.4 plan 02 in 23 min across 2 task commits and 4 modified files; the processor now exposes the fixed proof buses, routes one selected decoded source to `Remote Out 1`, and keeps focused routing plus voice-mode coverage green.
 - 2026-04-05: Completed Phase 08.3.4 plan 03 in 11h 12m elapsed across 2 task commits and 4 modified files; Ableton exposed both proof buses in normal routing UI, so the phase closed with an approved host-owned fixed-bus follow-on recommendation.
 - 2026-04-05: Completed Phase 08.3.4.1 plan 01 in 12 min across 2 task commits and 9 modified files; fixed-slot RED coverage, captured outbound metadata, and the Ableton routing matrix now lock the implementation target for plan 02.
+- 2026-04-05: Completed Phase 08.3.4.1 plan 03 in 25 min across 2 task commits and 6 modified files; the focused fixed-bus gate stayed green, but Ableton showed only one receiving source (`jim#0`) after `Main` plus `Local Send 2`, so the phase remains blocked and `ROUTE-03` is still unverified.
 
 ## Session Continuity
 
 Last session: 2026-04-05T08:56:12.162Z
-Stopped at: Completed 08.3.4.1-01-PLAN.md
+Stopped at: Completed 08.3.4.1-03-PLAN.md
 Resume file: None
