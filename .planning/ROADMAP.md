@@ -24,6 +24,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [ ] **Phase 08.3.2: Voice Mode Research & Prototype (INSERTED)** - Research JamTaba/ReaNINJAM mixed-room voice semantics and prototype true per-channel voice send/receive with a local strip toggle before broader routing and layout work.
 - [ ] **Phase 08.3.3: Stem Capture & Export (INSERTED)** - Add optional on-disk stem capture for local and remote recordings with user-controlled folder selection and practical naming/session rules.
 - [x] **Phase 08.3.4: Host Multi-I/O Routing Research (INSERTED)** - Determine what JUCE/VST3/Ableton can expose for multiple local send inputs and per-stream DAW output routing before committing to implementation. (completed 2026-04-05)
+- [ ] **Phase 08.3.4.1: Fixed-Bus Multi-Input And NINJAM Channel Implementation (INSERTED)** - Implement the first real host-routed bus path: `Main` plus `Local Send 2` for separate local transmit channels, with fixed extra FLJ output pairs for routed remote returns.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
@@ -284,9 +285,26 @@ Plans:
 - [x] 08.3.4-02-PLAN.md - Implement the fixed-bus processor proof for one extra local stereo input and one extra routed stereo output pair.
 - [x] 08.3.4-03-PLAN.md - Re-ran the focused gate in Ableton, recorded the approved fixed-bus verdict, and locked the follow-on architecture to host-owned plugin-bus routing.
 
+### Phase 08.3.4.1: Fixed-Bus Multi-Input And NINJAM Channel Implementation (INSERTED)
+  
+  **Goal:** Implement the first practical multi-I/O workflow validated by Phase 08.3.4: two local transmit paths via `Main` and `Local Send 2`, plus fixed extra output pairs for routed remote returns using host-owned Ableton routing.
+  **Requirements**: ROUTE-02, ROUTE-03
+**Depends on:** Phase 08.3.4
+  **Success Criteria** (what must be TRUE):
+  1. User can route a second Ableton track into `Local Send 2` and have FLJ transmit it as a separate NINJAM channel from the same plugin instance.
+  2. Local transmit channels are clearly distinguishable in FLJ and preserve the current interval/voice semantics per channel where supported.
+  3. User can route at least one selected remote return to an extra FLJ output pair while unrouted returns remain on the main FLJ output.
+  4. The implementation stays fixed-bus and host-routed; it does not depend on FLJ enumerating Ableton tracks internally.
+  **Plans:** 3 plans
+  
+  Plans:
+- [ ] 08.3.4.1-01-PLAN.md - Lock fixed-slot routing contracts, RED Wave 0 coverage, and the Ableton fixed-bus matrix.
+- [ ] 08.3.4.1-02-PLAN.md - Implement channel-indexed local uploads, fixed remote output routing, and the current-layout UI or state wiring.
+- [ ] 08.3.4.1-03-PLAN.md - Rebuild the fixed-bus artifact, run the Ableton matrix, and close the phase with aligned validation evidence.
+
 ### Phase 9: JamTaba-Inspired Layout & Mixer Parity
 **Goal**: Evolve the plugin UI toward a more ergonomic collaboration layout while preserving the current validated workflow.
-**Depends on**: Phase 08.3.4
+**Depends on**: Phase 08.3.4.1
 **Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03
 **Success Criteria** (what must be TRUE):
 1. Mixer strips are presented horizontally with the local monitor clearly distinguished and visually anchored.
