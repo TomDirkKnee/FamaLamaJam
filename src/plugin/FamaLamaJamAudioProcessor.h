@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <deque>
@@ -254,6 +255,34 @@ public:
         std::string sourceId;
     };
 
+    struct FixedLocalRoutingSlot
+    {
+        const char* sourceId { "" };
+        int inputBusIndex { 0 };
+        const char* fallbackLabel { "" };
+        bool visibleByDefault { false };
+    };
+
+    struct FixedRemoteOutputRoute
+    {
+        int outputBusIndex { 0 };
+        const char* hostLabel { "" };
+    };
+
+    static constexpr const char* kLocalMainSourceId = kLocalMonitorSourceId;
+    static constexpr const char* kLocalSend2SourceId = "local-send-2";
+    static constexpr const char* kFixedMainOutputBusName = "FLJ Main Output";
+    static constexpr const char* kFixedRoutedOutputBus2Name = "Remote Out 2";
+    static constexpr std::array<FixedLocalRoutingSlot, 2> kFixedLocalRoutingSlots { {
+        { kLocalMainSourceId, HostRoutingProof::kMainInputBusIndex, "Main", true },
+        { kLocalSend2SourceId, HostRoutingProof::kAuxInputBusIndex, kHostRoutingProofAuxInputBusName, false },
+    } };
+    static constexpr std::array<FixedRemoteOutputRoute, 3> kFixedRemoteOutputRoutes { {
+        { HostRoutingProof::kMainOutputBusIndex, kFixedMainOutputBusName },
+        { HostRoutingProof::kRoutedOutputBusIndex, kHostRoutingProofAuxOutputBusName },
+        { 2, kFixedRoutedOutputBus2Name },
+    } };
+
     struct RemoteReceiveDiagnosticRuntime
     {
         std::size_t lastEncodedBytes { 0 };
@@ -358,6 +387,27 @@ public:
     {
         hostRoutingProofRoute_.sourceId = std::move(sourceId);
         hostRoutingProof_.selectedRoutedSourceId = hostRoutingProofRoute_.sourceId;
+    }
+    void upsertMixerStripSnapshotForTesting(MixerStripSnapshot snapshot)
+    {
+        if (snapshot.descriptor.sourceId.empty())
+            return;
+
+        auto& runtimeState = mixerStripsBySourceId_[snapshot.descriptor.sourceId];
+        runtimeState.snapshot = std::move(snapshot);
+    }
+    void setFixedRemoteOutputAssignmentForTesting(std::string sourceId, int outputBusIndex)
+    {
+        hostRoutingProofRoute_.sourceId = std::move(sourceId);
+        hostRoutingProofRoute_.outputBusIndex = outputBusIndex;
+        hostRoutingProof_.selectedRoutedSourceId = hostRoutingProofRoute_.sourceId;
+    }
+    [[nodiscard]] int getFixedRemoteOutputAssignmentForTesting(const std::string& sourceId) const
+    {
+        if (hostRoutingProofRoute_.sourceId == sourceId)
+            return hostRoutingProofRoute_.outputBusIndex;
+
+        return kFixedRemoteOutputRoutes.front().outputBusIndex;
     }
     bool setStemCaptureDirectoryForTesting(const juce::File& directory, bool enabled);
     [[nodiscard]] bool waitForStemCaptureFlushForTesting(int timeoutMs) const;

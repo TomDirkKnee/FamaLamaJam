@@ -125,6 +125,34 @@ TEST_CASE("plugin host multi io routing declares one proof aux input and one pro
     CHECK(auxOutput->getCurrentLayout() == juce::AudioChannelSet::stereo());
 }
 
+TEST_CASE("plugin host multi io routing locks two fixed local slots and three host-facing output labels",
+          "[plugin_host_multi_io_routing]")
+{
+    REQUIRE(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.size() == 2);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].sourceId)
+          == FamaLamaJamAudioProcessor::kLocalMainSourceId);
+    CHECK(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].inputBusIndex == 0);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].fallbackLabel) == "Main");
+    CHECK(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].visibleByDefault);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].sourceId)
+          == FamaLamaJamAudioProcessor::kLocalSend2SourceId);
+    CHECK(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].inputBusIndex == 1);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].fallbackLabel) == "Local Send 2");
+    CHECK_FALSE(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].visibleByDefault);
+
+    REQUIRE(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.size() == 3);
+    CHECK(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[0].outputBusIndex == 0);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[0].hostLabel) == "FLJ Main Output");
+    CHECK(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[1].outputBusIndex == 1);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[1].hostLabel) == "Remote Out 1");
+    CHECK(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[2].outputBusIndex == 2);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[2].hostLabel) == "Remote Out 2");
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    CHECK(processor.getBusCount(true) == static_cast<int>(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.size()));
+    CHECK(processor.getBusCount(false) == static_cast<int>(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.size()));
+}
+
 TEST_CASE("plugin host multi io routing layout gate accepts only stereo proof buses",
           "[plugin_host_multi_io_routing]")
 {
@@ -168,6 +196,47 @@ TEST_CASE("plugin host multi io routing proof distinguishes main-path and aux-in
     const auto proof = processor.getHostRoutingProofForTesting();
     CHECK_FALSE(proof.mainPathActive);
     CHECK(proof.auxInputActive);
+}
+
+TEST_CASE("plugin host multi io routing expects per-slot channel metadata and channel-indexed uploads",
+          "[plugin_host_multi_io_routing][plugin_voice_mode_transport]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    REQUIRE(server.startServer());
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    connectProcessor(processor, server);
+
+    MiniNinjamServer::ClientChannelInfo mainChannelInfo;
+    REQUIRE(server.waitForCapturedClientChannelInfo(2000, mainChannelInfo));
+    CHECK(mainChannelInfo.channelIndex == 0);
+    CHECK(mainChannelInfo.channelName == FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].fallbackLabel);
+
+    MiniNinjamServer::ClientChannelInfo extraChannelInfo;
+    const auto capturedExtraChannelInfo = server.waitForCapturedClientChannelInfo(250, extraChannelInfo);
+    CHECK(capturedExtraChannelInfo);
+    if (capturedExtraChannelInfo)
+    {
+        CHECK(extraChannelInfo.channelIndex == 1);
+        CHECK(extraChannelInfo.channelName == FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].fallbackLabel);
+    }
+
+    juce::AudioBuffer<float> buffer(processor.getTotalNumInputChannels(), 512);
+    juce::MidiBuffer midi;
+    REQUIRE(waitForAuthoritativeTiming(processor, buffer, midi));
+
+    bool capturedUploadBegin = false;
+    MiniNinjamServer::UploadIntervalBegin uploadBegin;
+    for (int attempt = 0; attempt < 800 && ! capturedUploadBegin; ++attempt)
+    {
+        fillRampBuffer(buffer);
+        processor.processBlock(buffer, midi);
+        capturedUploadBegin = server.waitForCapturedUploadBegin(2, uploadBegin);
+    }
+
+    REQUIRE(capturedUploadBegin);
+    CHECK(uploadBegin.channelIndex == 1);
 }
 
 TEST_CASE("plugin host multi io routing routes one selected remote source to the proof output pair",

@@ -209,6 +209,21 @@ public:
         std::array<std::string, 5> fields;
     };
 
+    struct ClientChannelInfo
+    {
+        std::uint8_t channelIndex { 0 };
+        std::string channelName;
+        std::uint8_t channelFlags { 0 };
+    };
+
+    struct UploadIntervalBegin
+    {
+        std::array<std::uint8_t, 16> guid {};
+        std::uint32_t estimatedPayloadBytes { 0 };
+        std::uint32_t fourCc { 0 };
+        std::uint8_t channelIndex { 0 };
+    };
+
     struct RemotePeer
     {
         std::string username { "peer" };
@@ -253,6 +268,8 @@ public:
         {
             const juce::ScopedLock lock(clientLock_);
             lastAuthUsername_.clear();
+            capturedClientChannelInfos_.clear();
+            capturedUploadBegins_.clear();
         }
         startThread();
         return port_ > 0;
@@ -425,6 +442,46 @@ public:
 
         if (! capturedRoomMessages_.empty())
             roomMessageEvent_.signal();
+
+        return true;
+    }
+
+    bool waitForCapturedClientChannelInfo(int timeoutMs, ClientChannelInfo& out)
+    {
+        const auto boundedTimeout = juce::jmax(1, timeoutMs);
+
+        if (! clientChannelInfoEvent_.wait(boundedTimeout))
+            return false;
+
+        const juce::ScopedLock lock(clientLock_);
+        if (capturedClientChannelInfos_.empty())
+            return false;
+
+        out = std::move(capturedClientChannelInfos_.front());
+        capturedClientChannelInfos_.erase(capturedClientChannelInfos_.begin());
+
+        if (! capturedClientChannelInfos_.empty())
+            clientChannelInfoEvent_.signal();
+
+        return true;
+    }
+
+    bool waitForCapturedUploadBegin(int timeoutMs, UploadIntervalBegin& out)
+    {
+        const auto boundedTimeout = juce::jmax(1, timeoutMs);
+
+        if (! uploadBeginEvent_.wait(boundedTimeout))
+            return false;
+
+        const juce::ScopedLock lock(clientLock_);
+        if (capturedUploadBegins_.empty())
+            return false;
+
+        out = std::move(capturedUploadBegins_.front());
+        capturedUploadBegins_.erase(capturedUploadBegins_.begin());
+
+        if (! capturedUploadBegins_.empty())
+            uploadBeginEvent_.signal();
 
         return true;
     }
@@ -906,6 +963,17 @@ private:
                         return;
 
                     const auto* payload = static_cast<const std::uint8_t*>(message.payload.getData());
+                    UploadIntervalBegin capturedBegin;
+                    std::memcpy(capturedBegin.guid.data(), payload, capturedBegin.guid.size());
+                    capturedBegin.estimatedPayloadBytes = decodeLe32(payload + 16);
+                    capturedBegin.fourCc = decodeLe32(payload + 20);
+                    capturedBegin.channelIndex = payload[24];
+                    {
+                        const juce::ScopedLock lock(clientLock_);
+                        capturedUploadBegins_.push_back(capturedBegin);
+                    }
+                    uploadBeginEvent_.signal();
+
                     std::memcpy(lastUploadGuid.data(), payload, lastUploadGuid.size());
                     const auto estSize = decodeLe32(payload + 16);
                     hasUploadGuid = true;
@@ -987,7 +1055,29 @@ private:
                     continue;
                 }
 
-                if (message.type == kMessageClientSetChannelInfo || message.type == kMessageClientSetUserMask)
+                if (message.type == kMessageClientSetChannelInfo)
+                {
+                    if (message.payload.getSize() >= 3)
+                    {
+                        const auto* payload = static_cast<const std::uint8_t*>(message.payload.getData());
+                        ClientChannelInfo channelInfo;
+                        channelInfo.channelIndex = payload[1];
+                        const auto* channelName = reinterpret_cast<const char*>(payload + 2);
+                        const auto nameBytes = message.payload.getSize() - 2;
+                        const auto channelNameLength = boundedStrnlen(channelName, nameBytes);
+                        channelInfo.channelName.assign(channelName, channelNameLength);
+                        channelInfo.channelFlags = payload[message.payload.getSize() - 1];
+                        {
+                            const juce::ScopedLock lock(clientLock_);
+                            capturedClientChannelInfos_.push_back(std::move(channelInfo));
+                        }
+                        clientChannelInfoEvent_.signal();
+                    }
+
+                    continue;
+                }
+
+                if (message.type == kMessageClientSetUserMask)
                     continue;
             }
 
@@ -1003,6 +1093,8 @@ private:
     std::unique_ptr<juce::StreamingSocket> client_;
     mutable juce::WaitableEvent authEvent_;
     mutable juce::WaitableEvent roomMessageEvent_;
+    mutable juce::WaitableEvent clientChannelInfoEvent_;
+    mutable juce::WaitableEvent uploadBeginEvent_;
     juce::WaitableEvent wakeEvent_;
     mutable juce::CriticalSection configLock_;
     static constexpr std::array<std::uint8_t, 8> kAuthChallengeBytes { 1, 2, 3, 4, 5, 6, 7, 8 };
@@ -1011,6 +1103,8 @@ private:
     std::vector<RoomMessage> pendingRoomMessages_;
     std::vector<RemoteTransfer> pendingRemoteTransfers_;
     std::vector<RoomMessage> capturedRoomMessages_;
+    std::vector<ClientChannelInfo> capturedClientChannelInfos_;
+    std::vector<UploadIntervalBegin> capturedUploadBegins_;
     std::vector<RemotePeer> remotePeers_ { RemotePeer {} };
     std::string lastAuthUsername_;
     AuthRules authRules_;

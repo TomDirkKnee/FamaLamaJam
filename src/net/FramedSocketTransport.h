@@ -32,6 +32,13 @@ public:
         std::uint8_t channelFlags { 0 };
     };
 
+    struct LocalChannelInfo
+    {
+        std::uint8_t channelIndex { 0 };
+        std::string channelName;
+        std::uint8_t channelFlags { 0 };
+    };
+
     struct InboundFrame
     {
         juce::MemoryBlock payload;
@@ -78,6 +85,17 @@ public:
     [[nodiscard]] bool isRunning() const;
 
     void enqueueOutbound(const juce::MemoryBlock& payload);
+    void enqueueOutbound(const juce::MemoryBlock& payload, std::uint8_t channelIndex)
+    {
+        juce::ignoreUnused(channelIndex);
+        enqueueOutbound(payload);
+    }
+    void enqueueOutbound(const juce::MemoryBlock& payload, const LocalChannelInfo& channelInfo)
+    {
+        juce::ignoreUnused(channelInfo.channelIndex);
+        setLocalChannelInfo(channelInfo.channelName, channelInfo.channelFlags);
+        enqueueOutbound(payload);
+    }
     bool enqueueRoomMessage(std::array<std::string, 5> fields);
     bool popInbound(juce::MemoryBlock& payload);
     bool popInboundFrame(InboundFrame& frame);
@@ -87,6 +105,11 @@ public:
     bool getLatestIntervalBoundaryEvent(IntervalBoundaryEvent& event) const;
     bool getSubscribedUserMask(const std::string& username, std::uint32_t& channelMask) const;
     void setLocalChannelInfo(std::string channelName, std::uint8_t channelFlags);
+    void setLocalChannelInfo(LocalChannelInfo channelInfo)
+    {
+        juce::ignoreUnused(channelInfo.channelIndex);
+        setLocalChannelInfo(std::move(channelInfo.channelName), channelInfo.channelFlags);
+    }
 
     [[nodiscard]] std::size_t getSentFrameCount() const;
     [[nodiscard]] std::size_t getReceivedFrameCount() const;
