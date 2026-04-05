@@ -13,17 +13,18 @@ namespace famalamajam::audio
 class CodecStreamBridge final : private juce::Thread
 {
 public:
-    struct PendingInputFrame
-    {
-        juce::AudioBuffer<float> audio;
-        double sampleRate { 0.0 };
-    };
-
     struct LocalChannelMetadata
     {
         std::uint8_t channelIndex { 0 };
         std::string channelName;
         std::uint8_t channelFlags { 0 };
+    };
+
+    struct PendingInputFrame
+    {
+        juce::AudioBuffer<float> audio;
+        double sampleRate { 0.0 };
+        LocalChannelMetadata metadata;
     };
 
     struct EncodedLocalFrame
@@ -54,20 +55,12 @@ public:
     void submitInput(const juce::AudioBuffer<float>& input, double sampleRate);
     void submitInput(const juce::AudioBuffer<float>& input,
                      double sampleRate,
-                     LocalChannelMetadata metadata)
-    {
-        juce::ignoreUnused(metadata);
-        submitInput(input, sampleRate);
-    }
+                     LocalChannelMetadata metadata);
     void submitInboundEncoded(const void* encodedData, std::size_t encodedSize);
     void submitInboundEncoded(const std::string& sourceId, const void* encodedData, std::size_t encodedSize);
 
     bool popEncoded(juce::MemoryBlock& payload);
-    bool popEncoded(EncodedLocalFrame& frame)
-    {
-        frame.metadata = {};
-        return popEncoded(frame.payload);
-    }
+    bool popEncoded(EncodedLocalFrame& frame);
     bool popDecoded(juce::AudioBuffer<float>& output);
     bool popDecodedFrame(DecodedFrame& output);
 
@@ -81,7 +74,7 @@ private:
 
     std::deque<InboundEncodedFrame> pendingInboundEncodedQueue_;
 
-    std::deque<juce::MemoryBlock> encodedOutputQueue_;
+    std::deque<EncodedLocalFrame> encodedOutputQueue_;
 
     std::deque<DecodedFrame> decodedOutputQueue_;
 

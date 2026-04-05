@@ -50,6 +50,13 @@ void CodecStreamBridge::stop()
 
 void CodecStreamBridge::submitInput(const juce::AudioBuffer<float>& input, double sampleRate)
 {
+    submitInput(input, sampleRate, {});
+}
+
+void CodecStreamBridge::submitInput(const juce::AudioBuffer<float>& input,
+                                    double sampleRate,
+                                    LocalChannelMetadata metadata)
+{
     if (sampleRate <= 0.0 || input.getNumChannels() <= 0 || input.getNumSamples() <= 0)
         return;
 
@@ -59,6 +66,7 @@ void CodecStreamBridge::submitInput(const juce::AudioBuffer<float>& input, doubl
         PendingInputFrame frame;
         frame.audio.makeCopyOf(input, true);
         frame.sampleRate = sampleRate;
+        frame.metadata = std::move(metadata);
         pendingInputQueue_.push_back(std::move(frame));
 
         while (pendingInputQueue_.size() > kMaxPendingInputQueueDepth)
@@ -97,12 +105,22 @@ void CodecStreamBridge::submitInboundEncoded(const std::string& sourceId,
 
 bool CodecStreamBridge::popEncoded(juce::MemoryBlock& payload)
 {
+    EncodedLocalFrame frame;
+    if (! popEncoded(frame))
+        return false;
+
+    payload = std::move(frame.payload);
+    return true;
+}
+
+bool CodecStreamBridge::popEncoded(EncodedLocalFrame& frame)
+{
     const juce::ScopedLock lock(stateLock_);
 
     if (encodedOutputQueue_.empty())
         return false;
 
-    payload = encodedOutputQueue_.front();
+    frame = std::move(encodedOutputQueue_.front());
     encodedOutputQueue_.pop_front();
     return true;
 }
@@ -155,6 +173,7 @@ void CodecStreamBridge::run()
                 {
                     inputSnapshot.audio.makeCopyOf(pendingInputQueue_.front().audio, true);
                     inputSnapshot.sampleRate = pendingInputQueue_.front().sampleRate;
+                    inputSnapshot.metadata = pendingInputQueue_.front().metadata;
                     pendingInputQueue_.pop_front();
                 }
 
@@ -181,12 +200,15 @@ void CodecStreamBridge::run()
                 if (OggVorbisCodec::encode(inputSnapshot.audio, inputSnapshot.sampleRate, encoded, &codecError))
                 {
                     const juce::ScopedLock lock(stateLock_);
-                    encodedOutputQueue_.push_back(encoded);
+                    encodedOutputQueue_.push_back(EncodedLocalFrame {
+                        .payload = std::move(encoded),
+                        .metadata = inputSnapshot.metadata,
+                    });
 
                     while (encodedOutputQueue_.size() > kMaxEncodedQueueDepth)
                         encodedOutputQueue_.pop_front();
 
-                    lastEncodedPayloadBytes_ = encoded.getSize();
+                    lastEncodedPayloadBytes_ = encodedOutputQueue_.back().payload.getSize();
                 }
             }
 

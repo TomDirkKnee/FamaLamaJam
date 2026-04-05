@@ -620,6 +620,14 @@ void applyMixToBuffer(juce::AudioBuffer<float>& buffer,
     return false;
 }
 
+[[nodiscard]] const FamaLamaJamAudioProcessor::FixedLocalRoutingSlot* findFixedLocalRoutingSlot(std::string_view sourceId)
+{
+    const auto it = std::find_if(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.begin(),
+                                 FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.end(),
+                                 [&](const auto& slot) { return sourceId == slot.sourceId; });
+    return it != FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.end() ? &(*it) : nullptr;
+}
+
 void copyBuffer(juce::AudioBuffer<float>& destination, const juce::AudioBuffer<float>& source)
 {
     if (source.getNumChannels() <= 0 || source.getNumSamples() <= 0)
@@ -714,6 +722,9 @@ FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor(
                                             .withOutput("Output", juce::AudioChannelSet::stereo(), true)
                                             .withOutput(kHostRoutingProofAuxOutputBusName,
                                                         juce::AudioChannelSet::stereo(),
+                                                        true)
+                                            .withOutput(kFixedRoutedOutputBus2Name,
+                                                        juce::AudioChannelSet::stereo(),
                                                         true))
     , settingsController_(settingsStore_)
     , liveTransportEnabled_(enableLiveTransport)
@@ -765,11 +776,8 @@ void FamaLamaJamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
         if (isSessionConnected())
             codecStreamBridge_.start();
 
-        localUploadIntervalBuffer_.setSize(0, 0);
-        localVoiceUploadBuffer_.setSize(0, 0);
+        resetLocalUploadState();
         hostRoutingProofAuxSendBuffer_.setSize(0, 0);
-        localUploadIntervalWritePosition_ = 0;
-        localVoiceUploadWritePosition_ = 0;
         lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
         lastDecodedSamples_.store(0, std::memory_order_relaxed);
         remoteQueuedIntervalsBySource_.clear();
@@ -798,11 +806,8 @@ void FamaLamaJamAudioProcessor::releaseResources()
 
     stemCaptureWriter_->stop();
     codecStreamBridge_.stop();
-    localUploadIntervalBuffer_.setSize(0, 0);
-    localVoiceUploadBuffer_.setSize(0, 0);
+    resetLocalUploadState();
     hostRoutingProofAuxSendBuffer_.setSize(0, 0);
-    localUploadIntervalWritePosition_ = 0;
-    localVoiceUploadWritePosition_ = 0;
     lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
     lastDecodedSamples_.store(0, std::memory_order_relaxed);
     remoteQueuedIntervalsBySource_.clear();
@@ -820,13 +825,14 @@ void FamaLamaJamAudioProcessor::releaseResources()
 
 bool FamaLamaJamAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    if (layouts.inputBuses.size() != 2 || layouts.outputBuses.size() != 2)
+    if (layouts.inputBuses.size() != 2 || layouts.outputBuses.size() != 3)
         return false;
 
     return layouts.getMainInputChannelSet() == juce::AudioChannelSet::stereo()
         && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo()
         && isStereoOrDisabled(layouts.getChannelSet(true, HostRoutingProof::kAuxInputBusIndex))
-        && isStereoOrDisabled(layouts.getChannelSet(false, HostRoutingProof::kRoutedOutputBusIndex));
+        && isStereoOrDisabled(layouts.getChannelSet(false, HostRoutingProof::kRoutedOutputBusIndex))
+        && isStereoOrDisabled(layouts.getChannelSet(false, 2));
 }
 
 void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -835,15 +841,18 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     ++cpuDiagnosticSnapshot_.processBlockCalls;
     ensureLocalMonitorMixerStrip();
     resetMixerStripMeters();
-    const auto expectedAggregateChannels = juce::jmax(getTotalNumInputChannels(), getTotalNumOutputChannels());
-    const bool hasFullBusLayout = buffer.getNumChannels() >= expectedAggregateChannels;
-    auto mainInput = hasFullBusLayout ? getBusBuffer(buffer, true, HostRoutingProof::kMainInputBusIndex) : buffer;
-    auto auxInput = hasFullBusLayout && getBusCount(true) > HostRoutingProof::kAuxInputBusIndex
+    const bool hasInputBusLayout = buffer.getNumChannels() >= getTotalNumInputChannels();
+    const bool hasOutputBusLayout = buffer.getNumChannels() >= getTotalNumOutputChannels();
+    auto mainInput = hasInputBusLayout ? getBusBuffer(buffer, true, HostRoutingProof::kMainInputBusIndex) : buffer;
+    auto auxInput = hasInputBusLayout && getBusCount(true) > HostRoutingProof::kAuxInputBusIndex
         ? getBusBuffer(buffer, true, HostRoutingProof::kAuxInputBusIndex)
         : juce::AudioBuffer<float>();
-    auto mainOutput = hasFullBusLayout ? getBusBuffer(buffer, false, HostRoutingProof::kMainOutputBusIndex) : buffer;
-    auto auxOutput = hasFullBusLayout && getBusCount(false) > HostRoutingProof::kRoutedOutputBusIndex
+    auto mainOutput = hasOutputBusLayout ? getBusBuffer(buffer, false, HostRoutingProof::kMainOutputBusIndex) : buffer;
+    auto auxOutput = hasOutputBusLayout && getBusCount(false) > HostRoutingProof::kRoutedOutputBusIndex
         ? getBusBuffer(buffer, false, HostRoutingProof::kRoutedOutputBusIndex)
+        : juce::AudioBuffer<float>();
+    auto auxOutput2 = hasOutputBusLayout && getBusCount(false) > 2
+        ? getBusBuffer(buffer, false, 2)
         : juce::AudioBuffer<float>();
 
     hostRoutingProof_.mainPathActive = bufferHasSignal(mainInput);
@@ -853,6 +862,8 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     if (auxOutput.getNumChannels() > 0)
         auxOutput.clear();
+    if (auxOutput2.getNumChannels() > 0)
+        auxOutput2.clear();
 
     auto clearTransportUi = [this]() {
         currentBeatForUi_.store(0, std::memory_order_relaxed);
@@ -1009,132 +1020,207 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     if (experimentalStreamingEnabled_)
     {
+        auto makeLocalMetadata = [this](const char* sourceId,
+                                        std::uint8_t channelIndex,
+                                        const char* fallbackLabel,
+                                        std::uint8_t channelFlags) {
+            auto channelName = std::string(fallbackLabel);
+            if (const auto it = mixerStripsBySourceId_.find(sourceId); it != mixerStripsBySourceId_.end()
+                && ! it->second.snapshot.descriptor.displayName.empty())
+            {
+                channelName = it->second.snapshot.descriptor.displayName;
+            }
+
+            return audio::CodecStreamBridge::LocalChannelMetadata {
+                .channelIndex = channelIndex,
+                .channelName = std::move(channelName),
+                .channelFlags = channelFlags,
+            };
+        };
+
+        auto submitVoiceSlot = [&](const juce::AudioBuffer<float>& input,
+                                   juce::AudioBuffer<float>& uploadBuffer,
+                                   int& writePosition,
+                                   const char* sourceId,
+                                   std::uint8_t channelIndex,
+                                   const char* fallbackLabel) {
+            if (input.getNumChannels() <= 0 || input.getNumSamples() <= 0)
+            {
+                uploadBuffer.setSize(0, 0);
+                writePosition = 0;
+                return;
+            }
+
+            if (uploadBuffer.getNumChannels() != 1 || uploadBuffer.getNumSamples() != kLocalVoiceChunkSamples)
+            {
+                uploadBuffer.setSize(1, kLocalVoiceChunkSamples, false, true, true);
+                uploadBuffer.clear();
+                writePosition = 0;
+            }
+
+            int sourceOffset = 0;
+            while (sourceOffset < input.getNumSamples())
+            {
+                const auto writableSamples = juce::jmin(input.getNumSamples() - sourceOffset,
+                                                        kLocalVoiceChunkSamples - writePosition);
+
+                if (input.getNumChannels() == 1)
+                {
+                    uploadBuffer.copyFrom(0, writePosition, input, 0, sourceOffset, writableSamples);
+                }
+                else
+                {
+                    for (int sample = 0; sample < writableSamples; ++sample)
+                    {
+                        float summed = 0.0f;
+                        for (int channel = 0; channel < input.getNumChannels(); ++channel)
+                            summed += input.getSample(channel, sourceOffset + sample);
+
+                        uploadBuffer.setSample(0,
+                                               writePosition + sample,
+                                               summed / static_cast<float>(juce::jmax(1, input.getNumChannels())));
+                    }
+                }
+
+                writePosition += writableSamples;
+                sourceOffset += writableSamples;
+                localVoiceTransitionPending_ = false;
+
+                if (writePosition >= kLocalVoiceChunkSamples)
+                {
+                    codecStreamBridge_.submitInput(uploadBuffer,
+                                                   currentSampleRate_,
+                                                   makeLocalMetadata(sourceId, channelIndex, fallbackLabel, 0x2u));
+                    uploadBuffer.clear();
+                    writePosition = 0;
+                }
+            }
+        };
+
+        auto submitIntervalSlot = [&](const juce::AudioBuffer<float>& input,
+                                      juce::AudioBuffer<float>& uploadBuffer,
+                                      int& writePosition,
+                                      const char* sourceId,
+                                      std::uint8_t channelIndex,
+                                      const char* fallbackLabel,
+                                      bool captureStem) {
+            if (input.getNumChannels() <= 0 || input.getNumSamples() <= 0)
+            {
+                uploadBuffer.setSize(0, 0);
+                writePosition = 0;
+                return;
+            }
+
+            if (uploadBuffer.getNumChannels() != input.getNumChannels()
+                || uploadBuffer.getNumSamples() != authoritativeTiming_.activeIntervalSamples)
+            {
+                uploadBuffer.setSize(input.getNumChannels(),
+                                     authoritativeTiming_.activeIntervalSamples,
+                                     false,
+                                     true,
+                                     true);
+                uploadBuffer.clear();
+            }
+
+            auto intervalWritePosition = juce::jlimit(0,
+                                                      authoritativeTiming_.activeIntervalSamples - 1,
+                                                      authoritativeTiming_.samplesIntoInterval);
+            int sourceOffset = 0;
+            while (sourceOffset < input.getNumSamples())
+            {
+                const auto writableSamples = juce::jmin(input.getNumSamples() - sourceOffset,
+                                                        authoritativeTiming_.activeIntervalSamples
+                                                            - intervalWritePosition);
+
+                for (int channel = 0; channel < input.getNumChannels(); ++channel)
+                {
+                    uploadBuffer.copyFrom(channel,
+                                          intervalWritePosition,
+                                          input,
+                                          channel,
+                                          sourceOffset,
+                                          writableSamples);
+                }
+
+                intervalWritePosition += writableSamples;
+                sourceOffset += writableSamples;
+
+                if (intervalWritePosition >= authoritativeTiming_.activeIntervalSamples)
+                {
+                    if (captureStem)
+                    {
+                        const std::scoped_lock lock(stemCaptureMutex_);
+                        if (stemCaptureState_.activeRecording
+                            && ! stemCaptureState_.suppressLocalIntervalStemUntilBoundary)
+                        {
+                            captureLocalIntervalStem(uploadBuffer);
+                        }
+                    }
+
+                    codecStreamBridge_.submitInput(uploadBuffer,
+                                                   currentSampleRate_,
+                                                   makeLocalMetadata(sourceId, channelIndex, fallbackLabel, 0u));
+                    uploadBuffer.clear();
+                    intervalWritePosition = 0;
+                }
+            }
+
+            writePosition = intervalWritePosition;
+        };
+
         if (isLocalVoiceMode(localChannelMode_))
         {
             if (! transmitEnabled_)
             {
-                localUploadIntervalBuffer_.setSize(0, 0);
-                localVoiceUploadBuffer_.setSize(0, 0);
-                localUploadIntervalWritePosition_ = 0;
-                localVoiceUploadWritePosition_ = 0;
+                resetLocalUploadState();
             }
             else
             {
-                if (localVoiceUploadBuffer_.getNumChannels() != 1
-                    || localVoiceUploadBuffer_.getNumSamples() != kLocalVoiceChunkSamples)
-                {
-                    localVoiceUploadBuffer_.setSize(1, kLocalVoiceChunkSamples, false, true, true);
-                    localVoiceUploadBuffer_.clear();
-                    localVoiceUploadWritePosition_ = 0;
-                }
+                localUploadIntervalBuffer_.setSize(0, 0);
+                localSend2UploadIntervalBuffer_.setSize(0, 0);
+                localUploadIntervalWritePosition_ = 0;
+                localSend2UploadIntervalWritePosition_ = 0;
 
-                int sourceOffset = 0;
-                while (sourceOffset < mainInput.getNumSamples())
-                {
-                    const auto writableSamples = juce::jmin(mainInput.getNumSamples() - sourceOffset,
-                                                            kLocalVoiceChunkSamples - localVoiceUploadWritePosition_);
-
-                    if (mainInput.getNumChannels() == 1)
-                    {
-                        localVoiceUploadBuffer_.copyFrom(0,
-                                                         localVoiceUploadWritePosition_,
-                                                         mainInput,
-                                                         0,
-                                                         sourceOffset,
-                                                         writableSamples);
-                    }
-                    else
-                    {
-                        for (int sample = 0; sample < writableSamples; ++sample)
-                        {
-                            float summed = 0.0f;
-                            for (int channel = 0; channel < mainInput.getNumChannels(); ++channel)
-                                summed += mainInput.getSample(channel, sourceOffset + sample);
-
-                            localVoiceUploadBuffer_.setSample(
+                submitVoiceSlot(auxInput,
+                                localSend2VoiceUploadBuffer_,
+                                localSend2VoiceUploadWritePosition_,
+                                kLocalSend2SourceId,
+                                1,
+                                kHostRoutingProofAuxInputBusName);
+                submitVoiceSlot(mainInput,
+                                localVoiceUploadBuffer_,
+                                localVoiceUploadWritePosition_,
+                                kLocalMainSourceId,
                                 0,
-                                localVoiceUploadWritePosition_ + sample,
-                                summed / static_cast<float>(juce::jmax(1, mainInput.getNumChannels())));
-                        }
-                    }
-
-                    localVoiceUploadWritePosition_ += writableSamples;
-                    sourceOffset += writableSamples;
-                    localVoiceTransitionPending_ = false;
-
-                    if (localVoiceUploadWritePosition_ >= kLocalVoiceChunkSamples)
-                    {
-                        codecStreamBridge_.submitInput(localVoiceUploadBuffer_, currentSampleRate_);
-                        localVoiceUploadBuffer_.clear();
-                        localVoiceUploadWritePosition_ = 0;
-                    }
-                }
-
-                localUploadIntervalWritePosition_ = localVoiceUploadWritePosition_;
+                                "Main");
             }
         }
         else if (authoritativeTiming_.hasTiming && authoritativeTiming_.activeIntervalSamples > 0)
         {
             localVoiceUploadBuffer_.setSize(0, 0);
+            localSend2VoiceUploadBuffer_.setSize(0, 0);
             localVoiceUploadWritePosition_ = 0;
+            localSend2VoiceUploadWritePosition_ = 0;
             if (! transmitEnabled_ || transmitWarmupIntervalsRemaining_ > 0)
             {
-                localUploadIntervalBuffer_.setSize(0, 0);
-                localUploadIntervalWritePosition_ = 0;
+                resetLocalUploadState();
             }
             else
             {
-                if (localUploadIntervalBuffer_.getNumChannels() != mainInput.getNumChannels()
-                    || localUploadIntervalBuffer_.getNumSamples() != authoritativeTiming_.activeIntervalSamples)
-                {
-                    localUploadIntervalBuffer_.setSize(mainInput.getNumChannels(),
-                                                       authoritativeTiming_.activeIntervalSamples,
-                                                       false,
-                                                       true,
-                                                       true);
-                    localUploadIntervalBuffer_.clear();
-                }
-
-                auto intervalWritePosition = juce::jlimit(0,
-                                                          authoritativeTiming_.activeIntervalSamples - 1,
-                                                          authoritativeTiming_.samplesIntoInterval);
-                int sourceOffset = 0;
-                while (sourceOffset < mainInput.getNumSamples())
-                {
-                    const auto writableSamples = juce::jmin(mainInput.getNumSamples() - sourceOffset,
-                                                            authoritativeTiming_.activeIntervalSamples
-                                                                - intervalWritePosition);
-
-                    for (int channel = 0; channel < mainInput.getNumChannels(); ++channel)
-                    {
-                        localUploadIntervalBuffer_.copyFrom(channel,
-                                                            intervalWritePosition,
-                                                            mainInput,
-                                                            channel,
-                                                            sourceOffset,
-                                                            writableSamples);
-                    }
-
-                    intervalWritePosition += writableSamples;
-                    sourceOffset += writableSamples;
-
-                    if (intervalWritePosition >= authoritativeTiming_.activeIntervalSamples)
-                    {
-                        {
-                            const std::scoped_lock lock(stemCaptureMutex_);
-                            if (stemCaptureState_.activeRecording
-                                && ! stemCaptureState_.suppressLocalIntervalStemUntilBoundary)
-                            {
-                                captureLocalIntervalStem(localUploadIntervalBuffer_);
-                            }
-                        }
-                        codecStreamBridge_.submitInput(localUploadIntervalBuffer_, currentSampleRate_);
-                        localUploadIntervalBuffer_.clear();
-                        intervalWritePosition = 0;
-                    }
-                }
-
-                localUploadIntervalWritePosition_ = intervalWritePosition;
+                submitIntervalSlot(auxInput,
+                                   localSend2UploadIntervalBuffer_,
+                                   localSend2UploadIntervalWritePosition_,
+                                   kLocalSend2SourceId,
+                                   1,
+                                   kHostRoutingProofAuxInputBusName,
+                                   false);
+                submitIntervalSlot(mainInput,
+                                   localUploadIntervalBuffer_,
+                                   localUploadIntervalWritePosition_,
+                                   kLocalMainSourceId,
+                                   0,
+                                   "Main",
+                                   true);
             }
         }
     }
@@ -1145,14 +1231,19 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     applyLocalMonitorToOutput();
 
-    juce::MemoryBlock encoded;
-    if (codecStreamBridge_.popEncoded(encoded))
+    audio::CodecStreamBridge::EncodedLocalFrame encoded;
+    while (codecStreamBridge_.popEncoded(encoded))
     {
-        lastCodecPayloadBytes_.store(encoded.getSize(), std::memory_order_relaxed);
+        lastCodecPayloadBytes_.store(encoded.payload.getSize(), std::memory_order_relaxed);
 
         if (experimentalStreamingEnabled_ && transmitEnabled_)
         {
-            framedTransport_.enqueueOutbound(encoded);
+            framedTransport_.enqueueOutbound(encoded.payload,
+                                             net::FramedSocketTransport::LocalChannelInfo {
+                                                 .channelIndex = encoded.metadata.channelIndex,
+                                                 .channelName = encoded.metadata.channelName,
+                                                 .channelFlags = encoded.metadata.channelFlags,
+                                             });
             if (isLocalVoiceMode(localChannelMode_))
                 localVoiceTransitionPending_ = false;
         }
@@ -1432,10 +1523,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 if (transmitWarmupIntervalsRemaining_ > 0)
                 {
                     --transmitWarmupIntervalsRemaining_;
-                    localUploadIntervalBuffer_.setSize(0, 0);
-                    localVoiceUploadBuffer_.setSize(0, 0);
-                    localUploadIntervalWritePosition_ = 0;
-                    localVoiceUploadWritePosition_ = 0;
+                    resetLocalUploadState();
                 }
 
                 if (authoritativeTiming_.hasPendingTiming)
@@ -1445,10 +1533,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                                          authoritativeTiming_.pendingBpi,
                                          authoritativeTiming_.pendingIntervalSamples,
                                          authoritativeTiming_.pendingBeatSamples);
-                    localUploadIntervalBuffer_.setSize(0, 0);
-                    localVoiceUploadBuffer_.setSize(0, 0);
-                    localUploadIntervalWritePosition_ = 0;
-                    localVoiceUploadWritePosition_ = 0;
+                    resetLocalUploadState();
                     remoteQueuedIntervalsBySource_.clear();
                     remoteVoiceChunksBySource_.clear();
                     nextRemoteTargetBoundaryBySource_.clear();
@@ -2062,6 +2147,40 @@ bool FamaLamaJamAudioProcessor::requestNewStemCaptureRun()
     return true;
 }
 
+void FamaLamaJamAudioProcessor::resetLocalUploadState()
+{
+    localUploadIntervalBuffer_.setSize(0, 0);
+    localVoiceUploadBuffer_.setSize(0, 0);
+    localSend2UploadIntervalBuffer_.setSize(0, 0);
+    localSend2VoiceUploadBuffer_.setSize(0, 0);
+    localUploadIntervalWritePosition_ = 0;
+    localVoiceUploadWritePosition_ = 0;
+    localSend2UploadIntervalWritePosition_ = 0;
+    localSend2VoiceUploadWritePosition_ = 0;
+}
+
+void FamaLamaJamAudioProcessor::updateLocalTransportChannelInfo()
+{
+    const auto channelFlags = isLocalVoiceMode(localChannelMode_) ? static_cast<std::uint8_t>(0x2u)
+                                                                  : static_cast<std::uint8_t>(0u);
+
+    for (const auto& slot : kFixedLocalRoutingSlots)
+    {
+        auto channelName = std::string(slot.fallbackLabel);
+        if (const auto it = mixerStripsBySourceId_.find(slot.sourceId); it != mixerStripsBySourceId_.end()
+            && ! it->second.snapshot.descriptor.displayName.empty())
+        {
+            channelName = it->second.snapshot.descriptor.displayName;
+        }
+
+        framedTransport_.setLocalChannelInfo(net::FramedSocketTransport::LocalChannelInfo {
+            .channelIndex = static_cast<std::uint8_t>(slot.inputBusIndex),
+            .channelName = std::move(channelName),
+            .channelFlags = channelFlags,
+        });
+    }
+}
+
 bool FamaLamaJamAudioProcessor::toggleTransmitEnabled()
 {
     transmitEnabled_ = ! transmitEnabled_;
@@ -2069,10 +2188,7 @@ bool FamaLamaJamAudioProcessor::toggleTransmitEnabled()
     if (! transmitEnabled_)
     {
         transmitWarmupIntervalsRemaining_ = 0;
-        localUploadIntervalBuffer_.setSize(0, 0);
-        localVoiceUploadBuffer_.setSize(0, 0);
-        localUploadIntervalWritePosition_ = 0;
-        localVoiceUploadWritePosition_ = 0;
+        resetLocalUploadState();
     }
     else if (isSessionConnected())
     {
@@ -2101,12 +2217,8 @@ bool FamaLamaJamAudioProcessor::toggleLocalVoiceMode()
             retireStemCaptureSource(makeLocalStemSourceConfig(true, currentSampleRate_));
         }
         transmitWarmupIntervalsRemaining_ = 0;
-        localUploadIntervalBuffer_.setSize(0, 0);
-        localVoiceUploadBuffer_.setSize(0, 0);
-        localUploadIntervalWritePosition_ = 0;
-        localVoiceUploadWritePosition_ = 0;
+        resetLocalUploadState();
         localVoiceTransitionPending_ = transmitEnabled_;
-        framedTransport_.setLocalChannelInfo("Voice Chat", 0x2u);
     }
     else
     {
@@ -2117,14 +2229,10 @@ bool FamaLamaJamAudioProcessor::toggleLocalVoiceMode()
                 retireStemCaptureSource(makeLocalStemSourceConfig(false, currentSampleRate_));
         }
         localVoiceTransitionPending_ = false;
-        localUploadIntervalBuffer_.setSize(0, 0);
-        localVoiceUploadBuffer_.setSize(0, 0);
-        localUploadIntervalWritePosition_ = 0;
-        localVoiceUploadWritePosition_ = 0;
+        resetLocalUploadState();
         transmitWarmupIntervalsRemaining_ = (transmitEnabled_ && authoritativeTiming_.hasTiming && experimentalStreamingEnabled_)
             ? kPreparedTransmitIntervals
             : 0;
-        framedTransport_.setLocalChannelInfo({}, 0u);
     }
 
     ensureLocalMonitorMixerStrip();
@@ -2902,10 +3010,7 @@ void FamaLamaJamAudioProcessor::applyLifecycleTransition(const app::session::Con
     else
     {
         codecStreamBridge_.stop();
-        localUploadIntervalBuffer_.setSize(0, 0);
-        localVoiceUploadBuffer_.setSize(0, 0);
-        localUploadIntervalWritePosition_ = 0;
-        localVoiceUploadWritePosition_ = 0;
+        resetLocalUploadState();
         lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
         lastDecodedSamples_.store(0, std::memory_order_relaxed);
         remoteQueuedIntervalsBySource_.clear();
@@ -2966,10 +3071,7 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     authoritativeTiming_ = {};
     lastHandledIntervalBoundaryGeneration_ = 0;
     intervalPhaseAnchoredFromDownloadBegin_ = false;
-    localUploadIntervalBuffer_.setSize(0, 0);
-    localVoiceUploadBuffer_.setSize(0, 0);
-    localUploadIntervalWritePosition_ = 0;
-    localVoiceUploadWritePosition_ = 0;
+    resetLocalUploadState();
     transmitWarmupIntervalsRemaining_ = 0;
     nextRemoteTargetBoundaryBySource_.clear();
     lastRemoteActivationBoundaryBySource_.clear();
@@ -3441,47 +3543,57 @@ void FamaLamaJamAudioProcessor::rememberSuccessfulServer()
 
 void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
 {
-    auto it = mixerStripsBySourceId_.find(kLocalMonitorSourceId);
-    if (it == mixerStripsBySourceId_.end())
+    for (const auto& slot : kFixedLocalRoutingSlots)
     {
-        MixerStripSnapshot snapshot;
-        snapshot.descriptor.kind = MixerStripKind::LocalMonitor;
-        snapshot.descriptor.sourceId = kLocalMonitorSourceId;
-        snapshot.descriptor.groupId = "local";
-        snapshot.descriptor.userName = "Local";
-        snapshot.descriptor.channelName = "Monitor";
-        snapshot.descriptor.displayName = "Local Monitor";
-        snapshot.descriptor.active = true;
-        snapshot.descriptor.visible = true;
-        snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
-        snapshot.transmitState = transmitEnabled_ ? TransmitState::WarmingUp : TransmitState::Disabled;
-        snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
-        snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
-                                                      snapshot.transmitState,
-                                                      localVoiceTransitionPending_);
+        auto it = mixerStripsBySourceId_.find(slot.sourceId);
+        if (it == mixerStripsBySourceId_.end())
+        {
+            MixerStripSnapshot snapshot;
+            snapshot.descriptor.kind = MixerStripKind::LocalMonitor;
+            snapshot.descriptor.sourceId = slot.sourceId;
+            snapshot.descriptor.groupId = "local";
+            snapshot.descriptor.userName = "Local";
+            snapshot.descriptor.channelName = slot.fallbackLabel;
+            snapshot.descriptor.displayName = slot.fallbackLabel;
+            snapshot.descriptor.channelIndex = slot.inputBusIndex;
+            snapshot.descriptor.active = slot.visibleByDefault;
+            snapshot.descriptor.visible = slot.visibleByDefault;
+            snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
+            snapshot.transmitState = transmitEnabled_ ? TransmitState::WarmingUp : TransmitState::Disabled;
+            snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
+            snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
+                                                          snapshot.transmitState,
+                                                          localVoiceTransitionPending_);
 
-        it = mixerStripsBySourceId_.emplace(kLocalMonitorSourceId,
-                                            MixerStripRuntimeState {
-                                                .snapshot = std::move(snapshot),
-                                                .lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex,
-                                                .lastAudioIntervalIndex = authoritativeTiming_.intervalIndex,
-                                            })
-                 .first;
+            it = mixerStripsBySourceId_.emplace(slot.sourceId,
+                                                MixerStripRuntimeState {
+                                                    .snapshot = std::move(snapshot),
+                                                    .lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex,
+                                                    .lastAudioIntervalIndex = authoritativeTiming_.intervalIndex,
+                                                })
+                     .first;
+        }
+
+        auto& descriptor = it->second.snapshot.descriptor;
+        descriptor.kind = MixerStripKind::LocalMonitor;
+        descriptor.sourceId = slot.sourceId;
+        descriptor.groupId = "local";
+        descriptor.userName = "Local";
+        descriptor.channelName = slot.fallbackLabel;
+        descriptor.channelIndex = slot.inputBusIndex;
+        if (descriptor.displayName.empty())
+            descriptor.displayName = slot.fallbackLabel;
+        if (slot.visibleByDefault)
+            descriptor.visible = true;
+        descriptor.inactiveIntervals = 0;
+        it->second.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
+        it->second.snapshot.unsupportedVoiceMode = false;
+        it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
+        if (slot.visibleByDefault)
+            it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
     }
 
-    it->second.snapshot.descriptor.kind = MixerStripKind::LocalMonitor;
-    it->second.snapshot.descriptor.sourceId = kLocalMonitorSourceId;
-    it->second.snapshot.descriptor.groupId = "local";
-    it->second.snapshot.descriptor.userName = "Local";
-    it->second.snapshot.descriptor.channelName = "Monitor";
-    it->second.snapshot.descriptor.displayName = "Local Monitor";
-    it->second.snapshot.descriptor.active = true;
-    it->second.snapshot.descriptor.visible = true;
-    it->second.snapshot.descriptor.inactiveIntervals = 0;
-    it->second.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
-    it->second.snapshot.unsupportedVoiceMode = false;
-    it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
-    it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
+    updateLocalTransportChannelInfo();
 }
 
 void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTransport::RemoteSourceInfo& sourceInfo,
@@ -3599,8 +3711,11 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
 
         if (descriptor.kind == MixerStripKind::LocalMonitor)
         {
-            descriptor.active = true;
-            descriptor.visible = true;
+            const auto* slot = findFixedLocalRoutingSlot(sourceId);
+            const bool visibleByDefault = slot != nullptr && slot->visibleByDefault;
+            descriptor.active = visibleByDefault || descriptor.visible;
+            if (visibleByDefault)
+                descriptor.visible = true;
             descriptor.inactiveIntervals = 0;
             runtimeState.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
             runtimeState.snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,

@@ -85,16 +85,11 @@ public:
     [[nodiscard]] bool isRunning() const;
 
     void enqueueOutbound(const juce::MemoryBlock& payload);
-    void enqueueOutbound(const juce::MemoryBlock& payload, std::uint8_t channelIndex)
-    {
-        juce::ignoreUnused(channelIndex);
-        enqueueOutbound(payload);
-    }
+    void enqueueOutbound(const juce::MemoryBlock& payload, std::uint8_t channelIndex);
     void enqueueOutbound(const juce::MemoryBlock& payload, const LocalChannelInfo& channelInfo)
     {
-        juce::ignoreUnused(channelInfo.channelIndex);
-        setLocalChannelInfo(channelInfo.channelName, channelInfo.channelFlags);
-        enqueueOutbound(payload);
+        setLocalChannelInfo(channelInfo);
+        enqueueOutbound(payload, channelInfo.channelIndex);
     }
     bool enqueueRoomMessage(std::array<std::string, 5> fields);
     bool popInbound(juce::MemoryBlock& payload);
@@ -105,11 +100,7 @@ public:
     bool getLatestIntervalBoundaryEvent(IntervalBoundaryEvent& event) const;
     bool getSubscribedUserMask(const std::string& username, std::uint32_t& channelMask) const;
     void setLocalChannelInfo(std::string channelName, std::uint8_t channelFlags);
-    void setLocalChannelInfo(LocalChannelInfo channelInfo)
-    {
-        juce::ignoreUnused(channelInfo.channelIndex);
-        setLocalChannelInfo(std::move(channelInfo.channelName), channelInfo.channelFlags);
-    }
+    void setLocalChannelInfo(LocalChannelInfo channelInfo);
 
     [[nodiscard]] std::size_t getSentFrameCount() const;
     [[nodiscard]] std::size_t getReceivedFrameCount() const;
@@ -120,7 +111,7 @@ private:
 
     bool writeMessage(std::uint8_t type, const void* payload, std::size_t payloadBytes);
     bool readOneMessage(std::uint8_t& type, juce::MemoryBlock& payload);
-    bool writeUploadInterval(const juce::MemoryBlock& payload);
+    bool writeUploadInterval(const juce::MemoryBlock& payload, std::uint8_t channelIndex);
     void processInboundMessage(std::uint8_t type, const juce::MemoryBlock& payload);
     void handleAuthChallenge(const juce::MemoryBlock& payload);
     void handleAuthReply(const juce::MemoryBlock& payload);
@@ -159,6 +150,7 @@ private:
 
         Kind kind { Kind::UploadInterval };
         juce::MemoryBlock payload;
+        std::uint8_t channelIndex { 0 };
     };
 
     std::unique_ptr<juce::StreamingSocket> socket_;
@@ -182,8 +174,7 @@ private:
     std::string authFailureReason_;
     ServerTimingConfig serverTimingConfig_;
     bool hasServerTimingConfig_ { false };
-    std::string localChannelName_;
-    std::uint8_t localChannelFlags_ { 0 };
+    std::unordered_map<std::uint8_t, LocalChannelInfo> localChannelInfos_;
     std::unordered_map<std::string, RemoteSourceInfo> knownRemoteSourcesById_;
     IntervalBoundaryEvent latestIntervalBoundaryEvent_;
 

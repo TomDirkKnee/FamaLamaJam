@@ -515,6 +515,8 @@ private:
     void requestStemCaptureStop();
     void clearStemCaptureState(bool preserveArmedState);
     void handleStemCaptureBoundary();
+    void resetLocalUploadState();
+    void updateLocalTransportChannelInfo();
     void retireStemCaptureSource(const audio::StemCaptureWriter::SourceConfig& sourceConfig);
     void captureLocalIntervalStem(const juce::AudioBuffer<float>& intervalBuffer);
     void captureLocalVoiceStem(const juce::AudioBuffer<float>& voiceChunk);
@@ -545,9 +547,13 @@ private:
     audio::CodecStreamBridge codecStreamBridge_;
     juce::AudioBuffer<float> localUploadIntervalBuffer_;
     juce::AudioBuffer<float> localVoiceUploadBuffer_;
+    juce::AudioBuffer<float> localSend2UploadIntervalBuffer_;
+    juce::AudioBuffer<float> localSend2VoiceUploadBuffer_;
     juce::AudioBuffer<float> hostRoutingProofAuxSendBuffer_;
     int localUploadIntervalWritePosition_ { 0 };
     int localVoiceUploadWritePosition_ { 0 };
+    int localSend2UploadIntervalWritePosition_ { 0 };
+    int localSend2VoiceUploadWritePosition_ { 0 };
     int transmitWarmupIntervalsRemaining_ { 0 };
     std::atomic<std::size_t> lastCodecPayloadBytes_ { 0 };
     std::atomic<int> lastDecodedSamples_ { 0 };

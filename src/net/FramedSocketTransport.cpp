@@ -342,13 +342,24 @@ bool FramedSocketTransport::waitForAuthentication(int timeoutMs,
 
 void FramedSocketTransport::setLocalChannelInfo(std::string channelName, std::uint8_t channelFlags)
 {
+    setLocalChannelInfo(LocalChannelInfo {
+        .channelIndex = 0,
+        .channelName = std::move(channelName),
+        .channelFlags = channelFlags,
+    });
+}
+
+void FramedSocketTransport::setLocalChannelInfo(LocalChannelInfo channelInfo)
+{
     bool shouldSend = false;
+    bool changed = false;
 
     {
         const juce::ScopedLock lock(stateLock_);
-        localChannelName_ = std::move(channelName);
-        localChannelFlags_ = channelFlags;
-        shouldSend = socket_ != nullptr && authenticated_ && ! socketFailed_;
+        auto& stored = localChannelInfos_[channelInfo.channelIndex];
+        changed = stored.channelName != channelInfo.channelName || stored.channelFlags != channelInfo.channelFlags;
+        stored = std::move(channelInfo);
+        shouldSend = changed && socket_ != nullptr && authenticated_ && ! socketFailed_;
     }
 
     if (shouldSend)
@@ -415,6 +426,11 @@ bool FramedSocketTransport::isRunning() const
 
 void FramedSocketTransport::enqueueOutbound(const juce::MemoryBlock& payload)
 {
+    enqueueOutbound(payload, 0);
+}
+
+void FramedSocketTransport::enqueueOutbound(const juce::MemoryBlock& payload, std::uint8_t channelIndex)
+{
     if (payload.getSize() == 0)
         return;
 
@@ -422,6 +438,7 @@ void FramedSocketTransport::enqueueOutbound(const juce::MemoryBlock& payload)
     outboundQueue_.push_back(OutboundMessage {
         .kind = OutboundMessage::Kind::UploadInterval,
         .payload = payload,
+        .channelIndex = channelIndex,
     });
 
     while (outboundQueue_.size() > kMaxQueuedFrames)
@@ -570,7 +587,7 @@ void FramedSocketTransport::run()
             bool wroteOutbound = false;
 
             if (outbound.kind == OutboundMessage::Kind::UploadInterval)
-                wroteOutbound = writeUploadInterval(outbound.payload);
+                wroteOutbound = writeUploadInterval(outbound.payload, outbound.channelIndex);
             else
                 wroteOutbound = writeMessage(kMessageChatMessage,
                                              outbound.payload.getData(),
@@ -814,7 +831,7 @@ bool FramedSocketTransport::readOneMessage(std::uint8_t& type, juce::MemoryBlock
     return true;
 }
 
-bool FramedSocketTransport::writeUploadInterval(const juce::MemoryBlock& payload)
+bool FramedSocketTransport::writeUploadInterval(const juce::MemoryBlock& payload, std::uint8_t channelIndex)
 {
     if (payload.getSize() == 0)
         return true;
@@ -828,7 +845,7 @@ bool FramedSocketTransport::writeUploadInterval(const juce::MemoryBlock& payload
     std::memcpy(beginPayload.data(), guid.data(), guid.size());
     encodeLe32(static_cast<std::uint32_t>(payload.getSize()), beginPayload.data() + 16);
     encodeLe32(kUploadFourCcOggv, beginPayload.data() + 20);
-    beginPayload[24] = 0;
+    beginPayload[24] = channelIndex;
 
     if (! writeMessage(kMessageClientUploadIntervalBegin, beginPayload.data(), beginPayload.size()))
         return false;
@@ -1295,34 +1312,49 @@ void FramedSocketTransport::sendUserMask(const std::string& username, std::uint3
 
 void FramedSocketTransport::sendCurrentChannelInfo()
 {
-    std::string channelName;
-    std::uint8_t channelFlags = 0;
+    std::vector<LocalChannelInfo> localChannelInfos;
 
     {
         const juce::ScopedLock lock(stateLock_);
-        channelName = localChannelName_;
-        channelFlags = localChannelFlags_;
+        localChannelInfos.reserve(localChannelInfos_.size());
+        for (const auto& [channelIndex, channelInfo] : localChannelInfos_)
+        {
+            juce::ignoreUnused(channelIndex);
+            localChannelInfos.push_back(channelInfo);
+        }
     }
 
-    std::vector<std::uint8_t> payload(2 + channelName.size() + 1 + 4);
-    payload[0] = 4;
-    payload[1] = 0;
+    std::sort(localChannelInfos.begin(),
+              localChannelInfos.end(),
+              [](const LocalChannelInfo& lhs, const LocalChannelInfo& rhs) {
+                  return lhs.channelIndex < rhs.channelIndex;
+              });
 
-    std::size_t offset = 2;
-    if (! channelName.empty())
+    for (const auto& channelInfo : localChannelInfos)
     {
-        std::memcpy(payload.data() + offset, channelName.data(), channelName.size());
-        offset += channelName.size();
+        std::vector<std::uint8_t> payload(2 + channelInfo.channelName.size() + 1 + 4);
+        payload[0] = 4;
+        payload[1] = channelInfo.channelIndex;
+
+        std::size_t offset = 2;
+        if (! channelInfo.channelName.empty())
+        {
+            std::memcpy(payload.data() + offset, channelInfo.channelName.data(), channelInfo.channelName.size());
+            offset += channelInfo.channelName.size();
+        }
+
+        payload[offset++] = 0;
+        payload[offset++] = 0;
+        payload[offset++] = 0;
+        payload[offset++] = 0;
+        payload[offset++] = channelInfo.channelFlags;
+
+        if (! writeMessage(kMessageClientSetChannelInfo, payload.data(), offset))
+        {
+            socketFailed_ = true;
+            return;
+        }
     }
-
-    payload[offset++] = 0;
-    payload[offset++] = 0;
-    payload[offset++] = 0;
-    payload[offset++] = 0;
-    payload[offset++] = channelFlags;
-
-    if (! writeMessage(kMessageClientSetChannelInfo, payload.data(), offset))
-        socketFailed_ = true;
 }
 
 void FramedSocketTransport::failAuthentication(const std::string& reason)
