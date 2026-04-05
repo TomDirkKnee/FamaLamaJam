@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08.3.4-03-PLAN.md
-last_updated: "2026-04-05T07:47:42.434Z"
-last_activity: 2026-04-05 - Completed plan 03 with an approved Ableton fixed-bus verdict and a host-owned routing recommendation.
+stopped_at: Completed 08.3.4.1-01-PLAN.md
+last_updated: "2026-04-05T08:56:12.190Z"
+last_activity: 2026-04-05 - Completed 08.3.4.1 plan 01 with fixed-slot routing contracts, RED coverage for missing multi-local upload or UI/restore behavior, and the Ableton fixed-bus matrix.
 progress:
-  total_phases: 17
+  total_phases: 18
   completed_phases: 12
-  total_plans: 54
-  completed_plans: 49
-  percent: 91
+  total_plans: 57
+  completed_plans: 50
+  percent: 88
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.4 host multi-I/O routing research is complete with an approved fixed-bus follow-on recommendation, while Phase 08.2 still carries the separate same-machine CPU repro concern.
+**Current focus:** Phase 08.3.4.1 fixed-bus multi-input and NINJAM channel implementation now moves into plan 02 runtime work with explicit RED coverage and a locked Ableton validation matrix, while Phase 08.2 still carries the separate same-machine CPU repro concern.
 
 ## Current Position
 
-Phase: 08.3.4 - Host Multi-I/O Routing Research  
-Plan: 03 - Ableton Fixed-Bus Verdict  
-Status: Completed  
-Last activity: 2026-04-05 - Completed plan 03 with an approved Ableton fixed-bus verdict and a host-owned routing recommendation.
+Phase: 08.3.4.1 - Fixed-Bus Multi-Input And NINJAM Channel Implementation  
+Plan: 02  
+Status: In Progress  
+Last activity: 2026-04-05 - Completed plan 01 with fixed-slot contracts, RED transport/UI/restore coverage, and the manual Ableton routing matrix.
 
-Progress: 91%
+Progress: 88%
 
 ## Accumulated Context
 
@@ -92,6 +92,12 @@ Progress: 91%
 - [Phase 08.3.4]: Approve a follow-on fixed-bus implementation phase because Ableton exposes both proof buses in normal host routing UI.
 - [Phase 08.3.4]: Use host-owned track-to-bus routing in Live rather than plugin-owned Ableton track enumeration.
 - [Phase 08.3.4]: Start implementation with Main plus Local Send 2 and fixed extra remote output pairs; defer broader bus counts.
+- [Phase 08.3.4.1]: First implementation target is exactly two local transmit paths (`Main` and `Local Send 2`) and fixed extra output pairs for remote returns, not dynamic bus counts or plugin-owned DAW track browsing.
+- [Phase 08.3.4.1]: Extra local channels should be user-created full strips with editable names and an inline `Add channel` control.
+- [Phase 08.3.4.1]: Local `Transmit` and `Voice` controls should be global across all active local channels to preserve strip space.
+- [Phase 08.3.4.1]: Remote output assignment should live directly on each remote strip as a dropdown using explicit host-facing labels like `FLJ Main Output` and `Remote Out 1`.
+- [Phase 08.3.4.1]: Lock Wave 0 to two local send slots and three fixed host-facing output labels before runtime work begins.
+- [Phase 08.3.4.1]: Use header-level compatibility shims and captured transport metadata so RED coverage can compile against the new contracts without implementing the runtime early.
 
 ### Roadmap Evolution
 
@@ -102,6 +108,7 @@ Progress: 91%
 - Phase 08.3.2 inserted after Phase 08.3.1: Voice Mode Research & Prototype (URGENT)
 - Phase 08.3.3 inserted after Phase 08.3.2: Stem Capture & Export (URGENT)
 - Phase 08.3.4 inserted after Phase 08.3.3: Host Multi-I/O Routing Research (URGENT)
+- Phase 08.3.4.1 inserted after Phase 08.3.4: Fixed-Bus Multi-Input And NINJAM Channel Implementation (URGENT)
 
 ### Pending Todos
 
@@ -136,9 +143,10 @@ Progress: 91%
 - 2026-04-04: Completed Phase 08.3.4 plan 01 in 21 min across 2 task commits and 5 modified files; the phase now has RED fixed-bus routing coverage, a manual Ableton proof matrix, and explicit fallback criteria for per-user routing or no follow-on implementation phase.
 - 2026-04-04: Completed Phase 08.3.4 plan 02 in 23 min across 2 task commits and 4 modified files; the processor now exposes the fixed proof buses, routes one selected decoded source to `Remote Out 1`, and keeps focused routing plus voice-mode coverage green.
 - 2026-04-05: Completed Phase 08.3.4 plan 03 in 11h 12m elapsed across 2 task commits and 4 modified files; Ableton exposed both proof buses in normal routing UI, so the phase closed with an approved host-owned fixed-bus follow-on recommendation.
+- 2026-04-05: Completed Phase 08.3.4.1 plan 01 in 12 min across 2 task commits and 9 modified files; fixed-slot RED coverage, captured outbound metadata, and the Ableton routing matrix now lock the implementation target for plan 02.
 
 ## Session Continuity
 
-Last session: 2026-04-05T07:47:42.407Z
-Stopped at: Completed 08.3.4-03-PLAN.md
+Last session: 2026-04-05T08:56:12.162Z
+Stopped at: Completed 08.3.4.1-01-PLAN.md
 Resume file: None

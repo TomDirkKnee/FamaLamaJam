@@ -295,10 +295,10 @@ Plans:
   2. Local transmit channels are clearly distinguishable in FLJ and preserve the current interval/voice semantics per channel where supported.
   3. User can route at least one selected remote return to an extra FLJ output pair while unrouted returns remain on the main FLJ output.
   4. The implementation stays fixed-bus and host-routed; it does not depend on FLJ enumerating Ableton tracks internally.
-  **Plans:** 3 plans
+  **Plans:** 1/3 plans executed
   
   Plans:
-- [ ] 08.3.4.1-01-PLAN.md - Lock fixed-slot routing contracts, RED Wave 0 coverage, and the Ableton fixed-bus matrix.
+- [x] 08.3.4.1-01-PLAN.md - Lock fixed-slot routing contracts, RED Wave 0 coverage, and the Ableton fixed-bus matrix.
 - [ ] 08.3.4.1-02-PLAN.md - Implement channel-indexed local uploads, fixed remote output routing, and the current-layout UI or state wiring.
 - [ ] 08.3.4.1-03-PLAN.md - Rebuild the fixed-bus artifact, run the Ableton matrix, and close the phase with aligned validation evidence.
 
@@ -363,7 +363,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 8.3 -> 8.3.1 -> 8.3.2 -> 8.3.3 -> 8.3.4 -> 9 -> 10
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 8.1 -> 8.2 -> 8.3 -> 8.3.1 -> 8.3.2 -> 8.3.3 -> 8.3.4 -> 8.3.4.1 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -382,6 +382,7 @@ Plans:
 | 8.3.2. Voice Mode Research & Prototype | 0/3 | Planned | - |
 | 8.3.3. Stem Capture & Export | 0/TBD | Planned | - |
 | 8.3.4. Host Multi-I/O Routing Research | 3/3 | Complete | 2026-04-05 |
+| 8.3.4.1. Fixed-Bus Multi-Input And NINJAM Channel Implementation | 1/3 | In Progress | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 0/TBD | Planned     | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
