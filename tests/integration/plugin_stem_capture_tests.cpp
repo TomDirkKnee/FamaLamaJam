@@ -89,6 +89,13 @@ std::unique_ptr<juce::AudioFormatReader> createReader(const juce::File& file)
     REQUIRE(rawReader != nullptr);
     return std::unique_ptr<juce::AudioFormatReader>(rawReader);
 }
+
+juce::AudioBuffer<float> makeProcessBuffer(FamaLamaJamAudioProcessor& processor, int samples)
+{
+    return juce::AudioBuffer<float>(juce::jmax(processor.getTotalNumInputChannels(),
+                                               processor.getTotalNumOutputChannels()),
+                                    samples);
+}
 } // namespace
 
 TEST_CASE("plugin stem capture excludes local voice mode and resumes interval export with a fresh file",
@@ -102,7 +109,7 @@ TEST_CASE("plugin stem capture excludes local voice mode and resumes interval ex
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server, "jim");
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processor.setStemCaptureDirectoryForTesting(tempDirectory.directory(), true));
@@ -127,9 +134,12 @@ TEST_CASE("plugin stem capture excludes local voice mode and resumes interval ex
 
     (void) processor.toggleLocalVoiceMode();
     CHECK_FALSE(processor.isLocalVoiceModeEnabled());
+    const auto resumeInterval = processor.getTransportUiState().intervalIndex;
     REQUIRE(processUntil(processor, buffer, midi, [&]() {
-        return processor.getWrittenStemFilesForTesting().size() > filesBeforeVoice;
+        return processor.getTransportUiState().intervalIndex > resumeInterval;
     }));
+    REQUIRE(processor.waitForStemCaptureFlushForTesting(2000));
+    CHECK(processor.getWrittenStemFilesForTesting().size() > filesBeforeVoice);
 
     const auto stopInterval = processor.getTransportUiState().intervalIndex;
     REQUIRE(processor.setStemCaptureDirectoryForTesting(tempDirectory.directory(), false));
@@ -192,7 +202,7 @@ TEST_CASE("plugin stem capture writes late-joining remote interval stems without
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server, "dirk");
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processor.setStemCaptureDirectoryForTesting(tempDirectory.directory(), true));
@@ -253,7 +263,7 @@ TEST_CASE("plugin stem capture excludes remote voice chunks and resumes interval
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server, "dirk");
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processor.setStemCaptureDirectoryForTesting(tempDirectory.directory(), true));
@@ -315,7 +325,7 @@ TEST_CASE("plugin stem capture starts a fresh session folder on explicit new run
         dynamic_cast<FamaLamaJamAudioProcessorEditor*>(processor.createEditor()));
     REQUIRE(editor != nullptr);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processor.setStemCaptureDirectoryForTesting(tempDirectory.directory(), true));
@@ -366,7 +376,7 @@ TEST_CASE("plugin stem capture keeps one session folder across disconnect and re
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server, "dirk");
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processor.setStemCaptureDirectoryForTesting(tempDirectory.directory(), true));

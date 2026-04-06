@@ -78,10 +78,18 @@ void CodecStreamBridge::submitInput(const juce::AudioBuffer<float>& input,
 
 void CodecStreamBridge::submitInboundEncoded(const void* encodedData, std::size_t encodedSize)
 {
-    submitInboundEncoded(std::string(), encodedData, encodedSize);
+    submitInboundEncoded(std::string(), 0, encodedData, encodedSize);
 }
 
 void CodecStreamBridge::submitInboundEncoded(const std::string& sourceId,
+                                             const void* encodedData,
+                                             std::size_t encodedSize)
+{
+    submitInboundEncoded(sourceId, 0, encodedData, encodedSize);
+}
+
+void CodecStreamBridge::submitInboundEncoded(const std::string& sourceId,
+                                             std::uint64_t boundaryGeneration,
                                              const void* encodedData,
                                              std::size_t encodedSize)
 {
@@ -91,6 +99,7 @@ void CodecStreamBridge::submitInboundEncoded(const std::string& sourceId,
     InboundEncodedFrame frame;
     frame.payload.replaceAll(encodedData, encodedSize);
     frame.sourceId = sourceId;
+    frame.boundaryGeneration = boundaryGeneration;
 
     {
         const juce::ScopedLock lock(stateLock_);
@@ -145,6 +154,7 @@ bool CodecStreamBridge::popDecodedFrame(DecodedFrame& output)
     output.audio.makeCopyOf(decodedOutputQueue_.front().audio, true);
     output.sourceId = decodedOutputQueue_.front().sourceId;
     output.sampleRate = decodedOutputQueue_.front().sampleRate;
+    output.boundaryGeneration = decodedOutputQueue_.front().boundaryGeneration;
     decodedOutputQueue_.pop_front();
     return true;
 }
@@ -231,6 +241,7 @@ void CodecStreamBridge::run()
                     frame.audio.makeCopyOf(decoded, true);
                     frame.sourceId = inboundSnapshot.sourceId;
                     frame.sampleRate = decodedSampleRate;
+                    frame.boundaryGeneration = inboundSnapshot.boundaryGeneration;
 
                     const juce::ScopedLock lock(stateLock_);
                     decodedOutputQueue_.push_back(std::move(frame));

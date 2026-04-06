@@ -77,7 +77,54 @@ struct EditorHarness
             [this]() { return metronomeEnabled; },
             [this](bool enabled) { metronomeEnabled = enabled; },
             []() { return FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState {}; },
-            [](bool) { return false; });
+            [](bool) { return false; },
+            FamaLamaJamAudioProcessorEditor::RoomUiGetter {},
+            FamaLamaJamAudioProcessorEditor::RoomMessageHandler {},
+            FamaLamaJamAudioProcessorEditor::RoomVoteHandler {},
+            FamaLamaJamAudioProcessorEditor::DiagnosticsTextGetter {},
+            FamaLamaJamAudioProcessorEditor::FloatGetter {},
+            FamaLamaJamAudioProcessorEditor::FloatSetter {},
+            FamaLamaJamAudioProcessorEditor::FloatGetter {},
+            FamaLamaJamAudioProcessorEditor::FloatSetter {},
+            FamaLamaJamAudioProcessorEditor::StemCaptureUiGetter {},
+            FamaLamaJamAudioProcessorEditor::StemCaptureSettingsSetter {},
+            FamaLamaJamAudioProcessorEditor::StemCaptureNewRunHandler {},
+            [this](const std::string& sourceId, std::string displayName) {
+                for (auto& strip : mixerStrips)
+                {
+                    if (strip.sourceId == sourceId)
+                    {
+                        strip.displayName = std::move(displayName);
+                        return true;
+                    }
+                }
+                return false;
+            },
+            [](const std::string&, int) { return true; },
+            [this](const std::string& sourceId, bool visible) {
+                for (auto& strip : mixerStrips)
+                {
+                    if (strip.sourceId == sourceId)
+                    {
+                        strip.visible = visible;
+                        strip.active = visible;
+                        return true;
+                    }
+                }
+                return false;
+            },
+            [this]() {
+                for (auto& strip : mixerStrips)
+                {
+                    if (strip.kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor && ! strip.visible)
+                    {
+                        strip.visible = true;
+                        strip.active = true;
+                        return true;
+                    }
+                }
+                return false;
+            });
     }
 };
 
@@ -374,6 +421,72 @@ TEST_CASE("plugin mixer ui expects one local header for global transmit voice ad
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          == FamaLamaJamAudioProcessorEditor::kHideLocalChannelLabel);
+}
+
+TEST_CASE("plugin mixer ui reveals the next hidden local slot and confirms live hide without losing prior state",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = "Local Sends",
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = "local",
+          .groupLabel = "Local Sends",
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
+          .active = false,
+          .visible = false,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend3SourceId,
+          .groupId = "local",
+          .groupLabel = "Local Sends",
+          .displayName = "Keys",
+          .subtitle = "Local Send 3",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
+          .active = false,
+          .visible = false,
+          .editableName = true },
+    });
+
+    auto* addButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kAddLocalChannelLabel);
+    REQUIRE(addButton != nullptr);
+    REQUIRE(addButton->onClick != nullptr);
+    addButton->onClick();
+
+    auto visibleStrips = harness.editor->getVisibleMixerStripLabelsForTesting();
+    REQUIRE(visibleStrips.size() == 2);
+    CHECK(visibleStrips[1] == "Bass");
+
+    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          == FamaLamaJamAudioProcessorEditor::kHideLocalChannelLabel);
+    REQUIRE(harness.editor->clickMixerStripRemoveForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
+    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          == FamaLamaJamAudioProcessorEditor::kConfirmHideLocalChannelLabel);
+    CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
+
+    REQUIRE(harness.editor->clickMixerStripRemoveForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
+    visibleStrips = harness.editor->getVisibleMixerStripLabelsForTesting();
+    REQUIRE(visibleStrips.size() == 1);
+    CHECK(visibleStrips[0] == "Main");
+
+    addButton->onClick();
+    visibleStrips = harness.editor->getVisibleMixerStripLabelsForTesting();
+    REQUIRE(visibleStrips.size() == 2);
+    CHECK(visibleStrips[1] == "Bass");
 }
 
 TEST_CASE("plugin mixer ui expects inline remote output routing choices on remote strips", "[plugin_mixer_ui]")
@@ -400,6 +513,11 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
               FamaLamaJamAudioProcessorEditor::kMainOutputLabel,
               "Remote Out 1",
               "Remote Out 2",
+              "Remote Out 3",
+              "Remote Out 4",
+              "Remote Out 5",
+              "Remote Out 6",
+              "Remote Out 7",
           } },
     });
 
@@ -414,8 +532,9 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
     });
 
     REQUIRE(outputSelector != nullptr);
-    CHECK(outputSelector->getNumItems() == 3);
+    CHECK(outputSelector->getNumItems() == 8);
     CHECK(outputSelector->getItemText(0) == FamaLamaJamAudioProcessorEditor::kMainOutputLabel);
     CHECK(outputSelector->getItemText(1) == "Remote Out 1");
     CHECK(outputSelector->getItemText(2) == "Remote Out 2");
+    CHECK(outputSelector->getItemText(7) == "Remote Out 7");
 }

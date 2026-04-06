@@ -48,6 +48,13 @@ bool processUntil(FamaLamaJamAudioProcessor& processor,
 
     return false;
 }
+
+juce::AudioBuffer<float> makeProcessBuffer(FamaLamaJamAudioProcessor& processor, int samples)
+{
+    return juce::AudioBuffer<float>(juce::jmax(processor.getTotalNumInputChannels(),
+                                               processor.getTotalNumOutputChannels()),
+                                    samples);
+}
 } // namespace
 
 TEST_CASE("plugin_host_lifecycle restored duplicate instance stays idle with persisted mix state",
@@ -61,7 +68,7 @@ TEST_CASE("plugin_host_lifecycle restored duplicate instance stays idle with per
     FamaLamaJamAudioProcessor source(true, true);
     connectProcessor(source, server, 48000.0, 512);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(source, 512);
     juce::MidiBuffer midi;
     REQUIRE(processUntil(source, buffer, midi, [&]() {
         return source.getTransportUiState().hasServerTiming && source.isRemoteSourceActiveForTesting("alice#0");
@@ -103,7 +110,7 @@ TEST_CASE("plugin_host_lifecycle restored duplicate instance stays idle with per
     CHECK(remoteSnapshot.mix.muted);
 }
 
-TEST_CASE("plugin_host_lifecycle connected release and reprepare clears stale runtime before recovery",
+TEST_CASE("plugin_host_lifecycle connected release and reprepare preserves live session state for transient host rebinding",
           "[plugin_host_lifecycle]")
 {
     MiniNinjamServer server;
@@ -114,7 +121,7 @@ TEST_CASE("plugin_host_lifecycle connected release and reprepare clears stale ru
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server, 48000.0, 512);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
     REQUIRE(processUntil(processor, buffer, midi, [&]() {
         return processor.getTransportUiState().hasServerTiming
@@ -128,14 +135,12 @@ TEST_CASE("plugin_host_lifecycle connected release and reprepare clears stale ru
     FamaLamaJamAudioProcessor::MixerStripSnapshot remoteSnapshot;
     REQUIRE(processor.getMixerStripSnapshot("alice#0", remoteSnapshot));
 
-    CHECK_FALSE(processor.getTransportUiState().hasServerTiming);
-    CHECK(processor.getActiveRemoteSourceCountForTesting() == 0);
-    CHECK(processor.getQueuedRemoteSourceCountForTesting() == 0);
-    CHECK(processor.getPendingRemoteSourceCountForTesting() == 0);
+    CHECK(processor.getTransportUiState().hasServerTiming);
+    CHECK(processor.getActiveRemoteSourceCountForTesting() > 0);
     CHECK(processor.getLastCodecPayloadBytesForTesting() == 0);
     CHECK(processor.getLastDecodedSamplesForTesting() == 0);
-    CHECK_FALSE(remoteSnapshot.descriptor.active);
-    CHECK_FALSE(remoteSnapshot.descriptor.visible);
+    CHECK(remoteSnapshot.descriptor.active);
+    CHECK(remoteSnapshot.descriptor.visible);
 
     processor.prepareToPlay(48000.0, 512);
     REQUIRE(processUntil(processor, buffer, midi, [&]() {
@@ -181,7 +186,7 @@ TEST_CASE("plugin_host_lifecycle hides remote strips immediately when a peer dis
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server, 48000.0, 512);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
     REQUIRE(processUntil(processor, buffer, midi, [&]() {
         FamaLamaJamAudioProcessor::MixerStripSnapshot remoteSnapshot;

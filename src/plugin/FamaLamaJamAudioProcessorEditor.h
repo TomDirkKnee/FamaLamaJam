@@ -51,6 +51,8 @@ public:
     static constexpr const char* kLocalHeaderTransmitLabel = "Transmit";
     static constexpr const char* kLocalHeaderVoiceLabel = "Voice";
     static constexpr const char* kAddLocalChannelLabel = "Add channel";
+    static constexpr const char* kHideLocalChannelLabel = "Hide";
+    static constexpr const char* kConfirmHideLocalChannelLabel = "Confirm hide";
     static constexpr const char* kMainOutputLabel = "FLJ Main Output";
 
     enum class SyncHealth
@@ -256,6 +258,7 @@ public:
     using MixerStripSoloSetter = std::function<bool(const std::string&, bool)>;
     using MixerStripNameSetter = std::function<bool(const std::string&, std::string)>;
     using MixerStripOutputAssignmentSetter = std::function<bool(const std::string&, int)>;
+    using LocalChannelVisibilitySetter = std::function<bool(const std::string&, bool)>;
     using DiagnosticsTextGetter = std::function<std::string()>;
     using FloatGetter = std::function<float()>;
     using FloatSetter = std::function<void(float)>;
@@ -294,6 +297,7 @@ public:
                                     StemCaptureNewRunHandler stemCaptureNewRunHandler = {},
                                     MixerStripNameSetter mixerStripNameSetter = {},
                                     MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
+                                    LocalChannelVisibilitySetter localChannelVisibilitySetter = {},
                                     CommandHandler addLocalChannelHandler = {},
                                     CommandHandler transmitToggleHandler = {},
                                     VoiceModeToggleHandler voiceModeToggleHandler = {},
@@ -324,6 +328,7 @@ public:
                                     StemCaptureNewRunHandler stemCaptureNewRunHandler = {},
                                     MixerStripNameSetter mixerStripNameSetter = {},
                                     MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
+                                    LocalChannelVisibilitySetter localChannelVisibilitySetter = {},
                                     CommandHandler addLocalChannelHandler = {},
                                     CommandHandler transmitToggleHandler = {},
                                     VoiceModeToggleHandler voiceModeToggleHandler = {},
@@ -374,9 +379,11 @@ public:
                                                            bool& muted) const;
     [[nodiscard]] bool getMixerStripMeterLevelsForTesting(const juce::String& sourceId, float& left, float& right) const;
     [[nodiscard]] juce::Colour getMixerStripStatusColourForTesting(const juce::String& sourceId) const;
+    [[nodiscard]] juce::String getMixerStripRemoveButtonTextForTesting(const juce::String& sourceId) const;
     bool setMixerStripControlStateForTesting(const juce::String& sourceId, double gain, double pan, bool muted);
     bool clickMixerStripTransmitForTesting(const juce::String& sourceId);
     bool clickMixerStripVoiceToggleForTesting(const juce::String& sourceId);
+    bool clickMixerStripRemoveForTesting(const juce::String& sourceId);
     bool setMixerStripSoloStateForTesting(const juce::String& sourceId, bool soloed);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
@@ -431,9 +438,11 @@ private:
         juce::TextButton transmitButton;
         juce::ToggleButton voiceModeToggle;
         juce::ComboBox outputSelector;
+        juce::TextButton removeButton;
         bool editableName { false };
         bool hasTransmitControl { false };
         bool hasVoiceModeControl { false };
+        bool removable { false };
         bool showsGroupLabel { false };
         float lastMeterLeft { 0.0f };
         float lastMeterRight { 0.0f };
@@ -483,6 +492,7 @@ private:
     MixerStripSoloSetter mixerStripSoloSetter_;
     MixerStripNameSetter mixerStripNameSetter_;
     MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter_;
+    LocalChannelVisibilitySetter localChannelVisibilitySetter_;
     BoolGetter metronomeGetter_;
     BoolSetter metronomeSetter_;
     ServerDiscoveryUiGetter serverDiscoveryUiGetter_;
@@ -573,6 +583,7 @@ private:
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;
     std::vector<std::string> visibleMixerStripOrder_;
     std::vector<MixerStripState> currentVisibleMixerStrips_;
+    std::string pendingLocalRemovalSourceId_;
     CpuDiagnosticSnapshot cpuDiagnosticSnapshot_;
     std::string selectedServerDiscoveryEndpointKey_;
     std::string recalledPassword_;

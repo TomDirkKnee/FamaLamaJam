@@ -534,6 +534,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  StemCaptureNewRunHandler stemCaptureNewRunHandler,
                                                                  MixerStripNameSetter mixerStripNameSetter,
                                                                  MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter,
+                                                                 LocalChannelVisibilitySetter localChannelVisibilitySetter,
                                                                  CommandHandler addLocalChannelHandler,
                                                                  CommandHandler transmitToggleHandler,
                                                                  VoiceModeToggleHandler voiceModeToggleHandler,
@@ -555,6 +556,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     , mixerStripOutputAssignmentSetter_(
           mixerStripOutputAssignmentSetter ? std::move(mixerStripOutputAssignmentSetter)
                                            : [](const std::string&, int) { return false; })
+    , localChannelVisibilitySetter_(localChannelVisibilitySetter ? std::move(localChannelVisibilitySetter)
+                                                                 : [](const std::string&, bool) { return false; })
     , metronomeGetter_(std::move(metronomeGetter))
     , metronomeSetter_(std::move(metronomeSetter))
     , serverDiscoveryUiGetter_(serverDiscoveryUiGetter ? std::move(serverDiscoveryUiGetter)
@@ -835,6 +838,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 
     addLocalChannelButton_.setButtonText(kAddLocalChannelLabel);
     addLocalChannelButton_.onClick = [this]() {
+        pendingLocalRemovalSourceId_.clear();
         if (addLocalChannelHandler_())
             refreshMixerStrips();
     };
@@ -914,6 +918,7 @@ FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
         widgets->transmitButton.onClick = {};
         widgets->voiceModeToggle.onClick = {};
         widgets->outputSelector.onChange = {};
+        widgets->removeButton.onClick = {};
     }
 }
 
@@ -943,6 +948,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                                                  StemCaptureNewRunHandler stemCaptureNewRunHandler,
                                                                  MixerStripNameSetter mixerStripNameSetter,
                                                                  MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter,
+                                                                 LocalChannelVisibilitySetter localChannelVisibilitySetter,
                                                                  CommandHandler addLocalChannelHandler,
                                                                  CommandHandler transmitToggleHandler,
                                                                  VoiceModeToggleHandler voiceModeToggleHandler,
@@ -975,6 +981,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
                                         std::move(stemCaptureNewRunHandler),
                                         std::move(mixerStripNameSetter),
                                         std::move(mixerStripOutputAssignmentSetter),
+                                        std::move(localChannelVisibilitySetter),
                                         std::move(addLocalChannelHandler),
                                         std::move(transmitToggleHandler),
                                         std::move(voiceModeToggleHandler),
@@ -1271,6 +1278,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
         const auto transmitWidth = 150;
         const auto voiceWidth = 96;
         const auto outputWidth = 132;
+        const auto removeWidth = 96;
         const auto meterWidth = juce::jlimit(120, 220, mixerContentWidth / 3);
         widget->meter.setBounds(controlRow.removeFromLeft(meterWidth));
         controlRow.removeFromLeft(8);
@@ -1289,6 +1297,11 @@ void FamaLamaJamAudioProcessorEditor::resized()
         if (widget->hasTransmitControl)
         {
             widget->transmitButton.setBounds(rightControls.removeFromRight(transmitWidth));
+            rightControls.removeFromRight(8);
+        }
+        if (widget->removable)
+        {
+            widget->removeButton.setBounds(rightControls.removeFromRight(removeWidth));
             rightControls.removeFromRight(8);
         }
         widget->muteToggle.setBounds(rightControls.removeFromRight(muteWidth));
@@ -1961,6 +1974,12 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
     for (const auto& strip : visibleStrips)
         nextOrder.push_back(strip.sourceId);
 
+    if (! pendingLocalRemovalSourceId_.empty()
+        && std::find(nextOrder.begin(), nextOrder.end(), pendingLocalRemovalSourceId_) == nextOrder.end())
+    {
+        pendingLocalRemovalSourceId_.clear();
+    }
+
     if (nextOrder != visibleMixerStripOrder_)
         rebuildMixerStripWidgets(visibleStrips);
 
@@ -1979,9 +1998,20 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
             widgets.meter.setLevels(strip.meterLeft, strip.meterRight);
         }
 
+        const bool nextRemovable = strip.kind == MixerStripKind::LocalMonitor
+            && strip.sourceId != FamaLamaJamAudioProcessor::kLocalMainSourceId;
+        const bool transmitLive = strip.transmitState != TransmitState::Disabled;
+        const auto expectedRemoveText = nextRemovable
+            ? juce::String(transmitLive && pendingLocalRemovalSourceId_ == strip.sourceId
+                               ? kConfirmHideLocalChannelLabel
+                               : kHideLocalChannelLabel)
+            : juce::String {};
+        const bool removeStateChanged = widgets.removable != nextRemovable
+            || (nextRemovable && widgets.removeButton.getButtonText() != expectedRemoveText);
+
         const bool stripChanged = index >= currentVisibleMixerStrips_.size()
             || ! mixerStripStateMatches(strip, currentVisibleMixerStrips_[index]);
-        if (! stripChanged)
+        if (! stripChanged && ! removeStateChanged)
             continue;
 
         ++cpuDiagnosticSnapshot_.mixerStripUpdateCalls;
@@ -2008,9 +2038,15 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         widgets.soloToggle.setAlpha(strip.active || strip.kind == MixerStripKind::LocalMonitor ? 1.0f : 0.7f);
         widgets.hasTransmitControl = false;
         widgets.hasVoiceModeControl = false;
+        widgets.removable = nextRemovable;
         widgets.transmitButton.setVisible(widgets.hasTransmitControl);
         widgets.voiceModeToggle.setVisible(widgets.hasVoiceModeControl);
         widgets.outputSelector.setVisible(! strip.outputAssignmentLabels.empty());
+        widgets.removeButton.setVisible(widgets.removable);
+        if (widgets.removable)
+        {
+            widgets.removeButton.setButtonText(expectedRemoveText);
+        }
         if (! strip.outputAssignmentLabels.empty())
         {
             const auto selectedId = juce::jlimit(1,
@@ -2040,6 +2076,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->muteToggle.onClick = {};
         widgets->transmitButton.onClick = {};
         widgets->voiceModeToggle.onClick = {};
+        widgets->removeButton.onClick = {};
     }
 
     mixerStripWidgets_.clear();
@@ -2121,6 +2158,27 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         };
         mixerContent_.addAndMakeVisible(widgets->outputSelector);
 
+        widgets->removeButton.onClick = [this, raw = widgets.get()] {
+            const auto stripIt = std::find_if(currentVisibleMixerStrips_.begin(),
+                                              currentVisibleMixerStrips_.end(),
+                                              [raw](const auto& strip) { return strip.sourceId == raw->sourceId; });
+            if (stripIt == currentVisibleMixerStrips_.end())
+                return;
+
+            const bool transmitLive = stripIt->transmitState != TransmitState::Disabled;
+            if (transmitLive && pendingLocalRemovalSourceId_ != raw->sourceId)
+            {
+                pendingLocalRemovalSourceId_ = raw->sourceId;
+                refreshMixerStrips();
+                return;
+            }
+
+            pendingLocalRemovalSourceId_.clear();
+            if (localChannelVisibilitySetter_(raw->sourceId, false))
+                refreshMixerStrips();
+        };
+        mixerContent_.addAndMakeVisible(widgets->removeButton);
+
         widgets->soloToggle.setClickingTogglesState(true);
         widgets->soloToggle.setButtonText("Solo");
         widgets->soloToggle.onClick = [this, raw = widgets.get()] {
@@ -2136,6 +2194,8 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->titleLabel.setVisible(! strip.editableName);
         widgets->hasTransmitControl = false;
         widgets->hasVoiceModeControl = false;
+        widgets->removable = strip.kind == MixerStripKind::LocalMonitor
+            && strip.sourceId != FamaLamaJamAudioProcessor::kLocalMainSourceId;
         widgets->voiceModeToggle.setClickingTogglesState(true);
         widgets->voiceModeToggle.onClick = [this]() {
             (void) voiceModeToggleHandler_();
@@ -2153,6 +2213,14 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->outputSelector.setSelectedId(static_cast<int>(strip.outputAssignmentIndex + 1),
                                               juce::dontSendNotification);
         widgets->outputSelector.setVisible(! strip.outputAssignmentLabels.empty());
+        widgets->removeButton.setVisible(widgets->removable);
+        if (widgets->removable)
+        {
+            const bool transmitLive = strip.transmitState != TransmitState::Disabled;
+            widgets->removeButton.setButtonText(transmitLive && pendingLocalRemovalSourceId_ == strip.sourceId
+                                                    ? kConfirmHideLocalChannelLabel
+                                                    : kHideLocalChannelLabel);
+        }
         widgets->lastMeterLeft = strip.meterLeft;
         widgets->lastMeterRight = strip.meterRight;
         widgets->meter.setLevels(strip.meterLeft, strip.meterRight);
@@ -2474,6 +2542,17 @@ juce::Colour FamaLamaJamAudioProcessorEditor::getMixerStripStatusColourForTestin
     return {};
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getMixerStripRemoveButtonTextForTesting(const juce::String& sourceId) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString() && widgets->removable)
+            return widgets->removeButton.getButtonText();
+    }
+
+    return {};
+}
+
 bool FamaLamaJamAudioProcessorEditor::setMixerStripControlStateForTesting(const juce::String& sourceId,
                                                                           double gain,
                                                                           double pan,
@@ -2537,6 +2616,23 @@ bool FamaLamaJamAudioProcessorEditor::clickMixerStripVoiceToggleForTesting(const
             widgets->voiceModeToggle.setToggleState(! widgets->voiceModeToggle.getToggleState(),
                                                     juce::dontSendNotification);
             widgets->voiceModeToggle.onClick();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessorEditor::clickMixerStripRemoveForTesting(const juce::String& sourceId)
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString() && widgets->removable)
+        {
+            if (widgets->removeButton.onClick == nullptr)
+                return false;
+
+            widgets->removeButton.onClick();
             return true;
         }
     }

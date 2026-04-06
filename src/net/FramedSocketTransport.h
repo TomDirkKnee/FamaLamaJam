@@ -44,6 +44,7 @@ public:
         juce::MemoryBlock payload;
         std::string sourceId;
         RemoteSourceInfo sourceInfo;
+        std::uint64_t boundaryGeneration { 0 };
     };
 
     struct RemoteSourceActivityUpdate
@@ -101,6 +102,7 @@ public:
     bool getSubscribedUserMask(const std::string& username, std::uint32_t& channelMask) const;
     void setLocalChannelInfo(std::string channelName, std::uint8_t channelFlags);
     void setLocalChannelInfo(LocalChannelInfo channelInfo);
+    void clearLocalChannelInfo(std::uint8_t channelIndex);
 
     [[nodiscard]] std::size_t getSentFrameCount() const;
     [[nodiscard]] std::size_t getReceivedFrameCount() const;
@@ -138,6 +140,7 @@ private:
         juce::MemoryBlock payload;
         std::string sourceId;
         RemoteSourceInfo sourceInfo;
+        std::uint64_t boundaryGeneration { 0 };
     };
 
     struct OutboundMessage

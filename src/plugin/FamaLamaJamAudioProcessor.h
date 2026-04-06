@@ -271,16 +271,33 @@ public:
 
     static constexpr const char* kLocalMainSourceId = kLocalMonitorSourceId;
     static constexpr const char* kLocalSend2SourceId = "local-send-2";
+    static constexpr const char* kLocalSend3SourceId = "local-send-3";
+    static constexpr const char* kLocalSend4SourceId = "local-send-4";
+    static constexpr const char* kLocalSend5SourceId = "local-send-5";
+    static constexpr const char* kLocalSend6SourceId = "local-send-6";
+    static constexpr const char* kLocalSend7SourceId = "local-send-7";
+    static constexpr const char* kLocalSend8SourceId = "local-send-8";
     static constexpr const char* kFixedMainOutputBusName = "FLJ Main Output";
     static constexpr const char* kFixedRoutedOutputBus2Name = "Remote Out 2";
-    static constexpr std::array<FixedLocalRoutingSlot, 2> kFixedLocalRoutingSlots { {
-        { kLocalMainSourceId, HostRoutingProof::kMainInputBusIndex, "Main", true },
-        { kLocalSend2SourceId, HostRoutingProof::kAuxInputBusIndex, kHostRoutingProofAuxInputBusName, false },
+    static constexpr std::array<FixedLocalRoutingSlot, 8> kFixedLocalRoutingSlots { {
+        { kLocalMainSourceId, 0, "Main", true },
+        { kLocalSend2SourceId, 1, "Local Send 2", false },
+        { kLocalSend3SourceId, 2, "Local Send 3", false },
+        { kLocalSend4SourceId, 3, "Local Send 4", false },
+        { kLocalSend5SourceId, 4, "Local Send 5", false },
+        { kLocalSend6SourceId, 5, "Local Send 6", false },
+        { kLocalSend7SourceId, 6, "Local Send 7", false },
+        { kLocalSend8SourceId, 7, "Local Send 8", false },
     } };
-    static constexpr std::array<FixedRemoteOutputRoute, 3> kFixedRemoteOutputRoutes { {
-        { HostRoutingProof::kMainOutputBusIndex, kFixedMainOutputBusName },
-        { HostRoutingProof::kRoutedOutputBusIndex, kHostRoutingProofAuxOutputBusName },
-        { 2, kFixedRoutedOutputBus2Name },
+    static constexpr std::array<FixedRemoteOutputRoute, 8> kFixedRemoteOutputRoutes { {
+        { 0, "FLJ Main Output" },
+        { 1, "Remote Out 1" },
+        { 2, "Remote Out 2" },
+        { 3, "Remote Out 3" },
+        { 4, "Remote Out 4" },
+        { 5, "Remote Out 5" },
+        { 6, "Remote Out 6" },
+        { 7, "Remote Out 7" },
     } };
 
     struct RemoteReceiveDiagnosticRuntime
@@ -288,6 +305,7 @@ public:
         std::size_t lastEncodedBytes { 0 };
         int lastDecodedSamples { 0 };
         double lastDecodedSampleRate { 0.0 };
+        float lastDecodedRms { 0.0f };
         std::uint8_t channelFlags { 0 };
         int lastCopiedSamples { 0 };
         std::uint64_t lastInboundIntervalIndex { 0 };
@@ -467,6 +485,7 @@ public:
     };
 
 private:
+    static BusesProperties makeFixedBusProperties();
     struct MixerStripRuntimeState
     {
         MixerStripSnapshot snapshot;
@@ -533,18 +552,15 @@ private:
     double currentSampleRate_ { 48000.0 };
     int currentSamplesPerBlock_ { 0 };
     audio::CodecStreamBridge codecStreamBridge_;
-    juce::AudioBuffer<float> localUploadIntervalBuffer_;
-    juce::AudioBuffer<float> localVoiceUploadBuffer_;
-    juce::AudioBuffer<float> localSend2UploadIntervalBuffer_;
-    juce::AudioBuffer<float> localSend2VoiceUploadBuffer_;
-    juce::AudioBuffer<float> hostRoutingProofAuxSendBuffer_;
-    int localUploadIntervalWritePosition_ { 0 };
-    int localVoiceUploadWritePosition_ { 0 };
-    int localSend2UploadIntervalWritePosition_ { 0 };
-    int localSend2VoiceUploadWritePosition_ { 0 };
+    std::array<juce::AudioBuffer<float>, kFixedLocalRoutingSlots.size()> localUploadIntervalBuffers_;
+    std::array<juce::AudioBuffer<float>, kFixedLocalRoutingSlots.size()> localVoiceUploadBuffers_;
+    std::array<juce::AudioBuffer<float>, kFixedLocalRoutingSlots.size()> hostRoutingProofLocalSendBuffers_;
+    std::array<int, kFixedLocalRoutingSlots.size()> localUploadIntervalWritePositions_ {};
+    std::array<int, kFixedLocalRoutingSlots.size()> localVoiceUploadWritePositions_ {};
     int transmitWarmupIntervalsRemaining_ { 0 };
     std::atomic<std::size_t> lastCodecPayloadBytes_ { 0 };
     std::atomic<int> lastDecodedSamples_ { 0 };
+    std::array<std::atomic<float>, kFixedLocalRoutingSlots.size()> lastLocalSubmittedRms_ {};
     std::unordered_map<std::string, std::deque<RemoteQueuedInterval>> remoteQueuedIntervalsBySource_;
     std::unordered_map<std::string, std::deque<RemoteVoiceChunk>> remoteVoiceChunksBySource_;
     std::unordered_map<std::string, std::uint64_t> nextRemoteTargetBoundaryBySource_;
@@ -597,8 +613,6 @@ private:
     mutable std::mutex stemCaptureMutex_;
     StemCaptureRuntimeState stemCaptureState_;
     AuthoritativeTimingState authoritativeTiming_;
-    std::uint64_t lastHandledIntervalBoundaryGeneration_ { 0 };
-    bool intervalPhaseAnchoredFromDownloadBegin_ { false };
     int metronomeClickRemainingSamples_ { 0 };
     float metronomeClickPhase_ { 0.0f };
     float metronomeClickPhaseIncrement_ { 0.0f };

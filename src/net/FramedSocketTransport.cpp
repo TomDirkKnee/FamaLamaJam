@@ -38,6 +38,7 @@ constexpr std::size_t kMaxQueuedFrames = 32;
 constexpr std::size_t kNetMessageMaxSize = 16384;
 constexpr std::size_t kMaxUploadChunkBytes = 8192;
 constexpr double kBoundaryEventCoalesceMs = 250.0;
+constexpr std::uint32_t kSubscribeAllRemoteChannelsMask = 0xffffffffu;
 constexpr std::uint32_t kUploadFourCcOggv = static_cast<std::uint32_t>('O')
                                           | (static_cast<std::uint32_t>('G') << 8)
                                           | (static_cast<std::uint32_t>('G') << 16)
@@ -360,6 +361,22 @@ void FramedSocketTransport::setLocalChannelInfo(LocalChannelInfo channelInfo)
         changed = stored.channelName != channelInfo.channelName || stored.channelFlags != channelInfo.channelFlags;
         stored = std::move(channelInfo);
         shouldSend = changed && socket_ != nullptr && authenticated_ && ! socketFailed_;
+    }
+
+    if (shouldSend)
+        sendCurrentChannelInfo();
+}
+
+void FramedSocketTransport::clearLocalChannelInfo(std::uint8_t channelIndex)
+{
+    bool shouldSend = false;
+
+    {
+        const juce::ScopedLock lock(stateLock_);
+        shouldSend = localChannelInfos_.erase(channelIndex) > 0
+            && socket_ != nullptr
+            && authenticated_
+            && ! socketFailed_;
     }
 
     if (shouldSend)
@@ -1118,8 +1135,6 @@ void FramedSocketTransport::handleUserInfo(const juce::MemoryBlock& payload)
         if (! isActive)
             continue;
 
-        const auto bit = static_cast<std::uint32_t>(1u << channel);
-
         std::uint32_t existingMask = 0;
         {
             const juce::ScopedLock lock(stateLock_);
@@ -1128,7 +1143,10 @@ void FramedSocketTransport::handleUserInfo(const juce::MemoryBlock& payload)
                 existingMask = it->second;
         }
 
-        const auto nextMask = existingMask | bit;
+        // Subscribe broadly once a peer is active so later-added channels are
+        // still received even if the server does not resend full USERINFO for
+        // the new channel immediately.
+        const auto nextMask = kSubscribeAllRemoteChannelsMask;
         if (nextMask != existingMask)
             sendUserMask(remoteUser, nextMask);
     }
@@ -1209,6 +1227,7 @@ void FramedSocketTransport::handleDownloadBegin(const juce::MemoryBlock& payload
     }
 
     const juce::ScopedLock lock(stateLock_);
+    std::uint64_t boundaryGeneration = 0;
     if (fourcc == kUploadFourCcOggv)
     {
         const auto nowMs = juce::Time::getMillisecondCounterHiRes();
@@ -1218,12 +1237,15 @@ void FramedSocketTransport::handleDownloadBegin(const juce::MemoryBlock& payload
             ++latestIntervalBoundaryEvent_.generation;
             latestIntervalBoundaryEvent_.receivedMs = nowMs;
         }
+
+        boundaryGeneration = latestIntervalBoundaryEvent_.generation;
     }
 
     auto& transfer = inboundTransfers_[key];
     transfer.payload.reset();
     transfer.sourceId = sourceInfo.sourceId;
     transfer.sourceInfo = std::move(sourceInfo);
+    transfer.boundaryGeneration = boundaryGeneration;
 }
 
 void FramedSocketTransport::handleDownloadWrite(const juce::MemoryBlock& payload)
@@ -1239,6 +1261,7 @@ void FramedSocketTransport::handleDownloadWrite(const juce::MemoryBlock& payload
     juce::MemoryBlock completedPayload;
     std::string sourceId;
     RemoteSourceInfo sourceInfo;
+    std::uint64_t boundaryGeneration = 0;
 
     {
         const juce::ScopedLock lock(stateLock_);
@@ -1266,6 +1289,7 @@ void FramedSocketTransport::handleDownloadWrite(const juce::MemoryBlock& payload
             completedPayload = transfer.payload;
             sourceId = transfer.sourceId.empty() ? key : transfer.sourceId;
             sourceInfo = transfer.sourceInfo;
+            boundaryGeneration = transfer.boundaryGeneration;
             inboundTransfers_.erase(transferIt);
         }
     }
@@ -1282,7 +1306,12 @@ void FramedSocketTransport::handleDownloadWrite(const juce::MemoryBlock& payload
         sourceInfo.displayName = sourceId;
     }
 
-    inboundQueue_.push_back(InboundFrame { std::move(completedPayload), std::move(sourceId), std::move(sourceInfo) });
+    inboundQueue_.push_back(InboundFrame {
+        .payload = std::move(completedPayload),
+        .sourceId = std::move(sourceId),
+        .sourceInfo = std::move(sourceInfo),
+        .boundaryGeneration = boundaryGeneration,
+    });
 
     while (inboundQueue_.size() > kMaxQueuedFrames)
         inboundQueue_.pop_front();
@@ -1330,31 +1359,29 @@ void FramedSocketTransport::sendCurrentChannelInfo()
                   return lhs.channelIndex < rhs.channelIndex;
               });
 
+    std::vector<std::uint8_t> payload;
+    payload.reserve(2 + localChannelInfos.size() * 8);
+
+    // NINJAM expects one packed channel-list message here. The first two bytes
+    // are the per-channel parameter size (volume + pan + flags), and channel
+    // indices are implied by the ordered entries that follow.
+    payload.push_back(4);
+    payload.push_back(0);
+
     for (const auto& channelInfo : localChannelInfos)
     {
-        std::vector<std::uint8_t> payload(2 + channelInfo.channelName.size() + 1 + 4);
-        payload[0] = 4;
-        payload[1] = channelInfo.channelIndex;
-
-        std::size_t offset = 2;
         if (! channelInfo.channelName.empty())
-        {
-            std::memcpy(payload.data() + offset, channelInfo.channelName.data(), channelInfo.channelName.size());
-            offset += channelInfo.channelName.size();
-        }
+            payload.insert(payload.end(), channelInfo.channelName.begin(), channelInfo.channelName.end());
 
-        payload[offset++] = 0;
-        payload[offset++] = 0;
-        payload[offset++] = 0;
-        payload[offset++] = 0;
-        payload[offset++] = channelInfo.channelFlags;
-
-        if (! writeMessage(kMessageClientSetChannelInfo, payload.data(), offset))
-        {
-            socketFailed_ = true;
-            return;
-        }
+        payload.push_back(0);
+        payload.push_back(0);
+        payload.push_back(0);
+        payload.push_back(0);
+        payload.push_back(channelInfo.channelFlags);
     }
+
+    if (! writeMessage(kMessageClientSetChannelInfo, payload.data(), payload.size()))
+        socketFailed_ = true;
 }
 
 void FramedSocketTransport::failAuthentication(const std::string& reason)

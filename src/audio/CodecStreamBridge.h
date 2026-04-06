@@ -37,6 +37,7 @@ public:
     {
         juce::MemoryBlock payload;
         std::string sourceId;
+        std::uint64_t boundaryGeneration { 0 };
     };
 
     struct DecodedFrame
@@ -44,6 +45,7 @@ public:
         juce::AudioBuffer<float> audio;
         std::string sourceId;
         double sampleRate { 0.0 };
+        std::uint64_t boundaryGeneration { 0 };
     };
 
     CodecStreamBridge();
@@ -58,6 +60,10 @@ public:
                      LocalChannelMetadata metadata);
     void submitInboundEncoded(const void* encodedData, std::size_t encodedSize);
     void submitInboundEncoded(const std::string& sourceId, const void* encodedData, std::size_t encodedSize);
+    void submitInboundEncoded(const std::string& sourceId,
+                             std::uint64_t boundaryGeneration,
+                             const void* encodedData,
+                             std::size_t encodedSize);
 
     bool popEncoded(juce::MemoryBlock& payload);
     bool popEncoded(EncodedLocalFrame& frame);

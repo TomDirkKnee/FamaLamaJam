@@ -68,6 +68,13 @@ void fillNoiseBuffer(juce::AudioBuffer<float>& buffer, juce::Random& random)
             buffer.setSample(channel, sample, random.nextFloat() * 2.0f - 1.0f);
     }
 }
+
+juce::AudioBuffer<float> makeProcessBuffer(famalamajam::plugin::FamaLamaJamAudioProcessor& processor, int samples)
+{
+    return juce::AudioBuffer<float>(juce::jmax(processor.getTotalNumInputChannels(),
+                                               processor.getTotalNumOutputChannels()),
+                                    samples);
+}
 } // namespace
 
 TEST_CASE("plugin experimental transport performs ninjam auth and codec roundtrip", "[plugin_experimental_transport]")
@@ -92,7 +99,7 @@ TEST_CASE("plugin experimental transport performs ninjam auth and codec roundtri
     const auto snapshot = processor.getLifecycleSnapshot();
     REQUIRE(snapshot.state == famalamajam::app::session::ConnectionState::Active);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     for (int attempt = 0; attempt < 200; ++attempt)
@@ -157,10 +164,12 @@ TEST_CASE("plugin experimental transport keeps large interval uploads connected"
 
     REQUIRE(processor.applySettingsFromUi(settings));
 
-    processor.prepareToPlay(48000.0, 512);
+    processor.prepareToPlay(48000.0, 8192);
     REQUIRE(processor.requestConnect());
+    REQUIRE(server.waitForAuthentication(2000));
+    REQUIRE(waitForLifecycleState(processor, famalamajam::app::session::ConnectionState::Active));
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 8192);
     juce::MidiBuffer midi;
     juce::Random random(12345);
 

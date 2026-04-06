@@ -71,6 +71,13 @@ float captureAudibleRms(FamaLamaJamAudioProcessor& processor,
 
     return 0.0f;
 }
+
+juce::AudioBuffer<float> makeProcessBuffer(FamaLamaJamAudioProcessor& processor, int samples)
+{
+    return juce::AudioBuffer<float>(juce::jmax(processor.getTotalNumInputChannels(),
+                                               processor.getTotalNumOutputChannels()),
+                                    samples);
+}
 } // namespace
 
 TEST_CASE("plugin mixer controls applies remote gain pan and mute per user-plus-channel strip",
@@ -84,7 +91,7 @@ TEST_CASE("plugin mixer controls applies remote gain pan and mute per user-plus-
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processUntil(processor, buffer, midi, [&]() {
@@ -141,7 +148,7 @@ TEST_CASE("plugin mixer controls exposes dedicated local monitor strip meters an
 
     REQUIRE(processor.setMixerStripMixState(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, -6.0f, 0.5f, false));
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     fillRampBuffer(buffer);
     juce::MidiBuffer midi;
     processor.processBlock(buffer, midi);
@@ -164,7 +171,7 @@ TEST_CASE("plugin mixer controls persists mix state across restore and reconnect
     FamaLamaJamAudioProcessor source(true, true);
     connectProcessor(source, server);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(source, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processUntil(source, buffer, midi, [&]() { return source.isRemoteSourceActiveForTesting("alice#0"); }));
@@ -213,7 +220,7 @@ TEST_CASE("plugin mixer controls master output scales both mixed playback and me
     connectProcessor(processor, server);
     processor.setMetronomeEnabled(true);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     REQUIRE(processUntil(processor, buffer, midi, [&]() {

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 08.3.4.1-03-PLAN.md
-last_updated: "2026-04-05T10:10:49.332Z"
-last_activity: 2026-04-05 - Completed plan 03 with a green focused fixed-bus gate, but real Ableton evidence showed only one receiving source (`jim#0`) after `Main` plus `Local Send 2`, so Phase 08.3.4.1 remains blocked.
+status: planning
+stopped_at: Closed 08.3.4.1 as functionally complete and inserted 08.3.4.2
+last_updated: "2026-04-06T15:30:00.000Z"
+last_activity: 2026-04-06 - The fixed-bus Jim/Ben reruns now prove `Local Send 2` can publish and be heard remotely, and `P8.3.4.1-ROUTE-03` is manually passed; reopen persistence plus removable local-channel UX remain the open follow-on gaps.
 progress:
   total_phases: 18
   completed_phases: 13
@@ -21,14 +21,14 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.4.1 fixed-bus multi-input and NINJAM channel implementation is now blocked by the failed second-local-channel Ableton checkpoint, while Phase 08.2 still carries the separate same-machine CPU repro concern.
+**Current focus:** Phase 08.3.4.2 will expand the first fixed-bus implementation toward an eight-input/eight-output target, removable extra local channels, and persistent input-side channel naming/routing.
 
 ## Current Position
 
-Phase: 08.3.4.1 - Fixed-Bus Multi-Input And NINJAM Channel Implementation  
-Plan: 03  
-Status: Blocked  
-Last activity: 2026-04-05 - Completed plan 03 as a blocked closeout after the receiver exposed only `jim#0` instead of a second local NINJAM channel.
+Phase: 08.3.4.2 - Expanded Fixed-Bus I/O And Persistent Input Mapping  
+Plan: Context/Planning  
+Status: Planning  
+Last activity: 2026-04-06 - Closed 08.3.4.1 as a functional first fixed-bus pass and moved the remaining routing-expansion, removable-channel, and input persistence goals into the new 08.3.4.2 phase.
 
 Progress: 91%
 
@@ -98,8 +98,11 @@ Progress: 91%
 - [Phase 08.3.4.1]: Remote output assignment should live directly on each remote strip as a dropdown using explicit host-facing labels like `FLJ Main Output` and `Remote Out 1`.
 - [Phase 08.3.4.1]: Lock Wave 0 to two local send slots and three fixed host-facing output labels before runtime work begins.
 - [Phase 08.3.4.1]: Use header-level compatibility shims and captured transport metadata so RED coverage can compile against the new contracts without implementing the runtime early.
-- [Phase 08.3.4.1]: Do not treat the missing second receiving channel as residual risk; the phase stays blocked until a second remote source appears for the extra local bus.
-- [Phase 08.3.4.1]: Leave routed-remote host rows unverified when the second-local-channel proof fails early instead of inferring pass from automation.
+- [Phase 08.3.4.1]: The second remote source for `Local Send 2` is now proven in real Ableton reruns; the remaining questions are persistence and local-channel lifecycle UX, not whether the extra bus can transmit.
+- [Phase 08.3.4.1]: Keep routed-output validation tied to host evidence rather than automation-only inference; `ROUTE-03` is now manually passed.
+- [Phase 08.3.4.2]: Treat eight inputs/eight outputs as the expansion target, but explicitly verify what Ableton/VST3 actually expose before promising the full count.
+- [Phase 08.3.4.2]: Persist input-side local channel identity and bus mapping, but do not assume remote output assignments should persist across arbitrary room membership changes.
+- [Phase 08.3.4.2]: Extra local channels must become removable in the UI rather than add-only.
 
 ### Roadmap Evolution
 
@@ -111,6 +114,7 @@ Progress: 91%
 - Phase 08.3.3 inserted after Phase 08.3.2: Stem Capture & Export (URGENT)
 - Phase 08.3.4 inserted after Phase 08.3.3: Host Multi-I/O Routing Research (URGENT)
 - Phase 08.3.4.1 inserted after Phase 08.3.4: Fixed-Bus Multi-Input And NINJAM Channel Implementation (URGENT)
+- Phase 08.3.4.2 inserted after Phase 08.3.4.1: Expanded Fixed-Bus I/O And Persistent Input Mapping (URGENT)
 
 ### Pending Todos
 
@@ -124,7 +128,7 @@ Progress: 91%
 - Phase 7 verified BPM/BPI voting end-to-end, but non-initiator vote-against / vote-no semantics still need explicit real-server validation.
 - Phase 08.2 still carries forward unresolved same-machine CPU evidence, but it is now treated as a documented carry-forward concern rather than the active execution step.
 - Phase 08.3 is closed, but the local `build-vs` NMake tree still fails with `U1076 name too long`; continue using `build-vs-2026` until that environment issue is resolved.
-- Phase 08.3.4.1 is blocked: Ableton showed two transmitting local sends in the sender UI, but the receiving client exposed only one remote source (`jim#0`) and no second local NINJAM channel.
+- Phase 08.3.4.2 now carries the remaining routing-expansion concerns: proving what extra buses Ableton/VST3 actually expose beyond `Local Send 2`, adding removable extra local channels, and persisting input-side local channel state across project restore.
 
 ### Performance Metrics
 
@@ -147,7 +151,9 @@ Progress: 91%
 - 2026-04-04: Completed Phase 08.3.4 plan 02 in 23 min across 2 task commits and 4 modified files; the processor now exposes the fixed proof buses, routes one selected decoded source to `Remote Out 1`, and keeps focused routing plus voice-mode coverage green.
 - 2026-04-05: Completed Phase 08.3.4 plan 03 in 11h 12m elapsed across 2 task commits and 4 modified files; Ableton exposed both proof buses in normal routing UI, so the phase closed with an approved host-owned fixed-bus follow-on recommendation.
 - 2026-04-05: Completed Phase 08.3.4.1 plan 01 in 12 min across 2 task commits and 9 modified files; fixed-slot RED coverage, captured outbound metadata, and the Ableton routing matrix now lock the implementation target for plan 02.
-- 2026-04-05: Completed Phase 08.3.4.1 plan 03 in 25 min across 2 task commits and 6 modified files; the focused fixed-bus gate stayed green, but Ableton showed only one receiving source (`jim#0`) after `Main` plus `Local Send 2`, so the phase remains blocked and `ROUTE-03` is still unverified.
+- 2026-04-05: Completed Phase 08.3.4.1 plan 03 in 25 min across 2 task commits and 6 modified files; the focused fixed-bus gate stayed green, but the first Ableton checkpoint showed only one receiving source (`jim#0`) after `Main` plus `Local Send 2`.
+- 2026-04-06: Follow-up Ableton reruns confirmed `Local Send 2` remote audibility and `ROUTE-03` routed-output isolation after rolling back the receive-timing regression; the remaining gaps are reopen persistence and removable extra-local-channel UX.
+- 2026-04-06: Closed Phase 08.3.4.1 as a functional first-pass implementation and inserted Phase 08.3.4.2 to pursue expanded bus counts, removable extra channels, and persistent input-side naming/routing.
 
 ## Session Continuity
 

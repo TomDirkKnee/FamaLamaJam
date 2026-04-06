@@ -18,10 +18,17 @@ juce::AudioProcessor::BusesLayout makeProofLayout(const juce::AudioChannelSet& a
 {
     juce::AudioProcessor::BusesLayout layout;
     layout.inputBuses.add(juce::AudioChannelSet::stereo());
-    layout.inputBuses.add(auxInput);
     layout.outputBuses.add(juce::AudioChannelSet::stereo());
-    layout.outputBuses.add(auxOutput);
-    layout.outputBuses.add(auxOutput2);
+
+    for (std::size_t slotIndex = 1; slotIndex < FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.size(); ++slotIndex)
+        layout.inputBuses.add(juce::AudioChannelSet::disabled());
+
+    for (std::size_t routeIndex = 1; routeIndex < FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.size(); ++routeIndex)
+        layout.outputBuses.add(juce::AudioChannelSet::disabled());
+
+    layout.inputBuses.set(1, auxInput);
+    layout.outputBuses.set(1, auxOutput);
+    layout.outputBuses.set(2, auxOutput2);
     return layout;
 }
 
@@ -108,33 +115,41 @@ TEST_CASE("plugin host multi io routing declares the fixed local and remote rout
 {
     FamaLamaJamAudioProcessor processor(true, true);
 
-    REQUIRE(processor.getBusCount(true) == 2);
-    REQUIRE(processor.getBusCount(false) == 3);
+    REQUIRE(processor.getBusCount(true) == 8);
+    REQUIRE(processor.getBusCount(false) == 8);
 
     auto* mainInput = processor.getBus(true, FamaLamaJamAudioProcessor::HostRoutingProof::kMainInputBusIndex);
     auto* auxInput = processor.getBus(true, FamaLamaJamAudioProcessor::HostRoutingProof::kAuxInputBusIndex);
     auto* mainOutput = processor.getBus(false, FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
     auto* auxOutput = processor.getBus(false, FamaLamaJamAudioProcessor::HostRoutingProof::kRoutedOutputBusIndex);
     auto* auxOutput2 = processor.getBus(false, 2);
+    auto* auxInput8 = processor.getBus(true, 7);
+    auto* auxOutput8 = processor.getBus(false, 7);
 
     REQUIRE(mainInput != nullptr);
     REQUIRE(auxInput != nullptr);
     REQUIRE(mainOutput != nullptr);
     REQUIRE(auxOutput != nullptr);
     REQUIRE(auxOutput2 != nullptr);
+    REQUIRE(auxInput8 != nullptr);
+    REQUIRE(auxOutput8 != nullptr);
 
     CHECK(auxInput->getName() == FamaLamaJamAudioProcessor::kHostRoutingProofAuxInputBusName);
     CHECK(auxOutput->getName() == FamaLamaJamAudioProcessor::kHostRoutingProofAuxOutputBusName);
     CHECK(auxOutput2->getName() == FamaLamaJamAudioProcessor::kFixedRoutedOutputBus2Name);
+    CHECK(auxInput8->getName() == "Local Send 8");
+    CHECK(auxOutput8->getName() == "Remote Out 7");
     CHECK(auxInput->getCurrentLayout() == juce::AudioChannelSet::stereo());
     CHECK(auxOutput->getCurrentLayout() == juce::AudioChannelSet::stereo());
     CHECK(auxOutput2->getCurrentLayout() == juce::AudioChannelSet::stereo());
+    CHECK(auxInput8->getCurrentLayout() == juce::AudioChannelSet::stereo());
+    CHECK(auxOutput8->getCurrentLayout() == juce::AudioChannelSet::stereo());
 }
 
-TEST_CASE("plugin host multi io routing locks two fixed local slots and three host-facing output labels",
+TEST_CASE("plugin host multi io routing locks eight fixed local slots and eight host-facing output labels",
           "[plugin_host_multi_io_routing]")
 {
-    REQUIRE(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.size() == 2);
+    REQUIRE(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.size() == 8);
     CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].sourceId)
           == FamaLamaJamAudioProcessor::kLocalMainSourceId);
     CHECK(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].inputBusIndex == 0);
@@ -145,14 +160,20 @@ TEST_CASE("plugin host multi io routing locks two fixed local slots and three ho
     CHECK(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].inputBusIndex == 1);
     CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].fallbackLabel) == "Local Send 2");
     CHECK_FALSE(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].visibleByDefault);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[7].sourceId)
+          == FamaLamaJamAudioProcessor::kLocalSend8SourceId);
+    CHECK(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[7].inputBusIndex == 7);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[7].fallbackLabel) == "Local Send 8");
 
-    REQUIRE(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.size() == 3);
+    REQUIRE(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.size() == 8);
     CHECK(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[0].outputBusIndex == 0);
     CHECK(std::string(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[0].hostLabel) == "FLJ Main Output");
     CHECK(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[1].outputBusIndex == 1);
     CHECK(std::string(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[1].hostLabel) == "Remote Out 1");
     CHECK(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[2].outputBusIndex == 2);
     CHECK(std::string(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[2].hostLabel) == "Remote Out 2");
+    CHECK(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[7].outputBusIndex == 7);
+    CHECK(std::string(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes[7].hostLabel) == "Remote Out 7");
 
     FamaLamaJamAudioProcessor processor(true, true);
     CHECK(processor.getBusCount(true) == static_cast<int>(FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.size()));
@@ -193,12 +214,12 @@ TEST_CASE("plugin host multi io routing proof distinguishes main-path and aux-in
     FamaLamaJamAudioProcessor processor(true, true);
     processor.prepareToPlay(48000.0, 512);
 
-    REQUIRE(processor.getBusCount(true) == 2);
-    REQUIRE(processor.getBusCount(false) == 3);
-    REQUIRE(processor.getTotalNumInputChannels() == 4);
-    REQUIRE(processor.getTotalNumOutputChannels() == 6);
+    REQUIRE(processor.getBusCount(true) == 8);
+    REQUIRE(processor.getBusCount(false) == 8);
+    REQUIRE(processor.getTotalNumInputChannels() == 16);
+    REQUIRE(processor.getTotalNumOutputChannels() == 16);
 
-    juce::AudioBuffer<float> buffer(4, 512);
+    juce::AudioBuffer<float> buffer(16, 512);
     juce::MidiBuffer midi;
 
     buffer.clear();
@@ -212,6 +233,64 @@ TEST_CASE("plugin host multi io routing proof distinguishes main-path and aux-in
     const auto proof = processor.getHostRoutingProofForTesting();
     CHECK_FALSE(proof.mainPathActive);
     CHECK(proof.auxInputActive);
+}
+
+TEST_CASE("plugin host multi io routing reflects aux-input activity on the extra local strip meter",
+          "[plugin_host_multi_io_routing][plugin_mixer_ui]")
+{
+    FamaLamaJamAudioProcessor processor(true, true);
+    processor.prepareToPlay(48000.0, 512);
+    REQUIRE(processor.setLocalMonitorVisibility(FamaLamaJamAudioProcessor::kLocalSend2SourceId, true));
+
+    juce::AudioBuffer<float> buffer(16, 512);
+    juce::MidiBuffer midi;
+    buffer.clear();
+
+    auto auxInput = processor.getBusBuffer(buffer, true, FamaLamaJamAudioProcessor::HostRoutingProof::kAuxInputBusIndex);
+    for (int channel = 0; channel < auxInput.getNumChannels(); ++channel)
+        for (int sample = 0; sample < auxInput.getNumSamples(); ++sample)
+            auxInput.setSample(channel, sample, 0.35f);
+
+    processor.processBlock(buffer, midi);
+
+    FamaLamaJamAudioProcessor::MixerStripSnapshot snapshot;
+    REQUIRE(processor.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalSend2SourceId, snapshot));
+    CHECK(snapshot.meter.left > 0.0f);
+    CHECK(snapshot.meter.right > 0.0f);
+}
+
+TEST_CASE("plugin host multi io routing mixes the extra local input into FLJ main output",
+          "[plugin_host_multi_io_routing][plugin_mixer_ui]")
+{
+    FamaLamaJamAudioProcessor processor(true, true);
+    processor.prepareToPlay(48000.0, 512);
+    REQUIRE(processor.setLocalMonitorVisibility(FamaLamaJamAudioProcessor::kLocalSend2SourceId, true));
+
+    juce::AudioBuffer<float> buffer(processor.getTotalNumOutputChannels(), 512);
+    juce::MidiBuffer midi;
+    buffer.clear();
+
+    auto auxInput = processor.getBusBuffer(buffer, true, FamaLamaJamAudioProcessor::HostRoutingProof::kAuxInputBusIndex);
+    for (int channel = 0; channel < auxInput.getNumChannels(); ++channel)
+        for (int sample = 0; sample < auxInput.getNumSamples(); ++sample)
+            auxInput.setSample(channel, sample, 0.25f);
+
+    processor.processBlock(buffer, midi);
+
+    auto mainOutput = processor.getBusBuffer(buffer, false, FamaLamaJamAudioProcessor::HostRoutingProof::kMainOutputBusIndex);
+    FamaLamaJamAudioProcessor::MixerStripSnapshot snapshot;
+    REQUIRE(processor.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalSend2SourceId, snapshot));
+    INFO("auxPtrL=" << static_cast<const void*>(auxInput.getReadPointer(0))
+         << " mainOutPtrL=" << static_cast<const void*>(mainOutput.getReadPointer(0))
+         << " auxChannels=" << auxInput.getNumChannels()
+         << " outChannels=" << mainOutput.getNumChannels()
+         << " visible=" << snapshot.descriptor.visible
+         << " active=" << snapshot.descriptor.active
+         << " muted=" << snapshot.mix.muted
+         << " soloed=" << snapshot.mix.soloed
+         << " meterL=" << snapshot.meter.left);
+    CHECK(channelRms(mainOutput, 0) > 1.0e-4f);
+    CHECK(channelRms(mainOutput, 1) > 1.0e-4f);
 }
 
 TEST_CASE("plugin host multi io routing expects per-slot channel metadata and channel-indexed uploads",
@@ -229,14 +308,20 @@ TEST_CASE("plugin host multi io routing expects per-slot channel metadata and ch
     CHECK(mainChannelInfo.channelIndex == 0);
     CHECK(mainChannelInfo.channelName == FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[0].fallbackLabel);
 
+    REQUIRE(processor.setLocalMonitorVisibility(FamaLamaJamAudioProcessor::kLocalSend2SourceId, true));
+
     MiniNinjamServer::ClientChannelInfo extraChannelInfo;
-    const auto capturedExtraChannelInfo = server.waitForCapturedClientChannelInfo(250, extraChannelInfo);
+    bool capturedExtraChannelInfo = false;
+    for (int attempt = 0; attempt < 4 && ! capturedExtraChannelInfo; ++attempt)
+    {
+        if (! server.waitForCapturedClientChannelInfo(2000, extraChannelInfo))
+            break;
+
+        capturedExtraChannelInfo = extraChannelInfo.channelIndex == 1;
+    }
     CHECK(capturedExtraChannelInfo);
     if (capturedExtraChannelInfo)
-    {
-        CHECK(extraChannelInfo.channelIndex == 1);
         CHECK(extraChannelInfo.channelName == FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[1].fallbackLabel);
-    }
 
     juce::AudioBuffer<float> buffer(processor.getTotalNumInputChannels(), 512);
     juce::MidiBuffer midi;
@@ -260,7 +345,7 @@ TEST_CASE("plugin host multi io routing expects per-slot channel metadata and ch
     CHECK(capturedChannelOne);
 }
 
-TEST_CASE("plugin host multi io routing normalizes fixed remote output assignments to main or the two aux pairs",
+TEST_CASE("plugin host multi io routing normalizes fixed remote output assignments to main or the widened aux pairs",
           "[plugin_host_multi_io_routing]")
 {
     FamaLamaJamAudioProcessor processor(true, true);
@@ -270,6 +355,9 @@ TEST_CASE("plugin host multi io routing normalizes fixed remote output assignmen
 
     processor.setFixedRemoteOutputAssignmentForTesting("alice#0", 2);
     CHECK(processor.getFixedRemoteOutputAssignmentForTesting("alice#0") == 2);
+
+    processor.setFixedRemoteOutputAssignmentForTesting("alice#0", 7);
+    CHECK(processor.getFixedRemoteOutputAssignmentForTesting("alice#0") == 7);
 
     processor.setFixedRemoteOutputAssignmentForTesting("alice#0", 99);
     CHECK(processor.getFixedRemoteOutputAssignmentForTesting("alice#0") == 0);
@@ -288,8 +376,8 @@ TEST_CASE("plugin host multi io routing routes assigned remote sources exclusive
     FamaLamaJamAudioProcessor processor(true, true);
     connectProcessor(processor, server);
 
-    REQUIRE(processor.getBusCount(false) == 3);
-    REQUIRE(processor.getTotalNumOutputChannels() == 6);
+    REQUIRE(processor.getBusCount(false) == 8);
+    REQUIRE(processor.getTotalNumOutputChannels() == 16);
 
     juce::AudioBuffer<float> timingBuffer(processor.getTotalNumOutputChannels(), 512);
     juce::MidiBuffer midi;

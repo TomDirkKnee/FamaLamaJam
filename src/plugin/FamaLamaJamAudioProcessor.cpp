@@ -398,7 +398,8 @@ void queueDecodedRemoteInterval(
     std::unordered_map<std::string, FamaLamaJamAudioProcessor::RemoteReceiveDiagnosticRuntime>& diagnosticsBySource,
     const FamaLamaJamAudioProcessor::AuthoritativeTimingState& timing,
     const std::string& sourceId,
-    const juce::AudioBuffer<float>& decoded)
+    const juce::AudioBuffer<float>& decoded,
+    bool requeueLateIntervals = true)
 {
     if (! timing.hasTiming || timing.activeIntervalSamples <= 0)
         return;
@@ -414,9 +415,9 @@ void queueDecodedRemoteInterval(
         normalized.copyFrom(channel, 0, decoded, channel, 0, copiedSamples);
 
     const auto earliestPlayableBoundary = timing.intervalIndex + 1;
-    auto& nextTargetBoundary = nextTargetBoundaryBySource[sourceId];
     auto& diagnostics = diagnosticsBySource[sourceId];
 
+    auto& nextTargetBoundary = nextTargetBoundaryBySource[sourceId];
     if (nextTargetBoundary < earliestPlayableBoundary)
     {
         if (nextTargetBoundary != 0)
@@ -425,9 +426,16 @@ void queueDecodedRemoteInterval(
             diagnostics.lastCopiedSamples = copiedSamples;
             diagnostics.lastDropTargetBoundary = nextTargetBoundary;
             diagnostics.lastDropCurrentBoundary = earliestPlayableBoundary;
-            diagnostics.lastQueuedBoundary = earliestPlayableBoundary;
-            queueCompletedRemoteInterval(queuedBySource, sourceId, std::move(normalized), earliestPlayableBoundary);
-            nextTargetBoundary = earliestPlayableBoundary + 1;
+            diagnostics.lastQueuedBoundary = requeueLateIntervals ? earliestPlayableBoundary : 0;
+            if (requeueLateIntervals)
+            {
+                queueCompletedRemoteInterval(queuedBySource, sourceId, std::move(normalized), earliestPlayableBoundary);
+                nextTargetBoundary = earliestPlayableBoundary + 1;
+            }
+            else
+            {
+                nextTargetBoundary = earliestPlayableBoundary;
+            }
             return;
         }
 
@@ -490,6 +498,30 @@ void activateRemoteIntervalsForBoundary(
 [[nodiscard]] FamaLamaJamAudioProcessor::MixerStripMixState makeUnityMixerStripMixState()
 {
     return FamaLamaJamAudioProcessor::MixerStripMixState {};
+}
+
+[[nodiscard]] float computeBufferRmsAcrossChannels(const juce::AudioBuffer<float>& buffer)
+{
+    if (buffer.getNumChannels() <= 0 || buffer.getNumSamples() <= 0)
+        return 0.0f;
+
+    double sumSquares = 0.0;
+    int totalSamples = 0;
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    {
+        const auto* samples = buffer.getReadPointer(channel);
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            const auto value = static_cast<double>(samples[sample]);
+            sumSquares += value * value;
+        }
+        totalSamples += buffer.getNumSamples();
+    }
+
+    if (totalSamples <= 0)
+        return 0.0f;
+
+    return static_cast<float>(std::sqrt(sumSquares / static_cast<double>(totalSamples)));
 }
 
 [[nodiscard]] bool isVoiceMode(std::uint8_t channelFlags)
@@ -634,6 +666,17 @@ void applyMixToBuffer(juce::AudioBuffer<float>& buffer,
     return it != FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.end() ? &(*it) : nullptr;
 }
 
+[[nodiscard]] int findFixedLocalRoutingSlotIndex(std::string_view sourceId)
+{
+    for (std::size_t slotIndex = 0; slotIndex < FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots.size(); ++slotIndex)
+    {
+        if (sourceId == FamaLamaJamAudioProcessor::kFixedLocalRoutingSlots[slotIndex].sourceId)
+            return static_cast<int>(slotIndex);
+    }
+
+    return -1;
+}
+
 [[nodiscard]] bool isValidFixedRemoteOutputBusIndex(int outputBusIndex)
 {
     return std::any_of(FamaLamaJamAudioProcessor::kFixedRemoteOutputRoutes.begin(),
@@ -658,6 +701,69 @@ void copyBuffer(juce::AudioBuffer<float>& destination, const juce::AudioBuffer<f
 
     destination.setSize(source.getNumChannels(), source.getNumSamples(), false, true, true);
     destination.makeCopyOf(source, true);
+}
+
+void measureBufferToMeter(const juce::AudioBuffer<float>& sourceBuffer,
+                          FamaLamaJamAudioProcessor::MixerStripMeter& meter)
+{
+    meter = {};
+
+    if (sourceBuffer.getNumChannels() <= 0 || sourceBuffer.getNumSamples() <= 0)
+        return;
+
+    for (int sample = 0; sample < sourceBuffer.getNumSamples(); ++sample)
+    {
+        for (int channel = 0; channel < sourceBuffer.getNumChannels(); ++channel)
+        {
+            const auto magnitude = std::abs(sourceBuffer.getSample(channel, sample));
+            if (channel == 0)
+                meter.left = juce::jmax(meter.left, magnitude);
+            else if (channel == 1)
+                meter.right = juce::jmax(meter.right, magnitude);
+        }
+    }
+
+    if (sourceBuffer.getNumChannels() == 1)
+        meter.right = meter.left;
+}
+
+void mixInputBufferToOutput(const juce::AudioBuffer<float>& sourceBuffer,
+                            juce::AudioBuffer<float>& targetBuffer,
+                            const FamaLamaJamAudioProcessor::MixerStripMixState& mix)
+{
+    if (mix.muted || sourceBuffer.getNumChannels() <= 0 || sourceBuffer.getNumSamples() <= 0
+        || targetBuffer.getNumChannels() <= 0 || targetBuffer.getNumSamples() <= 0)
+    {
+        return;
+    }
+
+    const auto gainLinear = juce::Decibels::decibelsToGain(mix.gainDb);
+    float panLeft = 1.0f;
+    float panRight = 1.0f;
+    float panOther = 1.0f;
+    computePanGains(mix.pan, panLeft, panRight, panOther);
+
+    const auto samplesToMix = juce::jmin(sourceBuffer.getNumSamples(), targetBuffer.getNumSamples());
+    for (int sample = 0; sample < samplesToMix; ++sample)
+    {
+        for (int targetChannel = 0; targetChannel < targetBuffer.getNumChannels(); ++targetChannel)
+        {
+            const auto sourceChannel
+                = sourceBuffer.getNumChannels() == 1 ? 0 : juce::jmin(targetChannel, sourceBuffer.getNumChannels() - 1);
+            float channelGain = gainLinear * panOther;
+            if (targetBuffer.getNumChannels() > 1)
+            {
+                if (targetChannel == 0)
+                    channelGain = gainLinear * panLeft;
+                else if (targetChannel == 1)
+                    channelGain = gainLinear * panRight;
+            }
+
+            targetBuffer.addSample(targetChannel,
+                                   sample,
+                                   sourceBuffer.getSample(sourceChannel, sample) * channelGain);
+        }
+    }
 }
 
 void mixSourceSampleToOutput(const juce::AudioBuffer<float>& sourceBuffer,
@@ -735,17 +841,7 @@ FamaLamaJamAudioProcessor::FamaLamaJamAudioProcessor(
     std::unique_ptr<famalamajam::infra::state::RememberedServerStore> rememberedServerStore,
     bool enableLiveTransport,
     bool enableExperimentalStreaming)
-    : juce::AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
-                                            .withInput(kHostRoutingProofAuxInputBusName,
-                                                       juce::AudioChannelSet::stereo(),
-                                                       true)
-                                            .withOutput("Output", juce::AudioChannelSet::stereo(), true)
-                                            .withOutput(kHostRoutingProofAuxOutputBusName,
-                                                        juce::AudioChannelSet::stereo(),
-                                                        true)
-                                            .withOutput(kFixedRoutedOutputBus2Name,
-                                                        juce::AudioChannelSet::stereo(),
-                                                        true))
+    : juce::AudioProcessor(makeFixedBusProperties())
     , settingsController_(settingsStore_)
     , liveTransportEnabled_(enableLiveTransport)
     , experimentalStreamingEnabled_(enableExperimentalStreaming)
@@ -772,6 +868,19 @@ bool FamaLamaJamAudioProcessor::producesMidi() const { return false; }
 bool FamaLamaJamAudioProcessor::isMidiEffect() const { return false; }
 double FamaLamaJamAudioProcessor::getTailLengthSeconds() const { return 0.0; }
 
+juce::AudioProcessor::BusesProperties FamaLamaJamAudioProcessor::makeFixedBusProperties()
+{
+    BusesProperties properties;
+
+    for (const auto& slot : kFixedLocalRoutingSlots)
+        properties = properties.withInput(slot.fallbackLabel, juce::AudioChannelSet::stereo(), true);
+
+    for (const auto& route : kFixedRemoteOutputRoutes)
+        properties = properties.withOutput(route.hostLabel, juce::AudioChannelSet::stereo(), true);
+
+    return properties;
+}
+
 int FamaLamaJamAudioProcessor::getNumPrograms() { return 1; }
 int FamaLamaJamAudioProcessor::getCurrentProgram() { return 0; }
 void FamaLamaJamAudioProcessor::setCurrentProgram(int) {}
@@ -797,7 +906,8 @@ void FamaLamaJamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
             codecStreamBridge_.start();
 
         resetLocalUploadState();
-        hostRoutingProofAuxSendBuffer_.setSize(0, 0);
+        for (auto& buffer : hostRoutingProofLocalSendBuffers_)
+            buffer.setSize(0, 0);
         lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
         lastDecodedSamples_.store(0, std::memory_order_relaxed);
         remoteQueuedIntervalsBySource_.clear();
@@ -824,35 +934,57 @@ void FamaLamaJamAudioProcessor::releaseResources()
     if (snapshot.hasPendingRetry())
         applyLifecycleTransition(lifecycleController_.resetToIdle());
 
+    const bool keepConnectedSessionState = isSessionConnected();
+
     stemCaptureWriter_->stop();
     codecStreamBridge_.stop();
     resetLocalUploadState();
-    hostRoutingProofAuxSendBuffer_.setSize(0, 0);
+    for (auto& buffer : hostRoutingProofLocalSendBuffers_)
+        buffer.setSize(0, 0);
     lastCodecPayloadBytes_.store(0, std::memory_order_relaxed);
     lastDecodedSamples_.store(0, std::memory_order_relaxed);
-    remoteQueuedIntervalsBySource_.clear();
-    remoteVoiceChunksBySource_.clear();
-    nextRemoteTargetBoundaryBySource_.clear();
-    remoteActiveIntervalBySource_.clear();
-    lastRemoteActivationBoundaryBySource_.clear();
-    remoteReceiveDiagnosticsBySource_.clear();
-    knownRemoteSourcesById_.clear();
-    clearAuthoritativeTiming();
-    clearRoomUiState(false);
+    if (! keepConnectedSessionState)
+    {
+        remoteQueuedIntervalsBySource_.clear();
+        remoteVoiceChunksBySource_.clear();
+        nextRemoteTargetBoundaryBySource_.clear();
+        remoteActiveIntervalBySource_.clear();
+        lastRemoteActivationBoundaryBySource_.clear();
+        remoteReceiveDiagnosticsBySource_.clear();
+        knownRemoteSourcesById_.clear();
+        clearAuthoritativeTiming();
+        clearRoomUiState(false);
+    }
+
     resetMixerStripMeters();
     updateRemoteMixerStripActivity();
 }
 
 bool FamaLamaJamAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    if (layouts.inputBuses.size() != 2 || layouts.outputBuses.size() != 3)
+    if (layouts.inputBuses.size() != kFixedLocalRoutingSlots.size()
+        || layouts.outputBuses.size() != kFixedRemoteOutputRoutes.size())
         return false;
 
-    return layouts.getMainInputChannelSet() == juce::AudioChannelSet::stereo()
-        && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo()
-        && isStereoOrDisabled(layouts.getChannelSet(true, HostRoutingProof::kAuxInputBusIndex))
-        && isStereoOrDisabled(layouts.getChannelSet(false, HostRoutingProof::kRoutedOutputBusIndex))
-        && isStereoOrDisabled(layouts.getChannelSet(false, 2));
+    if (layouts.getMainInputChannelSet() != juce::AudioChannelSet::stereo()
+        || layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    {
+        return false;
+    }
+
+    for (std::size_t slotIndex = 1; slotIndex < kFixedLocalRoutingSlots.size(); ++slotIndex)
+    {
+        if (! isStereoOrDisabled(layouts.getChannelSet(true, static_cast<int>(slotIndex))))
+            return false;
+    }
+
+    for (std::size_t routeIndex = 1; routeIndex < kFixedRemoteOutputRoutes.size(); ++routeIndex)
+    {
+        if (! isStereoOrDisabled(layouts.getChannelSet(false, static_cast<int>(routeIndex))))
+            return false;
+    }
+
+    return true;
 }
 
 void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -863,29 +995,44 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     resetMixerStripMeters();
     const bool hasInputBusLayout = buffer.getNumChannels() >= getTotalNumInputChannels();
     const bool hasOutputBusLayout = buffer.getNumChannels() >= getTotalNumOutputChannels();
-    auto mainInput = hasInputBusLayout ? getBusBuffer(buffer, true, HostRoutingProof::kMainInputBusIndex) : buffer;
-    auto auxInput = hasInputBusLayout && getBusCount(true) > HostRoutingProof::kAuxInputBusIndex
-        ? getBusBuffer(buffer, true, HostRoutingProof::kAuxInputBusIndex)
-        : juce::AudioBuffer<float>();
-    auto mainOutput = hasOutputBusLayout ? getBusBuffer(buffer, false, HostRoutingProof::kMainOutputBusIndex) : buffer;
-    auto auxOutput = hasOutputBusLayout && getBusCount(false) > HostRoutingProof::kRoutedOutputBusIndex
-        ? getBusBuffer(buffer, false, HostRoutingProof::kRoutedOutputBusIndex)
-        : juce::AudioBuffer<float>();
-    auto auxOutput2 = hasOutputBusLayout && getBusCount(false) > 2
-        ? getBusBuffer(buffer, false, 2)
-        : juce::AudioBuffer<float>();
+    std::array<juce::AudioBuffer<float>, kFixedLocalRoutingSlots.size()> localInputs;
+    for (std::size_t slotIndex = 0; slotIndex < kFixedLocalRoutingSlots.size(); ++slotIndex)
+    {
+        localInputs[slotIndex] = hasInputBusLayout && getBusCount(true) > static_cast<int>(slotIndex)
+            ? getBusBuffer(buffer, true, static_cast<int>(slotIndex))
+            : (slotIndex == 0 ? buffer : juce::AudioBuffer<float>());
+    }
+
+    std::array<juce::AudioBuffer<float>, kFixedRemoteOutputRoutes.size()> routedOutputs;
+    for (std::size_t routeIndex = 0; routeIndex < kFixedRemoteOutputRoutes.size(); ++routeIndex)
+    {
+        routedOutputs[routeIndex] = hasOutputBusLayout && getBusCount(false) > static_cast<int>(routeIndex)
+            ? getBusBuffer(buffer, false, static_cast<int>(routeIndex))
+            : (routeIndex == 0 ? buffer : juce::AudioBuffer<float>());
+    }
+
+    auto& mainInput = localInputs.front();
+    auto& mainOutput = routedOutputs.front();
 
     hostRoutingProof_.mainPathActive = bufferHasSignal(mainInput);
-    hostRoutingProof_.auxInputActive = bufferHasSignal(auxInput);
+    hostRoutingProof_.auxInputActive = localInputs.size() > 1 && bufferHasSignal(localInputs[1]);
     hostRoutingProof_.selectedRoutedSourceId = fixedRemoteOutputAssignments_.empty()
         ? std::string {}
         : fixedRemoteOutputAssignments_.begin()->first;
-    copyBuffer(hostRoutingProofAuxSendBuffer_, auxInput);
+    for (std::size_t slotIndex = 0; slotIndex < kFixedLocalRoutingSlots.size(); ++slotIndex)
+    {
+        copyBuffer(hostRoutingProofLocalSendBuffers_[slotIndex], localInputs[slotIndex]);
 
-    if (auxOutput.getNumChannels() > 0)
-        auxOutput.clear();
-    if (auxOutput2.getNumChannels() > 0)
-        auxOutput2.clear();
+        const auto it = mixerStripsBySourceId_.find(kFixedLocalRoutingSlots[slotIndex].sourceId);
+        if (it != mixerStripsBySourceId_.end())
+            measureBufferToMeter(hostRoutingProofLocalSendBuffers_[slotIndex], it->second.snapshot.meter);
+    }
+
+    for (std::size_t routeIndex = 1; routeIndex < routedOutputs.size(); ++routeIndex)
+    {
+        if (routedOutputs[routeIndex].getNumChannels() > 0)
+            routedOutputs[routeIndex].clear();
+    }
 
     auto clearTransportUi = [this]() {
         currentBeatForUi_.store(0, std::memory_order_relaxed);
@@ -907,24 +1054,38 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     };
 
     auto applyLocalMonitorToOutput = [this, &mainOutput, &computeTransmitState]() {
-        auto& localStrip = mixerStripsBySourceId_[kLocalMonitorSourceId];
-        const auto soloActive = anySoloActive(mixerStripsBySourceId_);
-        if (isStripAudible(localStrip.snapshot.mix, soloActive))
-            applyMixToBuffer(mainOutput, localStrip.snapshot.mix, localStrip.snapshot.meter);
-        else
-            clearBufferAndMeter(mainOutput, localStrip.snapshot.meter);
+        mainOutput.clear();
 
-        localStrip.snapshot.descriptor.active = true;
-        localStrip.snapshot.descriptor.visible = true;
-        localStrip.snapshot.descriptor.inactiveIntervals = 0;
-        localStrip.snapshot.transmitState = computeTransmitState();
-        localStrip.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
-        localStrip.snapshot.unsupportedVoiceMode = false;
-        localStrip.snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
-                                                                 localStrip.snapshot.transmitState,
-                                                                 localVoiceTransitionPending_);
-        localStrip.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
-        localStrip.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
+        const auto soloActive = anySoloActive(mixerStripsBySourceId_);
+        for (const auto& slot : kFixedLocalRoutingSlots)
+        {
+            const auto it = mixerStripsBySourceId_.find(slot.sourceId);
+            if (it == mixerStripsBySourceId_.end())
+                continue;
+
+            auto& localStrip = it->second;
+            localStrip.snapshot.descriptor.active = slot.visibleByDefault || localStrip.snapshot.descriptor.visible;
+            if (slot.visibleByDefault)
+                localStrip.snapshot.descriptor.visible = true;
+            localStrip.snapshot.descriptor.inactiveIntervals = 0;
+            localStrip.snapshot.transmitState = computeTransmitState();
+            localStrip.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
+            localStrip.snapshot.unsupportedVoiceMode = false;
+            localStrip.snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
+                                                                     localStrip.snapshot.transmitState,
+                                                                     localVoiceTransitionPending_);
+            localStrip.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
+            localStrip.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
+
+            if (! isStripAudible(localStrip.snapshot.mix, soloActive))
+                continue;
+
+            const auto slotIndex = static_cast<std::size_t>(juce::jlimit(0,
+                                                                         static_cast<int>(hostRoutingProofLocalSendBuffers_.size() - 1),
+                                                                         slot.inputBusIndex));
+            const auto& sourceBuffer = hostRoutingProofLocalSendBuffers_[slotIndex];
+            mixInputBufferToOutput(sourceBuffer, mainOutput, localStrip.snapshot.mix);
+        }
     };
 
     auto applyMasterOutputToBuffer = [this, &mainOutput]() {
@@ -1169,15 +1330,21 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
                 if (intervalWritePosition >= authoritativeTiming_.activeIntervalSamples)
                 {
-                    if (captureStem)
-                    {
-                        const std::scoped_lock lock(stemCaptureMutex_);
-                        if (stemCaptureState_.activeRecording
-                            && ! stemCaptureState_.suppressLocalIntervalStemUntilBoundary)
+                   if (captureStem)
+                   {
+                       const std::scoped_lock lock(stemCaptureMutex_);
+                       if (stemCaptureState_.activeRecording
+                           && ! stemCaptureState_.suppressLocalIntervalStemUntilBoundary)
                         {
                             captureLocalIntervalStem(uploadBuffer);
                         }
                     }
+
+                    const auto submittedRms = computeBufferRmsAcrossChannels(uploadBuffer);
+                    const auto slotIndex = findFixedLocalRoutingSlotIndex(sourceId);
+                    if (slotIndex >= 0)
+                        lastLocalSubmittedRms_[static_cast<std::size_t>(slotIndex)].store(submittedRms,
+                                                                                           std::memory_order_relaxed);
 
                     codecStreamBridge_.submitInput(uploadBuffer,
                                                    currentSampleRate_,
@@ -1190,6 +1357,16 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             writePosition = intervalWritePosition;
         };
 
+        auto isLocalSlotPublishing = [this](const char* sourceId) {
+            if (const auto* slot = findFixedLocalRoutingSlot(sourceId); slot != nullptr && slot->visibleByDefault)
+                return true;
+
+            if (const auto it = mixerStripsBySourceId_.find(sourceId); it != mixerStripsBySourceId_.end())
+                return it->second.snapshot.descriptor.visible;
+
+            return false;
+        };
+
         if (isLocalVoiceMode(localChannelMode_))
         {
             if (! transmitEnabled_)
@@ -1198,51 +1375,60 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
             else
             {
-                localUploadIntervalBuffer_.setSize(0, 0);
-                localSend2UploadIntervalBuffer_.setSize(0, 0);
-                localUploadIntervalWritePosition_ = 0;
-                localSend2UploadIntervalWritePosition_ = 0;
+                for (auto& uploadBuffer : localUploadIntervalBuffers_)
+                    uploadBuffer.setSize(0, 0);
+                localUploadIntervalWritePositions_.fill(0);
 
-                submitVoiceSlot(auxInput,
-                                localSend2VoiceUploadBuffer_,
-                                localSend2VoiceUploadWritePosition_,
-                                kLocalSend2SourceId,
-                                1,
-                                kHostRoutingProofAuxInputBusName);
-                submitVoiceSlot(mainInput,
-                                localVoiceUploadBuffer_,
-                                localVoiceUploadWritePosition_,
-                                kLocalMainSourceId,
-                                0,
-                                "Main");
+                for (std::size_t slotIndex = 0; slotIndex < kFixedLocalRoutingSlots.size(); ++slotIndex)
+                {
+                    const auto& slot = kFixedLocalRoutingSlots[slotIndex];
+                    if (isLocalSlotPublishing(slot.sourceId))
+                    {
+                        submitVoiceSlot(hostRoutingProofLocalSendBuffers_[slotIndex],
+                                        localVoiceUploadBuffers_[slotIndex],
+                                        localVoiceUploadWritePositions_[slotIndex],
+                                        slot.sourceId,
+                                        static_cast<std::uint8_t>(slot.inputBusIndex),
+                                        slot.fallbackLabel);
+                    }
+                    else
+                    {
+                        localVoiceUploadBuffers_[slotIndex].setSize(0, 0);
+                        localVoiceUploadWritePositions_[slotIndex] = 0;
+                    }
+                }
             }
         }
         else if (authoritativeTiming_.hasTiming && authoritativeTiming_.activeIntervalSamples > 0)
         {
-            localVoiceUploadBuffer_.setSize(0, 0);
-            localSend2VoiceUploadBuffer_.setSize(0, 0);
-            localVoiceUploadWritePosition_ = 0;
-            localSend2VoiceUploadWritePosition_ = 0;
+            for (auto& uploadBuffer : localVoiceUploadBuffers_)
+                uploadBuffer.setSize(0, 0);
+            localVoiceUploadWritePositions_.fill(0);
             if (! transmitEnabled_ || transmitWarmupIntervalsRemaining_ > 0)
             {
                 resetLocalUploadState();
             }
             else
             {
-                submitIntervalSlot(auxInput,
-                                   localSend2UploadIntervalBuffer_,
-                                   localSend2UploadIntervalWritePosition_,
-                                   kLocalSend2SourceId,
-                                   1,
-                                   kHostRoutingProofAuxInputBusName,
-                                   false);
-                submitIntervalSlot(mainInput,
-                                   localUploadIntervalBuffer_,
-                                   localUploadIntervalWritePosition_,
-                                   kLocalMainSourceId,
-                                   0,
-                                   "Main",
-                                   true);
+                for (std::size_t slotIndex = 0; slotIndex < kFixedLocalRoutingSlots.size(); ++slotIndex)
+                {
+                    const auto& slot = kFixedLocalRoutingSlots[slotIndex];
+                    if (isLocalSlotPublishing(slot.sourceId))
+                    {
+                        submitIntervalSlot(hostRoutingProofLocalSendBuffers_[slotIndex],
+                                           localUploadIntervalBuffers_[slotIndex],
+                                           localUploadIntervalWritePositions_[slotIndex],
+                                           slot.sourceId,
+                                           static_cast<std::uint8_t>(slot.inputBusIndex),
+                                           slot.fallbackLabel,
+                                           slotIndex == 0);
+                    }
+                    else
+                    {
+                        localUploadIntervalBuffers_[slotIndex].setSize(0, 0);
+                        localUploadIntervalWritePositions_[slotIndex] = 0;
+                    }
+                }
             }
         }
     }
@@ -1297,10 +1483,12 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             diagnostics.lastEncodedBytes = inboundFrame.payload.getSize();
             diagnostics.lastInboundIntervalIndex = authoritativeTiming_.intervalIndex;
             codecStreamBridge_.submitInboundEncoded(inboundFrame.sourceId,
+                                                    inboundFrame.boundaryGeneration,
                                                     inboundFrame.payload.getData(),
                                                     inboundFrame.payload.getSize());
             ++framesConsumed;
         }
+
     }
 
     audio::CodecStreamBridge::DecodedFrame decodedFrame;
@@ -1318,6 +1506,7 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         auto& diagnostics = remoteReceiveDiagnosticsBySource_[sourceId];
         diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
         diagnostics.lastDecodedSampleRate = decodedFrame.sampleRate;
+        diagnostics.lastDecodedRms = computeBufferRmsAcrossChannels(decodedAtHostRate);
         const auto knownSourceIt = knownRemoteSourcesById_.find(sourceId);
         const auto sourceIsVoice = knownSourceIt != knownRemoteSourcesById_.end()
             && isVoiceMode(knownSourceIt->second.channelFlags);
@@ -1409,11 +1598,14 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             && authoritativeTiming_.activeBeatSamples > 0;
         auto selectRemoteOutputBuffer = [&](const std::string& sourceId) -> juce::AudioBuffer<float>* {
             const auto assignment = getFixedRemoteOutputAssignmentForTesting(sourceId);
-            if (assignment == 1 && auxOutput.getNumChannels() > 0)
-                return &auxOutput;
-            if (assignment == 2 && auxOutput2.getNumChannels() > 0)
-                return &auxOutput2;
-            return &mainOutput;
+            if (assignment >= 0
+                && assignment < static_cast<int>(routedOutputs.size())
+                && routedOutputs[static_cast<std::size_t>(assignment)].getNumChannels() > 0)
+            {
+                return &routedOutputs[static_cast<std::size_t>(assignment)];
+            }
+
+            return &routedOutputs.front();
         };
 
         hasServerTimingForUi_.store(true, std::memory_order_relaxed);
@@ -1754,9 +1946,13 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                 .editableName = snapshot.descriptor.kind == MixerStripKind::LocalMonitor,
                 .outputAssignmentIndex = getFixedRemoteOutputAssignmentForTesting(snapshot.descriptor.sourceId),
                 .outputAssignmentLabels = snapshot.descriptor.kind == MixerStripKind::RemoteDelayed
-                    ? std::vector<std::string> { kFixedRemoteOutputRoutes[0].hostLabel,
-                                                 kFixedRemoteOutputRoutes[1].hostLabel,
-                                                 kFixedRemoteOutputRoutes[2].hostLabel }
+                    ? [&]() {
+                          std::vector<std::string> labels;
+                          labels.reserve(kFixedRemoteOutputRoutes.size());
+                          for (const auto& route : kFixedRemoteOutputRoutes)
+                              labels.emplace_back(route.hostLabel);
+                          return labels;
+                      }()
                     : std::vector<std::string> {},
             });
         }
@@ -1770,6 +1966,9 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
     };
     auto mixerStripOutputAssignmentSetter = [this](const std::string& sourceId, int outputAssignmentIndex) {
         return setFixedRemoteOutputAssignment(sourceId, outputAssignmentIndex);
+    };
+    auto localChannelVisibilitySetter = [this](const std::string& sourceId, bool visible) {
+        return setLocalMonitorVisibility(sourceId, visible);
     };
     auto mixerStripSoloSetter = [this](const std::string& sourceId, bool soloed) {
         return setMixerStripSoloState(sourceId, soloed);
@@ -1802,7 +2001,22 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
     auto diagnosticsTextGetter = [this]() { return getRemoteReceiveDiagnosticsText(); };
     auto masterOutputGainGetter = [this]() { return getMasterOutputGainDb(); };
     auto masterOutputGainSetter = [this](float gainDb) { setMasterOutputGainDb(gainDb); };
-    auto addLocalChannelHandler = [this]() { return setLocalMonitorVisibility(kLocalSend2SourceId, true); };
+    auto addLocalChannelHandler = [this]() {
+        ensureLocalMonitorMixerStrip();
+        for (const auto& slot : kFixedLocalRoutingSlots)
+        {
+            if (slot.visibleByDefault)
+                continue;
+
+            if (const auto it = mixerStripsBySourceId_.find(slot.sourceId); it != mixerStripsBySourceId_.end()
+                && ! it->second.snapshot.descriptor.visible)
+            {
+                return setLocalMonitorVisibility(slot.sourceId, true);
+            }
+        }
+
+        return false;
+    };
     auto transmitToggleHandler = [this]() { return toggleTransmitEnabled(); };
     auto voiceModeToggleHandler = [this]() { return toggleLocalVoiceMode(); };
 
@@ -1834,6 +2048,7 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                                                std::move(stemCaptureNewRunHandler),
                                                std::move(mixerStripNameSetter),
                                                std::move(mixerStripOutputAssignmentSetter),
+                                               std::move(localChannelVisibilitySetter),
                                                std::move(addLocalChannelHandler),
                                                std::move(transmitToggleHandler),
                                                std::move(voiceModeToggleHandler),
@@ -1867,16 +2082,6 @@ void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     }
     stateTree.addChild(rememberedServerHistoryTree, -1, nullptr);
 
-    juce::ValueTree remoteOutputAssignmentsTree(kPluginStateRemoteOutputAssignments);
-    for (const auto& [sourceId, outputBusIndex] : fixedRemoteOutputAssignments_)
-    {
-        juce::ValueTree assignmentTree(kPluginStateRemoteOutputAssignment);
-        assignmentTree.setProperty(kPluginStateRemoteOutputSourceId, juce::String(sourceId), nullptr);
-        assignmentTree.setProperty(kPluginStateRemoteOutputBus, outputBusIndex, nullptr);
-        remoteOutputAssignmentsTree.addChild(assignmentTree, -1, nullptr);
-    }
-    stateTree.addChild(remoteOutputAssignmentsTree, -1, nullptr);
-
     const auto lastErrorContext = shortenLastErrorContext(lifecycleController_.getSnapshot().lastError);
     if (! lastErrorContext.empty())
         stateTree.setProperty(kPluginStateLastErrorContext, juce::String(lastErrorContext), nullptr);
@@ -1909,9 +2114,6 @@ void FamaLamaJamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         stripTree.setProperty(kPluginStateMixerStripDisplayName, juce::String(runtimeState.snapshot.descriptor.displayName), nullptr);
         stripTree.setProperty(kPluginStateMixerStripChannelIndex, runtimeState.snapshot.descriptor.channelIndex, nullptr);
         stripTree.setProperty(kPluginStateMixerStripVisible, runtimeState.snapshot.descriptor.visible, nullptr);
-        stripTree.setProperty(kPluginStateMixerStripRemoteOutputBus,
-                              getFixedRemoteOutputAssignmentForTesting(runtimeState.snapshot.descriptor.sourceId),
-                              nullptr);
         stripTree.setProperty(kPluginStateMixerStripGainDb, runtimeState.snapshot.mix.gainDb, nullptr);
         stripTree.setProperty(kPluginStateMixerStripPan, runtimeState.snapshot.mix.pan, nullptr);
         stripTree.setProperty(kPluginStateMixerStripMuted, runtimeState.snapshot.mix.muted, nullptr);
@@ -1934,7 +2136,6 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     float restoredMasterOutputGainDb = 0.0f;
     app::session::StemCaptureSettings restoredStemCaptureSettings = app::session::makeDefaultStemCaptureSettings();
     std::vector<MixerStripSnapshot> restoredMixerStrips;
-    std::vector<std::pair<std::string, int>> restoredRemoteOutputAssignments;
     std::vector<app::session::RememberedServerEntry> restoredRememberedServers;
 
     const auto stateTree = parseValueTree(data, sizeInBytes);
@@ -1997,26 +2198,6 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
             }
         }
 
-        if (const auto remoteOutputAssignmentsTree = stateTree.getChildWithName(kPluginStateRemoteOutputAssignments);
-            remoteOutputAssignmentsTree.isValid())
-        {
-            for (int childIndex = 0; childIndex < remoteOutputAssignmentsTree.getNumChildren(); ++childIndex)
-            {
-                const auto assignmentTree = remoteOutputAssignmentsTree.getChild(childIndex);
-                if (! assignmentTree.hasType(kPluginStateRemoteOutputAssignment))
-                    continue;
-
-                const auto sourceId
-                    = assignmentTree.getProperty(kPluginStateRemoteOutputSourceId, juce::String()).toString().toStdString();
-                if (sourceId.empty())
-                    continue;
-
-                restoredRemoteOutputAssignments.emplace_back(
-                    sourceId,
-                    static_cast<int>(assignmentTree.getProperty(kPluginStateRemoteOutputBus, 0)));
-            }
-        }
-
         if (const auto mixerStateTree = stateTree.getChildWithName(kPluginStateMixerState); mixerStateTree.isValid())
         {
             for (int childIndex = 0; childIndex < mixerStateTree.getNumChildren(); ++childIndex)
@@ -2053,9 +2234,6 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
 
                 if (! snapshot.descriptor.sourceId.empty())
                 {
-                    restoredRemoteOutputAssignments.emplace_back(
-                        snapshot.descriptor.sourceId,
-                        static_cast<int>(stripTree.getProperty(kPluginStateMixerStripRemoteOutputBus, 0)));
                     restoredMixerStrips.push_back(std::move(snapshot));
                 }
             }
@@ -2087,8 +2265,6 @@ void FamaLamaJamAudioProcessor::setStateInformation(const void* data, int sizeIn
     applyLifecycleTransition(lifecycleController_.resetToIdle());
     mixerStripsBySourceId_.clear();
     fixedRemoteOutputAssignments_.clear();
-    for (const auto& [sourceId, outputBusIndex] : restoredRemoteOutputAssignments)
-        setFixedRemoteOutputAssignment(sourceId, outputBusIndex);
 
     std::vector<app::session::RememberedServerEntry> mergedRememberedServers;
     {
@@ -2233,14 +2409,16 @@ bool FamaLamaJamAudioProcessor::requestNewStemCaptureRun()
 
 void FamaLamaJamAudioProcessor::resetLocalUploadState()
 {
-    localUploadIntervalBuffer_.setSize(0, 0);
-    localVoiceUploadBuffer_.setSize(0, 0);
-    localSend2UploadIntervalBuffer_.setSize(0, 0);
-    localSend2VoiceUploadBuffer_.setSize(0, 0);
-    localUploadIntervalWritePosition_ = 0;
-    localVoiceUploadWritePosition_ = 0;
-    localSend2UploadIntervalWritePosition_ = 0;
-    localSend2VoiceUploadWritePosition_ = 0;
+    for (auto& uploadBuffer : localUploadIntervalBuffers_)
+        uploadBuffer.setSize(0, 0);
+    for (auto& uploadBuffer : localVoiceUploadBuffers_)
+        uploadBuffer.setSize(0, 0);
+
+    localUploadIntervalWritePositions_.fill(0);
+    localVoiceUploadWritePositions_.fill(0);
+
+    for (auto& submittedRms : lastLocalSubmittedRms_)
+        submittedRms.store(0.0f, std::memory_order_relaxed);
 }
 
 void FamaLamaJamAudioProcessor::updateLocalTransportChannelInfo()
@@ -2250,18 +2428,27 @@ void FamaLamaJamAudioProcessor::updateLocalTransportChannelInfo()
 
     for (const auto& slot : kFixedLocalRoutingSlots)
     {
+        bool shouldPublish = slot.visibleByDefault;
         auto channelName = std::string(slot.fallbackLabel);
-        if (const auto it = mixerStripsBySourceId_.find(slot.sourceId); it != mixerStripsBySourceId_.end()
-            && ! it->second.snapshot.descriptor.displayName.empty())
+        if (const auto it = mixerStripsBySourceId_.find(slot.sourceId); it != mixerStripsBySourceId_.end())
         {
-            channelName = it->second.snapshot.descriptor.displayName;
+            shouldPublish = slot.visibleByDefault || it->second.snapshot.descriptor.visible;
+            if (! it->second.snapshot.descriptor.displayName.empty())
+                channelName = it->second.snapshot.descriptor.displayName;
         }
 
-        framedTransport_.setLocalChannelInfo(net::FramedSocketTransport::LocalChannelInfo {
-            .channelIndex = static_cast<std::uint8_t>(slot.inputBusIndex),
-            .channelName = std::move(channelName),
-            .channelFlags = channelFlags,
-        });
+        if (shouldPublish)
+        {
+            framedTransport_.setLocalChannelInfo(net::FramedSocketTransport::LocalChannelInfo {
+                .channelIndex = static_cast<std::uint8_t>(slot.inputBusIndex),
+                .channelName = std::move(channelName),
+                .channelFlags = channelFlags,
+            });
+        }
+        else
+        {
+            framedTransport_.clearLocalChannelInfo(static_cast<std::uint8_t>(slot.inputBusIndex));
+        }
     }
 }
 
@@ -2474,11 +2661,18 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
            << " bpm=" << authoritativeTiming_.activeBpm
            << " bpi=" << authoritativeTiming_.activeBpi
            << " sr=" << juce::roundToInt(currentSampleRate_)
-           << " anchor=" << (intervalPhaseAnchoredFromDownloadBegin_ ? "dl" : "cfg")
-           << " txWarm=" << transmitWarmupIntervalsRemaining_
-           << " upl=" << localUploadIntervalWritePosition_
-           << "/" << authoritativeTiming_.activeIntervalSamples
-           << " encLast=" << codecStreamBridge_.getLastEncodedPayloadBytes()
+           << " txWarm=" << transmitWarmupIntervalsRemaining_;
+
+    for (std::size_t slotIndex = 0; slotIndex < kFixedLocalRoutingSlots.size(); ++slotIndex)
+    {
+        const auto& slot = kFixedLocalRoutingSlots[slotIndex];
+        stream << " upl" << slot.inputBusIndex << "=" << localUploadIntervalWritePositions_[slotIndex]
+               << "/" << authoritativeTiming_.activeIntervalSamples
+               << " txRms" << slot.inputBusIndex << "="
+               << juce::String(lastLocalSubmittedRms_[slotIndex].load(std::memory_order_relaxed), 4).toStdString();
+    }
+
+    stream << " encLast=" << codecStreamBridge_.getLastEncodedPayloadBytes()
            << " rx=" << framedTransport_.getReceivedFrameCount()
            << " tx=" << framedTransport_.getSentFrameCount();
 
@@ -2535,6 +2729,7 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
 
         const auto decodedSamples = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSamples : 0;
         const auto decodedRate = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedSampleRate : 0.0;
+        const auto decodedRms = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end() ? diagnosticsIt->second.lastDecodedRms : 0.0f;
         const auto channelFlags = diagnosticsIt != remoteReceiveDiagnosticsBySource_.end()
             ? diagnosticsIt->second.channelFlags
             : static_cast<std::uint8_t>(0);
@@ -2551,6 +2746,14 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
             : (voiceIt != remoteVoiceChunksBySource_.end() && ! voiceIt->second.empty()
                    ? voiceIt->second.front().audio.getNumSamples()
                    : 0);
+        const auto activeRms = activeIt != remoteActiveIntervalBySource_.end()
+            ? computeBufferRmsAcrossChannels(activeIt->second)
+            : (voiceIt != remoteVoiceChunksBySource_.end() && ! voiceIt->second.empty()
+                   ? computeBufferRmsAcrossChannels(voiceIt->second.front().audio)
+                   : 0.0f);
+        const auto queuedRms = queuedIt != remoteQueuedIntervalsBySource_.end() && ! queuedIt->second.empty()
+            ? computeBufferRmsAcrossChannels(queuedIt->second.front().audio)
+            : 0.0f;
         const auto nextBoundary = nextIt != nextRemoteTargetBoundaryBySource_.end() ? nextIt->second : 0u;
         const auto lastBoundary = lastIt != lastRemoteActivationBoundaryBySource_.end() ? lastIt->second : 0u;
         const auto knownInRoom = knownIt != knownRemoteSourcesById_.end();
@@ -2582,10 +2785,11 @@ std::string FamaLamaJamAudioProcessor::getRemoteReceiveDiagnosticsText() const
                << " strip=" << stripState
                << " enc=" << encodedBytes
                << " dec=" << decodedSamples << "@" << juce::roundToInt(decodedRate)
+               << " decRms=" << juce::String(decodedRms, 4).toStdString()
                << " copy=" << copiedSamples
-               << " active=" << activeSamples
-               << " queued=" << queuedCount
-                << " queuedAt=" << queuedBoundary
+               << " active=" << activeSamples << "@" << juce::String(activeRms, 4).toStdString()
+               << " queued=" << queuedCount << "@" << juce::String(queuedRms, 4).toStdString()
+               << " queuedAt=" << queuedBoundary
                << " in=" << lastInboundInterval
                << " seenUser=" << presenceAt
                << " seenAudio=" << audioAt
@@ -2613,6 +2817,7 @@ void FamaLamaJamAudioProcessor::injectDecodedRemoteIntervalForTesting(const std:
     diagnostics.lastEncodedBytes = 0;
     diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
     diagnostics.lastDecodedSampleRate = sampleRate;
+    diagnostics.lastDecodedRms = computeBufferRmsAcrossChannels(decodedAtHostRate);
     {
         const std::scoped_lock lock(stemCaptureMutex_);
         if (stemCaptureState_.activeRecording)
@@ -2623,7 +2828,8 @@ void FamaLamaJamAudioProcessor::injectDecodedRemoteIntervalForTesting(const std:
                                remoteReceiveDiagnosticsBySource_,
                                authoritativeTiming_,
                                sourceId,
-                               decodedAtHostRate);
+                               decodedAtHostRate,
+                               false);
 }
 
 void FamaLamaJamAudioProcessor::injectDecodedRemoteVoiceForTesting(const std::string& sourceId,
@@ -2640,6 +2846,7 @@ void FamaLamaJamAudioProcessor::injectDecodedRemoteVoiceForTesting(const std::st
     diagnostics.lastEncodedBytes = 0;
     diagnostics.lastDecodedSamples = decodedAtHostRate.getNumSamples();
     diagnostics.lastDecodedSampleRate = sampleRate;
+    diagnostics.lastDecodedRms = computeBufferRmsAcrossChannels(decodedAtHostRate);
     diagnostics.lastCopiedSamples = decodedAtHostRate.getNumSamples();
     diagnostics.lastQueuedBoundary = authoritativeTiming_.intervalIndex;
     {
@@ -3087,6 +3294,7 @@ bool FamaLamaJamAudioProcessor::setLocalMonitorVisibility(const std::string& sou
     {
         it->second.snapshot.descriptor.visible = visible;
         it->second.snapshot.descriptor.active = visible;
+        updateLocalTransportChannelInfo();
         return true;
     }
 
@@ -3234,8 +3442,6 @@ void FamaLamaJamAudioProcessor::clearAuthoritativeTiming() noexcept
     const bool wasWaitingForHost = hostSyncAssistWaitingForHost_.load(std::memory_order_relaxed);
 
     authoritativeTiming_ = {};
-    lastHandledIntervalBoundaryGeneration_ = 0;
-    intervalPhaseAnchoredFromDownloadBegin_ = false;
     resetLocalUploadState();
     transmitWarmupIntervalsRemaining_ = 0;
     nextRemoteTargetBoundaryBySource_.clear();
@@ -3906,7 +4112,18 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
             descriptor.inactiveIntervals = 0;
             runtimeState.snapshot.voiceMode = voiceMode;
             runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
-            runtimeState.snapshot.statusText = voiceMode ? "Voice chat: near realtime" : "Receiving interval audio";
+            if (voiceMode)
+            {
+                runtimeState.snapshot.statusText = "Voice chat: near realtime";
+            }
+            else if (hasActiveInterval)
+            {
+                runtimeState.snapshot.statusText = "Receiving interval audio";
+            }
+            else
+            {
+                runtimeState.snapshot.statusText = "Queued for next interval";
+            }
             continue;
         }
 

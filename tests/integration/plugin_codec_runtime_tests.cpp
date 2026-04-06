@@ -14,6 +14,13 @@ void fillBuffer(juce::AudioBuffer<float>& buffer)
             buffer.setSample(channel, sample, static_cast<float>(sample) / static_cast<float>(buffer.getNumSamples()));
     }
 }
+
+juce::AudioBuffer<float> makeProcessBuffer(famalamajam::plugin::FamaLamaJamAudioProcessor& processor, int samples)
+{
+    return juce::AudioBuffer<float>(juce::jmax(processor.getTotalNumInputChannels(),
+                                               processor.getTotalNumOutputChannels()),
+                                    samples);
+}
 } // namespace
 
 TEST_CASE("plugin codec runtime bridge processes audio after active connection", "[plugin_codec_runtime]")
@@ -26,7 +33,7 @@ TEST_CASE("plugin codec runtime bridge processes audio after active connection",
         .type = famalamajam::app::session::ConnectionEventType::Connected,
     });
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     for (int attempt = 0; attempt < 80; ++attempt)
@@ -59,7 +66,7 @@ TEST_CASE("plugin codec runtime bridge resets stale timing and queued state on h
         .type = famalamajam::app::session::ConnectionEventType::Connected,
     });
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    auto buffer = makeProcessBuffer(processor, 512);
     juce::MidiBuffer midi;
 
     for (int attempt = 0; attempt < 40; ++attempt)

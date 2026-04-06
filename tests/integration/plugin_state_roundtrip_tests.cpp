@@ -383,7 +383,7 @@ TEST_CASE("plugin_state_roundtrip restores saved mixer state without reviving li
     FamaLamaJamAudioProcessor source(true, true);
     connectProcessor(source, server, 48000.0, 512);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    juce::AudioBuffer<float> buffer(source.getTotalNumOutputChannels(), 512);
     juce::MidiBuffer midi;
     REQUIRE(processUntil(source, buffer, midi, [&]() {
         return source.getTransportUiState().hasServerTiming && source.isRemoteSourceActiveForTesting("alice#0");
@@ -438,17 +438,18 @@ TEST_CASE("plugin_state_roundtrip restores saved mixer state without reviving li
     CHECK_FALSE(remoteSnapshot.descriptor.visible);
 }
 
-TEST_CASE("plugin_state_roundtrip expects hidden extra local slots and remote output assignments to restore",
+TEST_CASE("plugin_state_roundtrip restores hidden extra local slots by exact fixed slot while resetting remote outputs to main",
           "[plugin_state_roundtrip]")
 {
     FamaLamaJamAudioProcessor source(true, true);
 
     FamaLamaJamAudioProcessor::MixerStripSnapshot extraLocalSnapshot;
     extraLocalSnapshot.descriptor.kind = FamaLamaJamAudioProcessor::MixerStripKind::LocalMonitor;
-    extraLocalSnapshot.descriptor.sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId;
+    extraLocalSnapshot.descriptor.sourceId = FamaLamaJamAudioProcessor::kLocalSend3SourceId;
     extraLocalSnapshot.descriptor.groupId = "local";
-    extraLocalSnapshot.descriptor.displayName = "Bass";
-    extraLocalSnapshot.descriptor.channelName = "Bass";
+    extraLocalSnapshot.descriptor.displayName = "Keys";
+    extraLocalSnapshot.descriptor.channelName = "Keys";
+    extraLocalSnapshot.descriptor.channelIndex = 2;
     extraLocalSnapshot.descriptor.active = false;
     extraLocalSnapshot.descriptor.visible = false;
     extraLocalSnapshot.mix.gainDb = -5.0f;
@@ -465,15 +466,16 @@ TEST_CASE("plugin_state_roundtrip expects hidden extra local slots and remote ou
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
 
     FamaLamaJamAudioProcessor::MixerStripSnapshot restoredExtraLocal;
-    REQUIRE(restored.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalSend2SourceId, restoredExtraLocal));
-    CHECK(restoredExtraLocal.descriptor.displayName == "Bass");
+    REQUIRE(restored.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalSend3SourceId, restoredExtraLocal));
+    CHECK(restoredExtraLocal.descriptor.displayName == "Keys");
+    CHECK(restoredExtraLocal.descriptor.channelIndex == 2);
     CHECK_FALSE(restoredExtraLocal.descriptor.active);
     CHECK_FALSE(restoredExtraLocal.descriptor.visible);
     CHECK(restoredExtraLocal.mix.gainDb == Catch::Approx(-5.0f));
     CHECK(restoredExtraLocal.mix.pan == Catch::Approx(-0.4f));
     CHECK(restoredExtraLocal.mix.muted);
     CHECK(restoredExtraLocal.mix.soloed);
-    CHECK(restored.getFixedRemoteOutputAssignmentForTesting("alice#0") == 2);
+    CHECK(restored.getFixedRemoteOutputAssignmentForTesting("alice#0") == 0);
 }
 
 

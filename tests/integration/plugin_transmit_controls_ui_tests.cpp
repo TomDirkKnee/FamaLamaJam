@@ -157,8 +157,14 @@ TEST_CASE("plugin transmit controls ui keeps transmit off the transport row and 
     REQUIRE(stripLabels.size() == 2);
     CHECK(stripLabels[0] == "Local Monitor");
     CHECK(stripLabels[1] == "alice - guitar");
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("local-monitor") == "Not transmitting");
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("local-monitor") == "Voice Off");
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("local-monitor").isEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("local-monitor").isEmpty());
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("alice#0").isEmpty());
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("alice#0").isEmpty());
+
+    bool localVoiceEnabled = false;
+    CHECK(harness.editor->getMixerStripVoiceToggleStateForTesting("local-monitor", localVoiceEnabled));
+    CHECK_FALSE(localVoiceEnabled);
+    CHECK(harness.editor->clickMixerStripTransmitForTesting("local-monitor"));
+    CHECK(harness.editor->clickMixerStripVoiceToggleForTesting("local-monitor"));
 }

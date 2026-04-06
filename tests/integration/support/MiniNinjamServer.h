@@ -1057,21 +1057,38 @@ private:
 
                 if (message.type == kMessageClientSetChannelInfo)
                 {
-                    if (message.payload.getSize() >= 3)
+                    if (message.payload.getSize() >= 2)
                     {
                         const auto* payload = static_cast<const std::uint8_t*>(message.payload.getData());
-                        ClientChannelInfo channelInfo;
-                        channelInfo.channelIndex = payload[1];
-                        const auto* channelName = reinterpret_cast<const char*>(payload + 2);
-                        const auto nameBytes = message.payload.getSize() - 2;
-                        const auto channelNameLength = boundedStrnlen(channelName, nameBytes);
-                        channelInfo.channelName.assign(channelName, channelNameLength);
-                        channelInfo.channelFlags = payload[message.payload.getSize() - 1];
+                        const auto parameterSize = static_cast<std::size_t>(payload[0])
+                                                 | (static_cast<std::size_t>(payload[1]) << 8);
+                        std::size_t offset = 2;
+                        std::uint8_t channelIndex = 0;
+
+                        while (offset < message.payload.getSize())
                         {
-                            const juce::ScopedLock lock(clientLock_);
-                            capturedClientChannelInfos_.push_back(std::move(channelInfo));
+                            const auto* channelName = reinterpret_cast<const char*>(payload + offset);
+                            const auto nameBytes = message.payload.getSize() - offset;
+                            const auto channelNameLength = boundedStrnlen(channelName, nameBytes);
+                            if (channelNameLength == nameBytes)
+                                break;
+
+                            offset += channelNameLength + 1;
+                            if (offset + parameterSize > message.payload.getSize() || parameterSize < 1)
+                                break;
+
+                            ClientChannelInfo channelInfo;
+                            channelInfo.channelIndex = channelIndex++;
+                            channelInfo.channelName.assign(channelName, channelNameLength);
+                            channelInfo.channelFlags = payload[offset + parameterSize - 1];
+                            offset += parameterSize;
+
+                            {
+                                const juce::ScopedLock lock(clientLock_);
+                                capturedClientChannelInfos_.push_back(std::move(channelInfo));
+                            }
+                            clientChannelInfoEvent_.signal();
                         }
-                        clientChannelInfoEvent_.signal();
                     }
 
                     continue;
