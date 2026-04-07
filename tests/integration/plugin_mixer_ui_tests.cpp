@@ -1,5 +1,6 @@
 #include <memory>
 #include <algorithm>
+#include <cmath>
 #include <unordered_map>
 
 #include <catch2/catch_approx.hpp>
@@ -165,15 +166,40 @@ juce::Button* findButtonWithText(juce::Component& parent, const juce::String& te
     return findComponent<juce::Button>(parent, [&](const juce::Button& button) { return button.getButtonText() == text; });
 }
 
-juce::Button* findButtonContainingText(juce::Component& parent, const juce::String& text)
+juce::TextEditor* findTextEditorWithText(juce::Component& parent, const juce::String& text)
 {
-    return findComponent<juce::Button>(parent, [&](const juce::Button& button) {
-        return button.getButtonText().containsIgnoreCase(text);
-    });
+    return findComponent<juce::TextEditor>(parent, [&](const juce::TextEditor& editor) { return editor.getText() == text; });
+}
+
+juce::Rectangle<int> getBoundsInEditor(juce::Component& editor, juce::Component& component)
+{
+    return editor.getLocalArea(&component, component.getLocalBounds());
+}
+
+template <typename ComponentType>
+void collectVisibleComponents(juce::Component& parent, std::vector<ComponentType*>& matches)
+{
+    for (int index = 0; index < parent.getNumChildComponents(); ++index)
+    {
+        auto& child = *parent.getChildComponent(index);
+        if (auto* typed = dynamic_cast<ComponentType*>(&child); typed != nullptr && typed->isVisible())
+            matches.push_back(typed);
+
+        collectVisibleComponents<ComponentType>(child, matches);
+    }
+}
+
+template <typename ComponentType>
+std::vector<ComponentType*> findVisibleComponents(juce::Component& parent)
+{
+    std::vector<ComponentType*> matches;
+    collectVisibleComponents<ComponentType>(parent, matches);
+    return matches;
 }
 } // namespace
 
-TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[plugin_mixer_ui]")
+TEST_CASE("plugin mixer ui keeps locals first in one horizontal strip field with remote groups beside them",
+          "[plugin_mixer_ui]")
 {
     EditorHarness harness({
         { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
@@ -216,14 +242,15 @@ TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[
           .groupLabel = "bob",
           .displayName = "bob - bass",
           .subtitle = "bass",
-          .active = false,
+          .active = true,
           .visible = true },
     });
 
     const auto groupLabels = harness.editor->getVisibleMixerGroupLabelsForTesting();
-    REQUIRE(groupLabels.size() == 2);
-    CHECK(groupLabels[0] == "alice");
-    CHECK(groupLabels[1] == "bob");
+    REQUIRE(groupLabels.size() == 3);
+    CHECK(groupLabels[0] == FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    CHECK(groupLabels[1] == "alice");
+    CHECK(groupLabels[2] == "bob");
 
     const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
     REQUIRE(stripLabels.size() == 5);
@@ -232,26 +259,31 @@ TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[
     CHECK(stripLabels[2] == "alice - guitar");
     CHECK(stripLabels[3] == "alice - vocal");
     CHECK(stripLabels[4] == "bob - bass");
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("alice#0").isEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("alice#0").isEmpty());
 
-    auto* mixerSectionLabel = findLabelWithText(*harness.editor, "Mixer");
-    auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
+    auto* localHeaderLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* localMainEditor = findTextEditorWithText(*harness.editor, "Main");
+    auto* localBassEditor = findTextEditorWithText(*harness.editor, "Bass");
+    auto* aliceGroupLabel = findLabelWithText(*harness.editor, "alice");
+    auto* bobGroupLabel = findLabelWithText(*harness.editor, "bob");
 
-    REQUIRE(mixerSectionLabel != nullptr);
-    REQUIRE(masterOutputLabel != nullptr);
-    CHECK(masterOutputLabel->getY() > mixerSectionLabel->getY());
-    CHECK(std::none_of(stripLabels.begin(),
-                       stripLabels.end(),
-                       [](const juce::String& label) { return label == "Master Output"; }));
+    REQUIRE(localHeaderLabel != nullptr);
+    REQUIRE(localMainEditor != nullptr);
+    REQUIRE(localBassEditor != nullptr);
+    REQUIRE(aliceGroupLabel != nullptr);
+    REQUIRE(bobGroupLabel != nullptr);
+
+    const auto localHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
+    const auto localMainBounds = getBoundsInEditor(*harness.editor, *localMainEditor);
+    const auto localBassBounds = getBoundsInEditor(*harness.editor, *localBassEditor);
+    const auto aliceGroupBounds = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
+    const auto bobGroupBounds = getBoundsInEditor(*harness.editor, *bobGroupLabel);
+
+    CHECK(localMainBounds.getX() >= localHeaderBounds.getX());
+    CHECK(localBassBounds.getX() > localMainBounds.getRight());
+    CHECK(aliceGroupBounds.getX() > localBassBounds.getRight());
+    CHECK(bobGroupBounds.getX() > aliceGroupBounds.getRight());
+    CHECK(std::abs(aliceGroupBounds.getY() - localHeaderBounds.getY()) <= 24);
+    CHECK(std::abs(bobGroupBounds.getY() - aliceGroupBounds.getY()) <= 16);
 }
 
 TEST_CASE("plugin mixer ui writes strip controls back into processor-owned state and reflects meters",
@@ -413,7 +445,7 @@ TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with ora
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("voice-user#1").isEmpty());
 }
 
-TEST_CASE("plugin mixer ui expects a collapsible local lane that can hide local strip bodies without disturbing remotes",
+TEST_CASE("plugin mixer ui keeps add remove and collapse on the local group header instead of header transmit voice toggles",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -435,46 +467,35 @@ TEST_CASE("plugin mixer ui expects a collapsible local lane that can hide local 
           .active = true,
           .visible = true,
           .editableName = true },
-        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
-          .sourceId = "alice#0",
-          .groupId = "alice",
-          .groupLabel = "alice",
-          .displayName = "alice - guitar",
-          .subtitle = "guitar",
-          .active = true,
-          .visible = true },
     });
 
-    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
-    auto* collapseButton = findButtonContainingText(*harness.editor, "Collapse");
-    auto* localNameEditor = findComponent<juce::TextEditor>(*harness.editor,
-                                                            [](const juce::TextEditor& editor) { return editor.getText() == "Bass"; });
-    auto* remoteStripLabel = findLabelWithText(*harness.editor, "alice - guitar");
+    auto* localHeaderLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* headerRemoveButton = findButtonWithText(*harness.editor, "-");
+    auto* headerAddButton = findButtonWithText(*harness.editor, "+");
+    auto* headerCollapseButton = findButtonWithText(*harness.editor, "Collapse");
 
-    REQUIRE(localLaneLabel != nullptr);
-    REQUIRE(collapseButton != nullptr);
-    REQUIRE(collapseButton->onClick != nullptr);
-    REQUIRE(localNameEditor != nullptr);
-    REQUIRE(remoteStripLabel != nullptr);
+    REQUIRE(localHeaderLabel != nullptr);
+    REQUIRE(headerRemoveButton != nullptr);
+    REQUIRE(headerAddButton != nullptr);
+    REQUIRE(headerCollapseButton != nullptr);
+    REQUIRE(findTextEditorWithText(*harness.editor, "Bass") != nullptr);
 
-    CHECK(localNameEditor->getWidth() <= 132);
-    CHECK(remoteStripLabel->getWidth() <= 128);
+    CHECK(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTransmitLabel) == nullptr);
+    CHECK(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderVoiceLabel) == nullptr);
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
 
-    collapseButton->onClick();
+    const auto localHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
+    const auto removeBounds = getBoundsInEditor(*harness.editor, *headerRemoveButton);
+    const auto addBounds = getBoundsInEditor(*harness.editor, *headerAddButton);
+    const auto collapseBounds = getBoundsInEditor(*harness.editor, *headerCollapseButton);
 
-    CHECK(localLaneLabel->isVisible());
-    CHECK_FALSE(localNameEditor->isVisible());
-    CHECK(remoteStripLabel->isVisible());
-    CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 3);
-
-    auto* expandButton = findButtonContainingText(*harness.editor, "Expand");
-    REQUIRE(expandButton != nullptr);
-    REQUIRE(expandButton->onClick != nullptr);
-
-    expandButton->onClick();
-
-    CHECK(localNameEditor->isVisible());
-    CHECK(remoteStripLabel->isVisible());
+    CHECK(removeBounds.getCentreY() >= localHeaderBounds.getY());
+    CHECK(removeBounds.getCentreY() <= localHeaderBounds.getBottom());
+    CHECK(addBounds.getX() > removeBounds.getRight());
+    CHECK(collapseBounds.getX() > addBounds.getRight());
 }
 
 TEST_CASE("plugin mixer ui reveals the next hidden local slot and confirms live hide without losing prior state",
@@ -588,8 +609,75 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
     CHECK(outputSelector->getItemText(1) == "Remote Out 1");
     CHECK(outputSelector->getItemText(2) == "Remote Out 2");
     CHECK(outputSelector->getItemText(7) == "Remote Out 7");
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
-          .isNotEmpty());
+}
+
+TEST_CASE("plugin mixer ui collapses locals into visible mini strips without holding remote groups open",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .meterLeft = 0.48f,
+          .meterRight = 0.44f,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .meterLeft = 0.31f,
+          .meterRight = 0.28f,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .meterLeft = 0.65f,
+          .meterRight = 0.61f,
+          .active = true,
+          .visible = true },
+    });
+
+    auto* collapseButton = findButtonWithText(*harness.editor, "Collapse");
+    auto* aliceGroupLabel = findLabelWithText(*harness.editor, "alice");
+
+    REQUIRE(collapseButton != nullptr);
+    REQUIRE(collapseButton->onClick != nullptr);
+    REQUIRE(aliceGroupLabel != nullptr);
+
+    const auto aliceBoundsBefore = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
+    collapseButton->onClick();
+
+    auto* localMainEditor = findTextEditorWithText(*harness.editor, "Main");
+    auto* localBassEditor = findTextEditorWithText(*harness.editor, "Bass");
+    REQUIRE(localMainEditor != nullptr);
+    REQUIRE(localBassEditor != nullptr);
+
+    CHECK_FALSE(localMainEditor->isVisible());
+    CHECK_FALSE(localBassEditor->isVisible());
+
+    const auto aliceBoundsAfter = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
+    CHECK(aliceBoundsAfter.getX() < aliceBoundsBefore.getX());
+
+    const auto visibleMeters = findVisibleComponents<famalamajam::plugin::StereoMeterComponent>(*harness.editor);
+    int localMeterCount = 0;
+    for (auto* meter : visibleMeters)
+    {
+        const auto meterBounds = getBoundsInEditor(*harness.editor, *meter);
+        if (meterBounds.getRight() < aliceBoundsAfter.getX())
+            ++localMeterCount;
+    }
+
+    CHECK(localMeterCount == 2);
 }

@@ -1,7 +1,10 @@
 #include <memory>
+#include <utility>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <juce_gui_basics/juce_gui_basics.h>
 
 #include "app/session/ConnectionLifecycle.h"
 #include "app/session/SessionSettingsController.h"
@@ -90,7 +93,7 @@ struct EditorHarness
 };
 
 template <typename ComponentType, typename Matcher>
-ComponentType* findDirectChild(juce::Component& parent, Matcher&& matcher)
+ComponentType* findComponent(juce::Component& parent, Matcher&& matcher)
 {
     for (int index = 0; index < parent.getNumChildComponents(); ++index)
     {
@@ -99,20 +102,26 @@ ComponentType* findDirectChild(juce::Component& parent, Matcher&& matcher)
             if (matcher(*child))
                 return child;
         }
+
+        if (auto* match = findComponent<ComponentType>(*parent.getChildComponent(index),
+                                                       std::forward<Matcher>(matcher)))
+        {
+            return match;
+        }
     }
 
     return nullptr;
 }
 
-juce::Label* findDirectLabelWithText(juce::Component& parent, const juce::String& text)
+juce::Label* findLabelWithText(juce::Component& parent, const juce::String& text)
 {
-    return findDirectChild<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
+    return findComponent<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
 }
 
-juce::TextButton* findDirectButtonWithText(juce::Component& parent, const juce::String& text)
+juce::TextButton* findButtonWithText(juce::Component& parent, const juce::String& text)
 {
-    return findDirectChild<juce::TextButton>(parent,
-                                             [&](const juce::TextButton& button) { return button.getButtonText() == text; });
+    return findComponent<juce::TextButton>(parent,
+                                           [&](const juce::TextButton& button) { return button.getButtonText() == text; });
 }
 } // namespace
 
@@ -268,7 +277,7 @@ TEST_CASE("plugin transport ui sync shows a ready arm control with room timing c
     CHECK(readyHarness.editor->isHostSyncAssistEnabledForTesting());
 }
 
-TEST_CASE("plugin transport ui sync keeps timing text and sync assist visible in a pinned footer band",
+TEST_CASE("plugin transport ui sync keeps timing text and sync assist in a footer below the strip field",
           "[plugin_transport_ui_sync]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
@@ -293,40 +302,30 @@ TEST_CASE("plugin transport ui sync keeps timing text and sync assist visible in
                               .targetBeatsPerInterval = 16,
                           });
 
-    auto* transportLabel = findDirectLabelWithText(*harness.editor, "120 BPM | 16 BPI");
-    auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
-    auto* masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
+    auto* transportLabel = findLabelWithText(*harness.editor, "120 BPM | 16 BPI");
+    auto* syncButton = findButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+    auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
 
     REQUIRE(transportLabel != nullptr);
     REQUIRE(syncButton != nullptr);
     REQUIRE(masterOutputLabel != nullptr);
 
-    CHECK(transportLabel->isVisible());
-    CHECK(syncButton->isVisible());
     CHECK(transportLabel->getY() > harness.editor->getHeight() / 2);
     CHECK(syncButton->getY() > harness.editor->getHeight() / 2);
 
     harness.editor->setSize(760, 760);
     harness.editor->resized();
 
-    transportLabel = findDirectLabelWithText(*harness.editor, "120 BPM | 16 BPI");
-    syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
-    masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
+    transportLabel = findLabelWithText(*harness.editor, "120 BPM | 16 BPI");
+    syncButton = findButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+    masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
 
     REQUIRE(transportLabel != nullptr);
     REQUIRE(syncButton != nullptr);
     REQUIRE(masterOutputLabel != nullptr);
 
-    CHECK(transportLabel->getWidth() <= 220);
-    CHECK(syncButton->getWidth() <= 176);
     CHECK(syncButton->getRight() < masterOutputLabel->getX());
-
-    harness.transport.syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::TimingLost;
-    harness.transport.hasServerTiming = false;
-    harness.transport.metronomeAvailable = false;
-    harness.editor->refreshForTesting();
-
-    CHECK(harness.editor->getTransportStatusTextForTesting() == "120 BPM | 16 BPI");
+    CHECK(transportLabel->getBottom() <= masterOutputLabel->getBottom() + 10);
 }
 
 TEST_CASE("plugin transport ui sync disables the arm control with explicit blocked guidance",

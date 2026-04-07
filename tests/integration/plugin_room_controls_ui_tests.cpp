@@ -1,4 +1,5 @@
 #include <memory>
+#include <cmath>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -533,7 +534,7 @@ TEST_CASE("plugin room controls ui keeps diagnostics hidden until requested and 
 
     CHECK_FALSE(harness.editor->isDiagnosticsExpandedForTesting());
     CHECK(roomViewport->isVisible());
-    CHECK(diagnosticsButton->getBottom() < roomLabel->getY());
+    CHECK(diagnosticsButton->getX() < roomLabel->getX());
 
     harness.editor->clickDiagnosticsToggleForTesting();
 
@@ -595,7 +596,7 @@ TEST_CASE("plugin room controls ui only auto-scrolls the room feed when the read
     CHECK(roomViewport->getViewPositionY() == 0);
 }
 
-TEST_CASE("plugin room controls ui keeps the five-region shell ordered as top bar then local lane then sidebar and footer",
+TEST_CASE("plugin room controls ui places the room workflow in a fixed right sidebar instead of above the mixer",
           "[plugin_room_controls_ui]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
@@ -615,34 +616,21 @@ TEST_CASE("plugin room controls ui keeps the five-region shell ordered as top ba
                           });
 
     auto* hostLabel = findLabelWithText(*harness.editor, "Host");
-    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
     auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
-    auto* roomViewport = findRoomSidebarViewport(*harness.editor);
-    auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
+    auto* mixerLabel = findLabelWithText(*harness.editor, "Mixer");
 
     REQUIRE(hostLabel != nullptr);
-    REQUIRE(localLaneLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
-    REQUIRE(roomViewport != nullptr);
-    REQUIRE(masterOutputLabel != nullptr);
+    REQUIRE(mixerLabel != nullptr);
 
-    const auto hostBounds = getBoundsInEditor(*harness.editor, *hostLabel);
-    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
-    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
-    const auto footerBounds = getBoundsInEditor(*harness.editor, *masterOutputLabel);
-    const auto roomViewportBounds = getBoundsInEditor(*harness.editor, *roomViewport);
-
-    CHECK(hostBounds.getY() < localLaneBounds.getY());
-    CHECK(localLaneBounds.getBottom() < roomBounds.getY());
-    CHECK(roomBounds.getX() > localLaneBounds.getRight());
-    CHECK(roomViewport->isVisible());
-    CHECK(footerBounds.getY() > roomViewportBounds.getBottom());
+    CHECK(roomLabel->getX() > hostLabel->getRight());
+    CHECK(roomLabel->getX() > mixerLabel->getX());
+    CHECK_FALSE(harness.editor->isRoomSectionAboveMixerForTesting());
     CHECK(findButtonWithText(*harness.editor, "Room Tab") == nullptr);
     CHECK(findButtonWithText(*harness.editor, "Open Chat") == nullptr);
 }
 
-TEST_CASE("plugin room controls ui prefers collapsing locals at narrow widths before sacrificing the sidebar",
-          "[plugin_room_controls_ui]")
+TEST_CASE("plugin room controls ui keeps the sidebar beside a shared local-first strip plane", "[plugin_room_controls_ui]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
                               .state = ConnectionState::Active,
@@ -660,39 +648,61 @@ TEST_CASE("plugin room controls ui prefers collapsing locals at narrow widths be
                               .intervalIndex = 2,
                           });
 
-    harness.editor->setSize(760, 760);
-    harness.editor->resized();
+    harness.mixerStrips = {
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "bob#0",
+          .groupId = "bob",
+          .groupLabel = "bob",
+          .displayName = "bob - bass",
+          .subtitle = "bass",
+          .active = true,
+          .visible = true },
+    };
+    harness.editor->refreshForTesting();
 
-    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
-    auto* localStripLabel = findLabelWithText(*harness.editor, "Local Monitor");
-    auto* remoteStripLabel = findLabelWithText(*harness.editor, "alice - guitar");
-    auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
+    auto* localHeaderLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* aliceGroupLabel = findLabelWithText(*harness.editor, "alice");
+    auto* bobGroupLabel = findLabelWithText(*harness.editor, "bob");
     auto* roomViewport = findRoomSidebarViewport(*harness.editor);
-    auto* expandButton = findButtonWithText(*harness.editor, "Expand Locals");
 
-    REQUIRE(localLaneLabel != nullptr);
-    REQUIRE(localStripLabel != nullptr);
-    REQUIRE(remoteStripLabel != nullptr);
-    REQUIRE(roomLabel != nullptr);
+    REQUIRE(localHeaderLabel != nullptr);
+    REQUIRE(aliceGroupLabel != nullptr);
+    REQUIRE(bobGroupLabel != nullptr);
     REQUIRE(roomViewport != nullptr);
-    REQUIRE(expandButton != nullptr);
-    REQUIRE(expandButton->onClick != nullptr);
 
-    const auto remoteBounds = getBoundsInEditor(*harness.editor, *remoteStripLabel);
+    const auto localHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
+    const auto aliceBounds = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
+    const auto bobBounds = getBoundsInEditor(*harness.editor, *bobGroupLabel);
     const auto sidebarBounds = getBoundsInEditor(*harness.editor, *roomViewport);
 
-    CHECK(localLaneLabel->isVisible());
-    CHECK_FALSE(localStripLabel->isVisible());
-    CHECK(remoteStripLabel->isVisible());
-    CHECK(roomLabel->isVisible());
-    CHECK(roomViewport->isVisible());
-    CHECK(roomViewport->getWidth() >= 220);
-    CHECK(roomViewport->getWidth() <= 230);
-    CHECK(sidebarBounds.getX() - remoteBounds.getX() >= (sidebarBounds.getWidth() * 2) + 20);
-
-    expandButton->onClick();
-
-    CHECK_FALSE(harness.editor->isLocalLaneCollapsedForTesting());
-    CHECK(remoteStripLabel->isVisible());
-    CHECK(roomViewport->isVisible());
+    CHECK(aliceBounds.getX() > localHeaderBounds.getRight());
+    CHECK(bobBounds.getX() > aliceBounds.getRight());
+    CHECK(std::abs(aliceBounds.getY() - localHeaderBounds.getY()) <= 24);
+    CHECK(sidebarBounds.getX() > bobBounds.getRight());
 }

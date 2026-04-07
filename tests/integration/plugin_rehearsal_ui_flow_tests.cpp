@@ -1,4 +1,6 @@
 #include <memory>
+#include <cmath>
+#include <utility>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -128,6 +130,25 @@ ComponentType* findDirectChild(juce::Component& parent, Matcher&& matcher)
     return nullptr;
 }
 
+juce::Label* findDirectLabelWithText(juce::Component& parent, const juce::String& text)
+{
+    return findDirectChild<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
+}
+
+juce::TextButton* findDirectButtonWithText(juce::Component& parent, const juce::String& text)
+{
+    return findDirectChild<juce::TextButton>(parent,
+                                             [&](const juce::TextButton& button) { return button.getButtonText() == text; });
+}
+
+juce::TextEditor* findDirectTextEditorToRightOf(juce::Component& parent, const juce::Label& label)
+{
+    return findDirectChild<juce::TextEditor>(parent, [&](const juce::TextEditor& editor) {
+        return editor.getX() >= label.getRight()
+            && editor.getBounds().getCentreY() == label.getBounds().getCentreY();
+    });
+}
+
 template <typename ComponentType, typename Matcher>
 ComponentType* findComponent(juce::Component& parent, Matcher&& matcher)
 {
@@ -149,30 +170,6 @@ ComponentType* findComponent(juce::Component& parent, Matcher&& matcher)
     return nullptr;
 }
 
-juce::Label* findDirectLabelWithText(juce::Component& parent, const juce::String& text)
-{
-    return findDirectChild<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
-}
-
-juce::Label* findLabelWithText(juce::Component& parent, const juce::String& text)
-{
-    return findComponent<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
-}
-
-juce::TextButton* findDirectButtonWithText(juce::Component& parent, const juce::String& text)
-{
-    return findDirectChild<juce::TextButton>(parent,
-                                             [&](const juce::TextButton& button) { return button.getButtonText() == text; });
-}
-
-juce::TextEditor* findDirectTextEditorToRightOf(juce::Component& parent, const juce::Label& label)
-{
-    return findDirectChild<juce::TextEditor>(parent, [&](const juce::TextEditor& editor) {
-        return editor.getX() >= label.getRight()
-            && editor.getBounds().getCentreY() == label.getBounds().getCentreY();
-    });
-}
-
 juce::Rectangle<int> getBoundsInEditor(juce::Component& editor, juce::Component& component)
 {
     return editor.getLocalArea(&component, component.getLocalBounds());
@@ -192,8 +189,7 @@ bool waitForLifecycleState(FamaLamaJamAudioProcessor& processor, ConnectionState
 }
 } // namespace
 
-TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane and moves timing workflow into the footer",
-          "[plugin_rehearsal_ui_flow]")
+TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mixer", "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
                               .state = ConnectionState::Idle,
@@ -209,12 +205,11 @@ TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane
                               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
                                 .sourceId = "local-monitor",
                                 .groupId = "local",
-                                .groupLabel = "Local Sends",
-                                .displayName = "Main",
+                                .groupLabel = "Local Monitor",
+                                .displayName = "Local Monitor",
                                 .subtitle = "Live monitor",
                                 .active = true,
-                                .visible = true,
-                                .editableName = true },
+                                .visible = true },
                               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
                                 .sourceId = "alice#0",
                                 .groupId = "alice",
@@ -230,60 +225,52 @@ TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane
     auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
     auto* statusLabel =
         findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
-    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
-    auto* masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
-    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
+    auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
 
     REQUIRE(hostLabel != nullptr);
     REQUIRE(passwordLabel != nullptr);
     REQUIRE(connectButton != nullptr);
     REQUIRE(statusLabel != nullptr);
-    REQUIRE(localLaneLabel != nullptr);
-    REQUIRE(masterOutputLabel != nullptr);
-    REQUIRE(roomLabel != nullptr);
+    REQUIRE(mixerSectionLabel != nullptr);
 
     CHECK(hostLabel->isVisible());
     CHECK(passwordLabel->isVisible());
     CHECK(connectButton->isVisible());
     CHECK(statusLabel->isVisible());
-    const auto statusBounds = getBoundsInEditor(*harness.editor, *statusLabel);
-    const auto connectBounds = getBoundsInEditor(*harness.editor, *connectButton);
-    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
-    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
-    const auto footerBounds = getBoundsInEditor(*harness.editor, *masterOutputLabel);
-
-    CHECK(statusBounds.getBottom() < localLaneBounds.getY());
-    CHECK(connectBounds.getBottom() < localLaneBounds.getY());
-    CHECK(localLaneBounds.getBottom() < roomBounds.getY());
-    CHECK(footerBounds.getY() > roomBounds.getBottom());
+    CHECK(statusLabel->getY() < mixerSectionLabel->getY());
+    CHECK(connectButton->getBottom() < mixerSectionLabel->getY());
     CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
 }
 
-TEST_CASE("plugin rehearsal ui flow lets narrow-width sessions reopen locals without losing the sidebar or footer",
+TEST_CASE("plugin rehearsal ui flow keeps the disconnected setup above a strip-only local-first mixer plane",
           "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
-                              .state = ConnectionState::Active,
-                              .statusMessage = "Connected. Start playing when the beat appears.",
+                              .state = ConnectionState::Idle,
+                              .statusMessage = "Ready to join. Check settings, then press Connect.",
                           },
                           FamaLamaJamAudioProcessorEditor::TransportUiState {
-                              .connected = true,
-                              .hasServerTiming = true,
-                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
-                              .metronomeAvailable = true,
-                              .beatsPerMinute = 120,
-                              .beatsPerInterval = 16,
-                              .currentBeat = 3,
-                              .intervalProgress = 0.25f,
-                              .intervalIndex = 6,
+                              .connected = false,
+                              .hasServerTiming = false,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Disconnected,
+                              .metronomeAvailable = false,
                           },
                           {
                               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
-                                .sourceId = "local-monitor",
+                                .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
                                 .groupId = "local",
-                                .groupLabel = "Local Sends",
+                                .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
                                 .displayName = "Main",
                                 .subtitle = "Live monitor",
+                                .active = true,
+                                .visible = true,
+                                .editableName = true },
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+                                .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+                                .groupId = "local",
+                                .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+                                .displayName = "Bass",
+                                .subtitle = "Local Send 2",
                                 .active = true,
                                 .visible = true,
                                 .editableName = true },
@@ -295,43 +282,31 @@ TEST_CASE("plugin rehearsal ui flow lets narrow-width sessions reopen locals wit
                                 .subtitle = "guitar",
                                 .active = true,
                                 .visible = true },
-                          },
-                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
-                              .armable = true,
-                              .targetBeatsPerMinute = 120,
-                              .targetBeatsPerInterval = 16,
                           });
 
-    harness.editor->setSize(760, 760);
-    harness.editor->resized();
+    auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
+    auto* statusLabel =
+        findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
+    auto* localHeaderLabel = findComponent<juce::Label>(
+        *harness.editor,
+        [](const juce::Label& label) { return label.getText() == FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle; });
+    auto* aliceGroupLabel =
+        findComponent<juce::Label>(*harness.editor, [](const juce::Label& label) { return label.getText() == "alice"; });
 
-    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
-    auto* localNameEditor =
-        findComponent<juce::TextEditor>(*harness.editor, [](const juce::TextEditor& editor) { return editor.getText() == "Main"; });
-    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
-    auto* masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
-    auto* expandButton =
-        findComponent<juce::Button>(*harness.editor, [](const juce::Button& button) { return button.getButtonText() == "Expand Locals"; });
+    REQUIRE(connectButton != nullptr);
+    REQUIRE(statusLabel != nullptr);
+    REQUIRE(localHeaderLabel != nullptr);
+    REQUIRE(aliceGroupLabel != nullptr);
 
-    REQUIRE(localLaneLabel != nullptr);
-    REQUIRE(localNameEditor != nullptr);
-    REQUIRE(roomLabel != nullptr);
-    REQUIRE(masterOutputLabel != nullptr);
-    REQUIRE(expandButton != nullptr);
-    REQUIRE(expandButton->onClick != nullptr);
+    const auto connectBounds = getBoundsInEditor(*harness.editor, *connectButton);
+    const auto statusBounds = getBoundsInEditor(*harness.editor, *statusLabel);
+    const auto localHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
+    const auto aliceBounds = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
 
-    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
-    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
-    const auto footerBounds = getBoundsInEditor(*harness.editor, *masterOutputLabel);
-
-    CHECK_FALSE(localNameEditor->isVisible());
-    CHECK(footerBounds.getY() > roomBounds.getBottom());
-
-    expandButton->onClick();
-
-    CHECK(localLaneBounds.getY() < roomBounds.getY());
-    CHECK(localNameEditor->isVisible());
-    CHECK(roomBounds.getY() < footerBounds.getY());
+    CHECK(connectBounds.getBottom() < localHeaderBounds.getY());
+    CHECK(statusBounds.getBottom() < localHeaderBounds.getY());
+    CHECK(aliceBounds.getX() > localHeaderBounds.getRight());
+    CHECK(std::abs(aliceBounds.getY() - localHeaderBounds.getY()) <= 24);
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure copy near the connect controls",
@@ -419,8 +394,7 @@ TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Reconnecting room timing.");
 }
 
-TEST_CASE("plugin rehearsal ui flow keeps host sync assist beside footer timing instead of in the top controls",
-          "[plugin_rehearsal_ui_flow]")
+TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport workflow", "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
                               .state = ConnectionState::Active,
@@ -468,24 +442,13 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist beside footer timing 
     harness.editor->refreshForTesting();
 
     auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
-    auto* transportLabel = findDirectLabelWithText(*harness.editor, "120 BPM | 16 BPI");
-    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
-    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
+    auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
 
     REQUIRE(syncButton != nullptr);
-    REQUIRE(transportLabel != nullptr);
-    REQUIRE(localLaneLabel != nullptr);
-    REQUIRE(roomLabel != nullptr);
+    REQUIRE(mixerSectionLabel != nullptr);
 
     CHECK(syncButton->isVisible());
-    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
-    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
-    const auto syncBounds = getBoundsInEditor(*harness.editor, *syncButton);
-    const auto transportBounds = getBoundsInEditor(*harness.editor, *transportLabel);
-
-    CHECK(localLaneBounds.getBottom() < roomBounds.getY());
-    CHECK(syncBounds.getY() > roomBounds.getBottom());
-    CHECK(transportBounds.getY() > roomBounds.getBottom());
+    CHECK(syncButton->getBottom() < mixerSectionLabel->getY());
     CHECK(harness.editor->getServerSettingsSummaryForTesting() == "Connected as Dirk | jam.example.net:2049");
     CHECK(harness.editor->getTransportStatusTextForTesting() == "120 BPM | 16 BPI");
 }
