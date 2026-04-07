@@ -450,6 +450,13 @@ private:
         float lastMeterRight { 0.0f };
     };
 
+    enum class LocalLaneCollapseMode
+    {
+        Auto,
+        ForceExpanded,
+        ForceCollapsed,
+    };
+
     void timerCallback() override;
     app::session::SessionSettings makeDraftFromUi() const;
     void loadFromSettings(const app::session::SessionSettings& settings);
@@ -602,7 +609,7 @@ private:
     bool hostSyncAssistLastActionWasCancel_ { false };
     bool serverSettingsExpanded_ { true };
     bool diagnosticsExpanded_ { false };
-    bool localLaneManuallyCollapsed_ { false };
+    LocalLaneCollapseMode localLaneCollapseMode_ { LocalLaneCollapseMode::Auto };
     bool updatingRoomVoteInputs_ { false };
     std::unique_ptr<juce::FileChooser> stemCaptureFolderChooser_;
     juce::String stemCaptureInlineStatusText_;

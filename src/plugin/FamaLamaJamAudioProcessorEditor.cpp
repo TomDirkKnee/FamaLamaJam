@@ -826,7 +826,19 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
 
     localLaneCollapseButton_.setButtonText(getLocalLaneCollapseText());
     localLaneCollapseButton_.onClick = [this]() {
-        localLaneManuallyCollapsed_ = ! localLaneManuallyCollapsed_;
+        constexpr int kAutoCollapseWidth = 860;
+        const bool autoCollapsed = getWidth() <= kAutoCollapseWidth;
+
+        if (isLocalLaneCollapsed())
+        {
+            localLaneCollapseMode_ = LocalLaneCollapseMode::ForceExpanded;
+        }
+        else
+        {
+            localLaneCollapseMode_ = autoCollapsed ? LocalLaneCollapseMode::Auto
+                                                   : LocalLaneCollapseMode::ForceCollapsed;
+        }
+
         localLaneCollapseButton_.setButtonText(getLocalLaneCollapseText());
         resized();
     };
@@ -993,8 +1005,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
     constexpr int kShellGap = 12;
     constexpr int kSidebarMinWidth = 220;
-    constexpr int kSidebarMaxWidth = 300;
-    constexpr int kFooterHeight = 112;
+    constexpr int kSidebarMaxWidth = 280;
+    constexpr int kFooterHeight = 96;
     constexpr int kTopBarExpandedHeight = 172;
     constexpr int kTopBarCollapsedHeight = 94;
 
@@ -1116,33 +1128,33 @@ void FamaLamaJamAudioProcessorEditor::resized()
     hostSyncAssistStatusLabel_.setVisible(hostSyncAssistStatusLabel_.getText().trim().isNotEmpty());
     hostSyncAssistTargetLabel_.setVisible(false);
 
-    intervalProgressBar_.setBounds(footer.removeFromTop(20));
-    footer.removeFromTop(8);
+    intervalProgressBar_.setBounds(footer.removeFromTop(18));
+    footer.removeFromTop(6);
 
     if (transportLabel_.isVisible())
     {
-        auto footerInfoRow = footer.removeFromTop(22);
-        transportLabel_.setBounds(footerInfoRow.removeFromLeft(240));
-        footer.removeFromTop(4);
+        auto footerInfoRow = footer.removeFromTop(20);
+        transportLabel_.setBounds(footerInfoRow.removeFromLeft(220));
+        footer.removeFromTop(2);
     }
     else
     {
         transportLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
-    auto footerControls = footer.removeFromTop(34);
-    metronomeToggle_.setBounds(footerControls.removeFromLeft(110));
+    auto footerControls = footer.removeFromTop(28);
+    metronomeToggle_.setBounds(footerControls.removeFromLeft(104));
     footerControls.removeFromLeft(6);
-    metronomeVolumeSlider_.setBounds(footerControls.removeFromLeft(64).reduced(0, -4));
-    footerControls.removeFromLeft(10);
-    hostSyncAssistButton_.setBounds(footerControls.removeFromLeft(192));
-    footerControls.removeFromLeft(10);
-    masterOutputLabel_.setBounds(footerControls.removeFromLeft(94));
-    masterOutputSlider_.setBounds(footerControls.removeFromLeft(juce::jmin(260, juce::jmax(160, footerControls.getWidth() / 2))));
+    metronomeVolumeSlider_.setBounds(footerControls.removeFromLeft(60).reduced(0, -2));
+    footerControls.removeFromLeft(8);
+    hostSyncAssistButton_.setBounds(footerControls.removeFromLeft(176));
+    footerControls.removeFromLeft(8);
+    masterOutputLabel_.setBounds(footerControls.removeFromLeft(88));
+    masterOutputSlider_.setBounds(footerControls.removeFromLeft(juce::jmin(240, juce::jmax(148, footerControls.getWidth()))));
 
     if (hostSyncAssistStatusLabel_.isVisible())
     {
-        footer.removeFromTop(6);
+        footer.removeFromTop(4);
         hostSyncAssistStatusLabel_.setBounds(footer.removeFromTop(20));
     }
     else
@@ -1152,7 +1164,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
     const auto sidebarWidth = juce::jlimit(kSidebarMinWidth,
                                            kSidebarMaxWidth,
-                                           juce::jmax(kSidebarMinWidth, area.getWidth() / 3));
+                                           juce::jmax(kSidebarMinWidth, area.getWidth() / 4));
     const bool hasLocalStrips = localHeaderLabel_.isVisible();
     const bool localLaneCollapsed = hasLocalStrips && isLocalLaneCollapsed();
     const int localHeaderHeight = hasLocalStrips ? 28 : 0;
@@ -1313,8 +1325,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
         if (! localLaneCollapsed)
         {
-            constexpr int kLocalCardWidth = 148;
-            constexpr int kLocalCardHeight = 218;
+            constexpr int kLocalCardWidth = 132;
+            constexpr int kLocalCardHeight = 206;
             int localX = 0;
             for (auto* widget : localWidgets)
             {
@@ -1377,8 +1389,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
     const auto remoteContentWidth = juce::jmax(320, mixerViewport_.getWidth() - 16);
     mixerContentWidth = juce::jmax(mixerContentWidth, remoteContentWidth);
-    constexpr int kRemoteCardWidth = 140;
-    constexpr int kRemoteCardHeight = 170;
+    constexpr int kRemoteCardWidth = 128;
+    constexpr int kRemoteCardHeight = 164;
     constexpr int kRemoteCardGap = 10;
     int groupCardX = 0;
     std::string previousRemoteGroupId;
@@ -1708,7 +1720,18 @@ juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsToggleText() const
 bool FamaLamaJamAudioProcessorEditor::isLocalLaneCollapsed() const noexcept
 {
     constexpr int kAutoCollapseWidth = 860;
-    return localLaneManuallyCollapsed_ || getWidth() <= kAutoCollapseWidth;
+
+    switch (localLaneCollapseMode_)
+    {
+        case LocalLaneCollapseMode::ForceExpanded:
+            return false;
+        case LocalLaneCollapseMode::ForceCollapsed:
+            return true;
+        case LocalLaneCollapseMode::Auto:
+            return getWidth() <= kAutoCollapseWidth;
+    }
+
+    return getWidth() <= kAutoCollapseWidth;
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getLocalLaneCollapseText() const

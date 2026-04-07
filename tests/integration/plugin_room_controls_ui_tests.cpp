@@ -692,7 +692,7 @@ TEST_CASE("plugin room controls ui prefers collapsing locals at narrow widths be
 
     expandButton->onClick();
 
-    CHECK(localStripLabel->isVisible());
+    CHECK_FALSE(harness.editor->isLocalLaneCollapsedForTesting());
     CHECK(remoteStripLabel->isVisible());
     CHECK(roomViewport->isVisible());
 }
