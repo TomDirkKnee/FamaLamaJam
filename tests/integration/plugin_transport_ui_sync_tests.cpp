@@ -88,6 +88,32 @@ struct EditorHarness
             [](bool) { return false; });
     }
 };
+
+template <typename ComponentType, typename Matcher>
+ComponentType* findDirectChild(juce::Component& parent, Matcher&& matcher)
+{
+    for (int index = 0; index < parent.getNumChildComponents(); ++index)
+    {
+        if (auto* child = dynamic_cast<ComponentType*>(parent.getChildComponent(index)))
+        {
+            if (matcher(*child))
+                return child;
+        }
+    }
+
+    return nullptr;
+}
+
+juce::Label* findDirectLabelWithText(juce::Component& parent, const juce::String& text)
+{
+    return findDirectChild<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
+}
+
+juce::TextButton* findDirectButtonWithText(juce::Component& parent, const juce::String& text)
+{
+    return findDirectChild<juce::TextButton>(parent,
+                                             [&](const juce::TextButton& button) { return button.getButtonText() == text; });
+}
 } // namespace
 
 TEST_CASE("plugin transport ui sync exposes processor sync states", "[plugin_transport_ui_sync]")
@@ -240,6 +266,50 @@ TEST_CASE("plugin transport ui sync shows a ready arm control with room timing c
     CHECK(readyHarness.editor->getHostSyncAssistButtonTextForTesting() == "Arm Sync to Ableton Play");
     CHECK(readyHarness.editor->getHostSyncAssistStatusTextForTesting().isEmpty());
     CHECK(readyHarness.editor->isHostSyncAssistEnabledForTesting());
+}
+
+TEST_CASE("plugin transport ui sync keeps timing text and sync assist visible in a pinned footer band",
+          "[plugin_transport_ui_sync]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 5,
+                              .intervalProgress = 0.25f,
+                              .intervalIndex = 9,
+                          },
+                          true,
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .armable = true,
+                              .targetBeatsPerMinute = 120,
+                              .targetBeatsPerInterval = 16,
+                          });
+
+    auto* transportLabel = findDirectLabelWithText(*harness.editor, "120 BPM | 16 BPI");
+    auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+
+    REQUIRE(transportLabel != nullptr);
+    REQUIRE(syncButton != nullptr);
+
+    CHECK(transportLabel->isVisible());
+    CHECK(syncButton->isVisible());
+    CHECK(transportLabel->getY() > harness.editor->getHeight() / 2);
+    CHECK(syncButton->getY() > harness.editor->getHeight() / 2);
+
+    harness.transport.syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::TimingLost;
+    harness.transport.hasServerTiming = false;
+    harness.transport.metronomeAvailable = false;
+    harness.editor->refreshForTesting();
+
+    CHECK(harness.editor->getTransportStatusTextForTesting() == "120 BPM | 16 BPI");
 }
 
 TEST_CASE("plugin transport ui sync disables the arm control with explicit blocked guidance",

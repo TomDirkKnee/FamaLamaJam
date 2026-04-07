@@ -128,9 +128,35 @@ ComponentType* findDirectChild(juce::Component& parent, Matcher&& matcher)
     return nullptr;
 }
 
+template <typename ComponentType, typename Matcher>
+ComponentType* findComponent(juce::Component& parent, Matcher&& matcher)
+{
+    for (int index = 0; index < parent.getNumChildComponents(); ++index)
+    {
+        if (auto* child = dynamic_cast<ComponentType*>(parent.getChildComponent(index)))
+        {
+            if (matcher(*child))
+                return child;
+        }
+
+        if (auto* match = findComponent<ComponentType>(*parent.getChildComponent(index),
+                                                       std::forward<Matcher>(matcher)))
+        {
+            return match;
+        }
+    }
+
+    return nullptr;
+}
+
 juce::Label* findDirectLabelWithText(juce::Component& parent, const juce::String& text)
 {
     return findDirectChild<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
+}
+
+juce::Label* findLabelWithText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::Label>(parent, [&](const juce::Label& label) { return label.getText() == text; });
 }
 
 juce::TextButton* findDirectButtonWithText(juce::Component& parent, const juce::String& text)
@@ -147,6 +173,11 @@ juce::TextEditor* findDirectTextEditorToRightOf(juce::Component& parent, const j
     });
 }
 
+juce::Rectangle<int> getBoundsInEditor(juce::Component& editor, juce::Component& component)
+{
+    return editor.getLocalArea(&component, component.getLocalBounds());
+}
+
 bool waitForLifecycleState(FamaLamaJamAudioProcessor& processor, ConnectionState expectedState, int attempts = 200)
 {
     for (int attempt = 0; attempt < attempts; ++attempt)
@@ -161,7 +192,8 @@ bool waitForLifecycleState(FamaLamaJamAudioProcessor& processor, ConnectionState
 }
 } // namespace
 
-TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mixer", "[plugin_rehearsal_ui_flow]")
+TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane and moves timing workflow into the footer",
+          "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
                               .state = ConnectionState::Idle,
@@ -177,11 +209,12 @@ TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mix
                               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
                                 .sourceId = "local-monitor",
                                 .groupId = "local",
-                                .groupLabel = "Local Monitor",
-                                .displayName = "Local Monitor",
+                                .groupLabel = "Local Sends",
+                                .displayName = "Main",
                                 .subtitle = "Live monitor",
                                 .active = true,
-                                .visible = true },
+                                .visible = true,
+                                .editableName = true },
                               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
                                 .sourceId = "alice#0",
                                 .groupId = "alice",
@@ -197,20 +230,32 @@ TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mix
     auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
     auto* statusLabel =
         findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
-    auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
+    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* transportLabel = findDirectLabelWithText(*harness.editor, harness.editor->getTransportStatusTextForTesting());
+    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
 
     REQUIRE(hostLabel != nullptr);
     REQUIRE(passwordLabel != nullptr);
     REQUIRE(connectButton != nullptr);
     REQUIRE(statusLabel != nullptr);
-    REQUIRE(mixerSectionLabel != nullptr);
+    REQUIRE(localLaneLabel != nullptr);
+    REQUIRE(transportLabel != nullptr);
+    REQUIRE(roomLabel != nullptr);
 
     CHECK(hostLabel->isVisible());
     CHECK(passwordLabel->isVisible());
     CHECK(connectButton->isVisible());
     CHECK(statusLabel->isVisible());
-    CHECK(statusLabel->getY() < mixerSectionLabel->getY());
-    CHECK(connectButton->getBottom() < mixerSectionLabel->getY());
+    const auto statusBounds = getBoundsInEditor(*harness.editor, *statusLabel);
+    const auto connectBounds = getBoundsInEditor(*harness.editor, *connectButton);
+    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
+    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
+    const auto transportBounds = getBoundsInEditor(*harness.editor, *transportLabel);
+
+    CHECK(statusBounds.getBottom() < localLaneBounds.getY());
+    CHECK(connectBounds.getBottom() < localLaneBounds.getY());
+    CHECK(localLaneBounds.getBottom() < roomBounds.getY());
+    CHECK(transportBounds.getY() > roomBounds.getBottom());
     CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
 }
 
@@ -299,7 +344,8 @@ TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Reconnecting room timing.");
 }
 
-TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport workflow", "[plugin_rehearsal_ui_flow]")
+TEST_CASE("plugin rehearsal ui flow keeps host sync assist beside footer timing instead of in the top controls",
+          "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
                               .state = ConnectionState::Active,
@@ -347,13 +393,24 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
     harness.editor->refreshForTesting();
 
     auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
-    auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
+    auto* transportLabel = findDirectLabelWithText(*harness.editor, "120 BPM | 16 BPI");
+    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
 
     REQUIRE(syncButton != nullptr);
-    REQUIRE(mixerSectionLabel != nullptr);
+    REQUIRE(transportLabel != nullptr);
+    REQUIRE(localLaneLabel != nullptr);
+    REQUIRE(roomLabel != nullptr);
 
     CHECK(syncButton->isVisible());
-    CHECK(syncButton->getBottom() < mixerSectionLabel->getY());
+    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
+    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
+    const auto syncBounds = getBoundsInEditor(*harness.editor, *syncButton);
+    const auto transportBounds = getBoundsInEditor(*harness.editor, *transportLabel);
+
+    CHECK(localLaneBounds.getBottom() < roomBounds.getY());
+    CHECK(syncBounds.getY() > roomBounds.getBottom());
+    CHECK(transportBounds.getY() > roomBounds.getBottom());
     CHECK(harness.editor->getServerSettingsSummaryForTesting() == "Connected as Dirk | jam.example.net:2049");
     CHECK(harness.editor->getTransportStatusTextForTesting() == "120 BPM | 16 BPI");
 }

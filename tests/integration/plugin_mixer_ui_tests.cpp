@@ -164,6 +164,13 @@ juce::Button* findButtonWithText(juce::Component& parent, const juce::String& te
 {
     return findComponent<juce::Button>(parent, [&](const juce::Button& button) { return button.getButtonText() == text; });
 }
+
+juce::Button* findButtonContainingText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::Button>(parent, [&](const juce::Button& button) {
+        return button.getButtonText().containsIgnoreCase(text);
+    });
+}
 } // namespace
 
 TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[plugin_mixer_ui]")
@@ -385,7 +392,7 @@ TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with ora
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("voice-user#1").isEmpty());
 }
 
-TEST_CASE("plugin mixer ui expects one local header for global transmit voice add-channel and inline rename",
+TEST_CASE("plugin mixer ui expects a collapsible local lane that can hide local strip bodies without disturbing remotes",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -407,23 +414,34 @@ TEST_CASE("plugin mixer ui expects one local header for global transmit voice ad
           .active = true,
           .visible = true,
           .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true },
     });
 
-    REQUIRE(findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle) != nullptr);
-    REQUIRE(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTransmitLabel) != nullptr);
-    REQUIRE(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderVoiceLabel) != nullptr);
-    REQUIRE(findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kAddLocalChannelLabel) != nullptr);
-    REQUIRE(findComponent<juce::TextEditor>(*harness.editor,
-                                            [](const juce::TextEditor& editor) { return editor.getText() == "Bass"; })
-            != nullptr);
+    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* collapseButton = findButtonContainingText(*harness.editor, "Collapse");
+    auto* localNameEditor = findComponent<juce::TextEditor>(*harness.editor,
+                                                            [](const juce::TextEditor& editor) { return editor.getText() == "Bass"; });
+    auto* remoteStripLabel = findLabelWithText(*harness.editor, "alice - guitar");
 
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
-    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
-    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
-          == FamaLamaJamAudioProcessorEditor::kHideLocalChannelLabel);
+    REQUIRE(localLaneLabel != nullptr);
+    REQUIRE(collapseButton != nullptr);
+    REQUIRE(collapseButton->onClick != nullptr);
+    REQUIRE(localNameEditor != nullptr);
+    REQUIRE(remoteStripLabel != nullptr);
+
+    collapseButton->onClick();
+
+    CHECK(localLaneLabel->isVisible());
+    CHECK_FALSE(localNameEditor->isVisible());
+    CHECK(remoteStripLabel->isVisible());
+    CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 3);
 }
 
 TEST_CASE("plugin mixer ui reveals the next hidden local slot and confirms live hide without losing prior state",

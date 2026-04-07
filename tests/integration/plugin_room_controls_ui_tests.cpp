@@ -202,6 +202,11 @@ juce::TextEditor* findTextEditorContainingText(juce::Component& parent, const ju
                                            [&](const juce::TextEditor& editor) { return editor.getText().contains(text); });
 }
 
+juce::Rectangle<int> getBoundsInEditor(juce::Component& editor, juce::Component& component)
+{
+    return editor.getLocalArea(&component, component.getLocalBounds());
+}
+
 juce::Viewport* findRoomSidebarViewport(juce::Component& parent)
 {
     return findComponent<juce::Viewport>(parent, [&](const juce::Viewport& viewport) {
@@ -590,7 +595,7 @@ TEST_CASE("plugin room controls ui only auto-scrolls the room feed when the read
     CHECK(roomViewport->getViewPositionY() == 0);
 }
 
-TEST_CASE("plugin room controls ui places the room workflow in a fixed right sidebar instead of above the mixer",
+TEST_CASE("plugin room controls ui keeps the five-region shell ordered as top bar then local lane then sidebar and footer",
           "[plugin_room_controls_ui]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
@@ -610,16 +615,70 @@ TEST_CASE("plugin room controls ui places the room workflow in a fixed right sid
                           });
 
     auto* hostLabel = findLabelWithText(*harness.editor, "Host");
+    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
     auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
-    auto* mixerLabel = findLabelWithText(*harness.editor, "Mixer");
+    auto* roomViewport = findRoomSidebarViewport(*harness.editor);
+    auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
 
     REQUIRE(hostLabel != nullptr);
+    REQUIRE(localLaneLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
-    REQUIRE(mixerLabel != nullptr);
+    REQUIRE(roomViewport != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
 
-    CHECK(roomLabel->getX() > hostLabel->getRight());
-    CHECK(roomLabel->getX() > mixerLabel->getX());
-    CHECK_FALSE(harness.editor->isRoomSectionAboveMixerForTesting());
+    const auto hostBounds = getBoundsInEditor(*harness.editor, *hostLabel);
+    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
+    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
+    const auto footerBounds = getBoundsInEditor(*harness.editor, *masterOutputLabel);
+    const auto roomViewportBounds = getBoundsInEditor(*harness.editor, *roomViewport);
+
+    CHECK(hostBounds.getY() < localLaneBounds.getY());
+    CHECK(localLaneBounds.getBottom() < roomBounds.getY());
+    CHECK(roomBounds.getX() > localLaneBounds.getRight());
+    CHECK(roomViewport->isVisible());
+    CHECK(footerBounds.getY() > roomViewportBounds.getBottom());
     CHECK(findButtonWithText(*harness.editor, "Room Tab") == nullptr);
     CHECK(findButtonWithText(*harness.editor, "Open Chat") == nullptr);
+}
+
+TEST_CASE("plugin room controls ui prefers collapsing locals at narrow widths before sacrificing the sidebar",
+          "[plugin_room_controls_ui]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 4,
+                              .intervalProgress = 0.5f,
+                              .intervalIndex = 2,
+                          });
+
+    harness.editor->setSize(760, 760);
+    harness.editor->resized();
+
+    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* localStripLabel = findLabelWithText(*harness.editor, "Local Monitor");
+    auto* remoteStripLabel = findLabelWithText(*harness.editor, "alice - guitar");
+    auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
+    auto* roomViewport = findRoomSidebarViewport(*harness.editor);
+
+    REQUIRE(localLaneLabel != nullptr);
+    REQUIRE(localStripLabel != nullptr);
+    REQUIRE(remoteStripLabel != nullptr);
+    REQUIRE(roomLabel != nullptr);
+    REQUIRE(roomViewport != nullptr);
+
+    CHECK(localLaneLabel->isVisible());
+    CHECK_FALSE(localStripLabel->isVisible());
+    CHECK(remoteStripLabel->isVisible());
+    CHECK(roomLabel->isVisible());
+    CHECK(roomViewport->isVisible());
+    CHECK(roomViewport->getWidth() >= 220);
 }
