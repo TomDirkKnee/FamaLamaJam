@@ -248,3 +248,29 @@ TEST_CASE("plugin mixer controls master output scales both mixed playback and me
     REQUIRE(attenuatedMetronomeRms > 1.0e-6f);
     CHECK(attenuatedMetronomeRms < unityMetronomeRms * 0.4f);
 }
+
+TEST_CASE("plugin mixer controls keeps solo state available on both local and remote strip identities",
+          "[plugin_mixer_controls]")
+{
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    server.setRemotePeers({ { "alice", 0, 0 } });
+    REQUIRE(server.startServer());
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    connectProcessor(processor, server);
+
+    auto buffer = makeProcessBuffer(processor, 512);
+    juce::MidiBuffer midi;
+
+    REQUIRE(processUntil(processor, buffer, midi, [&]() { return processor.isRemoteSourceActiveForTesting("alice#0"); }));
+
+    REQUIRE(processor.setMixerStripSoloState(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, true));
+    REQUIRE(processor.setMixerStripSoloState("alice#0", true));
+
+    FamaLamaJamAudioProcessor::MixerStripSnapshot snapshot;
+    REQUIRE(processor.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, snapshot));
+    CHECK(snapshot.mix.soloed);
+    REQUIRE(processor.getMixerStripSnapshot("alice#0", snapshot));
+    CHECK(snapshot.mix.soloed);
+}

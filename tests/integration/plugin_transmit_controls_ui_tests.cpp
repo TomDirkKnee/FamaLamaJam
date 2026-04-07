@@ -76,13 +76,23 @@ struct EditorHarness
           })
         , mixerStrips({
               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
-                .sourceId = "local-monitor",
+                .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
                 .groupId = "local",
-                .groupLabel = "Local Monitor",
-                .displayName = "Local Monitor",
+                .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+                .displayName = "Main",
                 .subtitle = "Live monitor",
                 .active = true,
-                .visible = true },
+                .visible = true,
+                .editableName = true },
+              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+                .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+                .groupId = "local",
+                .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+                .displayName = "Bass",
+                .subtitle = "Local Send 2",
+                .active = true,
+                .visible = true,
+                .editableName = true },
               { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
                 .sourceId = "alice#0",
                 .groupId = "alice",
@@ -154,17 +164,32 @@ TEST_CASE("plugin transmit controls ui keeps transmit off the transport row and 
 
     auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
 
-    REQUIRE(stripLabels.size() == 2);
-    CHECK(stripLabels[0] == "Local Monitor");
-    CHECK(stripLabels[1] == "alice - guitar");
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("local-monitor").isEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("local-monitor").isEmpty());
+    REQUIRE(stripLabels.size() == 3);
+    CHECK(stripLabels[0] == "Main");
+    CHECK(stripLabels[1] == "Bass");
+    CHECK(stripLabels[2] == "alice - guitar");
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          .isNotEmpty());
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("alice#0").isEmpty());
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("alice#0").isEmpty());
 
     bool localVoiceEnabled = false;
-    CHECK(harness.editor->getMixerStripVoiceToggleStateForTesting("local-monitor", localVoiceEnabled));
+    CHECK(harness.editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  localVoiceEnabled));
     CHECK_FALSE(localVoiceEnabled);
-    CHECK(harness.editor->clickMixerStripTransmitForTesting("local-monitor"));
-    CHECK(harness.editor->clickMixerStripVoiceToggleForTesting("local-monitor"));
+    CHECK(harness.editor->clickMixerStripTransmitForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId));
+    CHECK(harness.editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId));
+
+    bool sendVoiceEnabled = false;
+    CHECK(harness.editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+                                                                  sendVoiceEnabled));
+    CHECK_FALSE(sendVoiceEnabled);
+    CHECK(harness.editor->clickMixerStripTransmitForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
+    CHECK(harness.editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
 }

@@ -177,13 +177,23 @@ TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[
 {
     EditorHarness harness({
         { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
-          .sourceId = "local-monitor",
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
           .groupId = "local",
-          .groupLabel = "Local Monitor",
-          .displayName = "Local Monitor",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
           .subtitle = "Live monitor",
           .active = true,
-          .visible = true },
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .active = true,
+          .visible = true,
+          .editableName = true },
         { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
           .sourceId = "alice#0",
           .groupId = "alice",
@@ -216,11 +226,22 @@ TEST_CASE("plugin mixer ui groups local and remote strips with stable order", "[
     CHECK(groupLabels[1] == "bob");
 
     const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
-    REQUIRE(stripLabels.size() == 4);
-    CHECK(stripLabels[0] == "Local Monitor");
-    CHECK(stripLabels[1] == "alice - guitar");
-    CHECK(stripLabels[2] == "alice - vocal");
-    CHECK(stripLabels[3] == "bob - bass");
+    REQUIRE(stripLabels.size() == 5);
+    CHECK(stripLabels[0] == "Main");
+    CHECK(stripLabels[1] == "Bass");
+    CHECK(stripLabels[2] == "alice - guitar");
+    CHECK(stripLabels[3] == "alice - vocal");
+    CHECK(stripLabels[4] == "bob - bass");
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("alice#0").isEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("alice#0").isEmpty());
 
     auto* mixerSectionLabel = findLabelWithText(*harness.editor, "Mixer");
     auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
@@ -555,4 +576,8 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
     CHECK(outputSelector->getItemText(1) == "Remote Out 1");
     CHECK(outputSelector->getItemText(2) == "Remote Out 2");
     CHECK(outputSelector->getItemText(7) == "Remote Out 7");
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          .isNotEmpty());
 }
