@@ -98,21 +98,25 @@ void StereoMeterComponent::paint(juce::Graphics& graphics)
     graphics.setColour(juce::Colour::fromRGB(22, 26, 33));
     graphics.fillRoundedRectangle(bounds, 4.0f);
 
-    auto topHalf = bounds.removeFromTop(bounds.getHeight() * 0.5f).reduced(4.0f, 3.0f);
-    auto bottomHalf = bounds.reduced(4.0f, 3.0f);
+    auto lanes = bounds.reduced(2.0f, 4.0f);
+    constexpr float laneGap = 2.0f;
+    const auto laneWidth = juce::jmax(3.0f, (lanes.getWidth() - laneGap) * 0.5f);
+    auto leftLane = juce::Rectangle<float>(lanes.getX(), lanes.getY(), laneWidth, lanes.getHeight());
+    auto rightLane = juce::Rectangle<float>(leftLane.getRight() + laneGap, lanes.getY(), laneWidth, lanes.getHeight());
 
     auto drawMeter = [&](juce::Rectangle<float> area, float level, juce::Colour colour) {
         graphics.setColour(juce::Colour::fromRGB(42, 48, 56));
         graphics.fillRoundedRectangle(area, 3.0f);
 
         auto filled = area;
-        filled.setWidth(area.getWidth() * level);
+        filled.setY(area.getBottom() - (area.getHeight() * level));
+        filled.setHeight(area.getHeight() * level);
         graphics.setColour(colour);
         graphics.fillRoundedRectangle(filled, 3.0f);
     };
 
-    drawMeter(topHalf, leftLevel_, juce::Colour::fromRGB(86, 174, 114));
-    drawMeter(bottomHalf, rightLevel_, juce::Colour::fromRGB(79, 146, 204));
+    drawMeter(leftLane, leftLevel_, juce::Colour::fromRGB(86, 174, 114));
+    drawMeter(rightLane, rightLevel_, juce::Colour::fromRGB(79, 146, 204));
 }
 
 namespace
@@ -1298,10 +1302,10 @@ void FamaLamaJamAudioProcessorEditor::resized()
     constexpr int kHeaderGap = 8;
     constexpr int kStripGap = 8;
     constexpr int kRemoteGroupLabelHeight = 20;
-    const int expandedStripWidth = juce::jlimit(148, 180, juce::jmax(150, mixerViewport_.getWidth() / 5));
-    const int expandedStripHeight = 236;
-    const int collapsedStripWidth = 28;
-    const int collapsedStripHeight = 188;
+    const int expandedStripWidth = juce::jlimit(112, 126, juce::jmax(116, mixerViewport_.getWidth() / 9));
+    const int expandedStripHeight = 252;
+    const int collapsedStripWidth = 40;
+    const int collapsedStripHeight = 216;
 
     auto hideComponent = [](juce::Component& component) {
         component.setVisible(false);
@@ -1336,7 +1340,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
         }
 
         auto inner = bounds.reduced(6);
-        auto titleRow = inner.removeFromTop(22);
+        auto titleRow = inner.removeFromTop(20);
         if (strip.editableName)
         {
             widget.nameEditor.setVisible(true);
@@ -1352,13 +1356,13 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
         inner.removeFromTop(2);
         widget.subtitleLabel.setVisible(true);
-        widget.subtitleLabel.setBounds(inner.removeFromTop(18));
+        widget.subtitleLabel.setBounds(inner.removeFromTop(16));
 
         if (widget.statusLabel.getText().isNotEmpty())
         {
             inner.removeFromTop(2);
             widget.statusLabel.setVisible(true);
-            widget.statusLabel.setBounds(inner.removeFromTop(18));
+            widget.statusLabel.setBounds(inner.removeFromTop(16));
         }
         else
         {
@@ -1366,27 +1370,55 @@ void FamaLamaJamAudioProcessorEditor::resized()
         }
 
         inner.removeFromTop(4);
-        widget.meter.setBounds(inner.removeFromTop(juce::jmax(112, inner.getHeight() - 72)));
-        inner.removeFromTop(4);
+        auto stripBody = inner.removeFromTop(juce::jmax(150, inner.getHeight()));
+        const int sideWidth = strip.kind == MixerStripKind::RemoteDelayed ? 42 : 34;
+        auto sideColumn = stripBody.removeFromRight(sideWidth);
+        stripBody.removeFromRight(4);
+        auto meterColumn = stripBody.removeFromLeft(12);
+        stripBody.removeFromLeft(4);
 
+        widget.meter.setBounds(meterColumn);
         widget.gainSlider.setVisible(true);
-        widget.gainSlider.setBounds(inner.removeFromTop(22));
-        inner.removeFromTop(4);
+        widget.gainSlider.setBounds(stripBody);
 
-        auto controlRow = inner.removeFromTop(22);
+        auto nextCompactSlot = [&sideColumn](int height) {
+            auto slot = sideColumn.removeFromTop(height);
+            sideColumn.removeFromTop(4);
+            return slot;
+        };
+
         widget.panSlider.setVisible(true);
-        widget.panSlider.setBounds(controlRow.removeFromLeft(74));
-        controlRow.removeFromLeft(4);
-        widget.soloToggle.setVisible(true);
-        widget.soloToggle.setBounds(controlRow.removeFromLeft(34));
-        controlRow.removeFromLeft(4);
+        widget.panSlider.setBounds(nextCompactSlot(28));
+
         widget.muteToggle.setVisible(true);
-        widget.muteToggle.setBounds(controlRow.removeFromLeft(34));
+        widget.muteToggle.setBounds(nextCompactSlot(22));
+
+        widget.soloToggle.setVisible(true);
+        widget.soloToggle.setBounds(nextCompactSlot(22));
+
+        if (widget.hasTransmitControl)
+        {
+            widget.transmitButton.setVisible(true);
+            widget.transmitButton.setBounds(nextCompactSlot(22));
+        }
+        else
+        {
+            hideComponent(widget.transmitButton);
+        }
+
+        if (widget.hasVoiceModeControl)
+        {
+            widget.voiceModeToggle.setVisible(true);
+            widget.voiceModeToggle.setBounds(nextCompactSlot(22));
+        }
+        else
+        {
+            hideComponent(widget.voiceModeToggle);
+        }
 
         if (widget.outputSelector.isVisible())
         {
-            inner.removeFromTop(4);
-            widget.outputSelector.setBounds(inner.removeFromTop(22));
+            widget.outputSelector.setBounds(nextCompactSlot(42));
             widget.outputSelector.setVisible(true);
         }
         else
@@ -1394,8 +1426,6 @@ void FamaLamaJamAudioProcessorEditor::resized()
             hideComponent(widget.outputSelector);
         }
 
-        hideComponent(widget.transmitButton);
-        hideComponent(widget.voiceModeToggle);
         hideComponent(widget.removeButton);
     };
 
@@ -1686,7 +1716,7 @@ void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripW
         return;
 
     juce::Colour colour = juce::Colour::fromRGB(168, 72, 72);
-    juce::String text = "Not transmitting";
+    juce::String text = "TX";
 
     switch (strip.transmitState)
     {
@@ -1694,11 +1724,9 @@ void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripW
             break;
         case TransmitState::WarmingUp:
             colour = juce::Colour::fromRGB(196, 152, 72);
-            text = "Getting ready";
             break;
         case TransmitState::Active:
             colour = juce::Colour::fromRGB(88, 168, 102);
-            text = "Transmitting";
             break;
     }
 
@@ -1715,7 +1743,7 @@ void FamaLamaJamAudioProcessorEditor::updateVoiceModeButtonAppearance(MixerStrip
 
     const bool enabled = strip.localChannelMode == LocalChannelMode::Voice;
     widgets.voiceModeToggle.setToggleState(enabled, juce::dontSendNotification);
-    widgets.voiceModeToggle.setButtonText(enabled ? "Voice On" : "Voice Off");
+    widgets.voiceModeToggle.setButtonText(enabled ? "VOX" : "INT");
     widgets.voiceModeToggle.setColour(juce::ToggleButton::textColourId,
                                       enabled ? juce::Colour::fromRGB(230, 181, 120) : juce::Colours::white);
 }
@@ -2205,11 +2233,11 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
             widgets.panSlider.setValue(strip.pan, juce::dontSendNotification);
         widgets.muteToggle.setToggleState(strip.muted, juce::dontSendNotification);
         widgets.soloToggle.setToggleState(strip.soloed, juce::dontSendNotification);
-        widgets.soloToggle.setButtonText(strip.soloed ? "Soloed" : "Solo");
-        widgets.muteToggle.setButtonText("Mute");
+        widgets.soloToggle.setButtonText("S");
+        widgets.muteToggle.setButtonText("M");
         widgets.soloToggle.setAlpha(strip.active || strip.kind == MixerStripKind::LocalMonitor ? 1.0f : 0.7f);
-        widgets.hasTransmitControl = false;
-        widgets.hasVoiceModeControl = false;
+        widgets.hasTransmitControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets.hasVoiceModeControl = strip.kind == MixerStripKind::LocalMonitor;
         widgets.removable = false;
         widgets.transmitButton.setVisible(widgets.hasTransmitControl);
         widgets.voiceModeToggle.setVisible(widgets.hasVoiceModeControl);
@@ -2291,7 +2319,8 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         mixerContent_.addAndMakeVisible(widgets->meter);
 
         widgets->gainSlider.setRange(-60.0, 12.0, 0.1);
-        widgets->gainSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
+        widgets->gainSlider.setSliderStyle(juce::Slider::LinearVertical);
+        widgets->gainSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
         widgets->gainSlider.onValueChange = [this, raw = widgets.get()] {
             mixerStripSetter_(raw->sourceId,
                               static_cast<float>(raw->gainSlider.getValue()),
@@ -2301,7 +2330,11 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         mixerContent_.addAndMakeVisible(widgets->gainSlider);
 
         widgets->panSlider.setRange(-1.0, 1.0, 0.01);
-        widgets->panSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
+        widgets->panSlider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+        widgets->panSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        widgets->panSlider.setRotaryParameters(juce::MathConstants<float>::pi * 1.18f,
+                                               juce::MathConstants<float>::pi * 2.82f,
+                                               true);
         widgets->panSlider.onValueChange = [this, raw = widgets.get()] {
             mixerStripSetter_(raw->sourceId,
                               static_cast<float>(raw->gainSlider.getValue()),
@@ -2310,7 +2343,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         };
         mixerContent_.addAndMakeVisible(widgets->panSlider);
 
-        widgets->muteToggle.setButtonText("Mute");
+        widgets->muteToggle.setButtonText("M");
         widgets->muteToggle.onClick = [this, raw = widgets.get()] {
             mixerStripSetter_(raw->sourceId,
                               static_cast<float>(raw->gainSlider.getValue()),
@@ -2348,7 +2381,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         mixerContent_.addAndMakeVisible(widgets->removeButton);
 
         widgets->soloToggle.setClickingTogglesState(true);
-        widgets->soloToggle.setButtonText("Solo");
+        widgets->soloToggle.setButtonText("S");
         widgets->soloToggle.onClick = [this, raw = widgets.get()] {
             const auto targetState = raw->soloToggle.getToggleState();
             if (! mixerStripSoloSetter_(raw->sourceId, targetState))
@@ -2360,10 +2393,9 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->nameEditor.setText(strip.displayName, juce::dontSendNotification);
         widgets->nameEditor.setVisible(strip.editableName);
         widgets->titleLabel.setVisible(! strip.editableName);
-        widgets->hasTransmitControl = false;
-        widgets->hasVoiceModeControl = false;
-        widgets->removable = strip.kind == MixerStripKind::LocalMonitor
-            && strip.sourceId != FamaLamaJamAudioProcessor::kLocalMainSourceId;
+        widgets->hasTransmitControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets->hasVoiceModeControl = strip.kind == MixerStripKind::LocalMonitor;
+        widgets->removable = false;
         widgets->voiceModeToggle.setClickingTogglesState(true);
         widgets->voiceModeToggle.onClick = [this]() {
             (void) voiceModeToggleHandler_();

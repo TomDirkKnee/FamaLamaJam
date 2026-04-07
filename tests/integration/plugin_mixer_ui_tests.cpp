@@ -482,8 +482,10 @@ TEST_CASE("plugin mixer ui keeps add remove and collapse on the local group head
 
     CHECK(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTransmitLabel) == nullptr);
     CHECK(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderVoiceLabel) == nullptr);
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId) == "TX");
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId) == "INT");
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId) == "TX");
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId) == "INT");
     CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId).isEmpty());
     CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId).isEmpty());
 
