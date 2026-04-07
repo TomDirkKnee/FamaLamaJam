@@ -457,12 +457,24 @@ TEST_CASE("plugin mixer ui expects a collapsible local lane that can hide local 
     REQUIRE(localNameEditor != nullptr);
     REQUIRE(remoteStripLabel != nullptr);
 
+    CHECK(localNameEditor->getWidth() <= 132);
+    CHECK(remoteStripLabel->getWidth() <= 128);
+
     collapseButton->onClick();
 
     CHECK(localLaneLabel->isVisible());
     CHECK_FALSE(localNameEditor->isVisible());
     CHECK(remoteStripLabel->isVisible());
     CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 3);
+
+    auto* expandButton = findButtonContainingText(*harness.editor, "Expand");
+    REQUIRE(expandButton != nullptr);
+    REQUIRE(expandButton->onClick != nullptr);
+
+    expandButton->onClick();
+
+    CHECK(localNameEditor->isVisible());
+    CHECK(remoteStripLabel->isVisible());
 }
 
 TEST_CASE("plugin mixer ui reveals the next hidden local slot and confirms live hide without losing prior state",

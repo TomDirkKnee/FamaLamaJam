@@ -259,6 +259,81 @@ TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane
     CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
 }
 
+TEST_CASE("plugin rehearsal ui flow lets narrow-width sessions reopen locals without losing the sidebar or footer",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 3,
+                              .intervalProgress = 0.25f,
+                              .intervalIndex = 6,
+                          },
+                          {
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+                                .sourceId = "local-monitor",
+                                .groupId = "local",
+                                .groupLabel = "Local Sends",
+                                .displayName = "Main",
+                                .subtitle = "Live monitor",
+                                .active = true,
+                                .visible = true,
+                                .editableName = true },
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+                                .sourceId = "alice#0",
+                                .groupId = "alice",
+                                .groupLabel = "alice",
+                                .displayName = "alice - guitar",
+                                .subtitle = "guitar",
+                                .active = true,
+                                .visible = true },
+                          },
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .armable = true,
+                              .targetBeatsPerMinute = 120,
+                              .targetBeatsPerInterval = 16,
+                          });
+
+    harness.editor->setSize(760, 760);
+    harness.editor->resized();
+
+    auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
+    auto* localNameEditor =
+        findComponent<juce::TextEditor>(*harness.editor, [](const juce::TextEditor& editor) { return editor.getText() == "Main"; });
+    auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
+    auto* masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
+    auto* expandButton =
+        findComponent<juce::Button>(*harness.editor, [](const juce::Button& button) { return button.getButtonText() == "Expand Locals"; });
+
+    REQUIRE(localLaneLabel != nullptr);
+    REQUIRE(localNameEditor != nullptr);
+    REQUIRE(roomLabel != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
+    REQUIRE(expandButton != nullptr);
+    REQUIRE(expandButton->onClick != nullptr);
+
+    const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
+    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
+    const auto footerBounds = getBoundsInEditor(*harness.editor, *masterOutputLabel);
+
+    CHECK_FALSE(localNameEditor->isVisible());
+    CHECK(footerBounds.getY() > roomBounds.getBottom());
+
+    expandButton->onClick();
+
+    CHECK(localLaneBounds.getY() < roomBounds.getY());
+    CHECK(localNameEditor->isVisible());
+    CHECK(roomBounds.getY() < footerBounds.getY());
+}
+
 TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure copy near the connect controls",
           "[plugin_rehearsal_ui_flow]")
 {

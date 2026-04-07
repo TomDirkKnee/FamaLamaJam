@@ -668,12 +668,18 @@ TEST_CASE("plugin room controls ui prefers collapsing locals at narrow widths be
     auto* remoteStripLabel = findLabelWithText(*harness.editor, "alice - guitar");
     auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
     auto* roomViewport = findRoomSidebarViewport(*harness.editor);
+    auto* expandButton = findButtonWithText(*harness.editor, "Expand Locals");
 
     REQUIRE(localLaneLabel != nullptr);
     REQUIRE(localStripLabel != nullptr);
     REQUIRE(remoteStripLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
     REQUIRE(roomViewport != nullptr);
+    REQUIRE(expandButton != nullptr);
+    REQUIRE(expandButton->onClick != nullptr);
+
+    const auto remoteBounds = getBoundsInEditor(*harness.editor, *remoteStripLabel);
+    const auto sidebarBounds = getBoundsInEditor(*harness.editor, *roomViewport);
 
     CHECK(localLaneLabel->isVisible());
     CHECK_FALSE(localStripLabel->isVisible());
@@ -681,4 +687,12 @@ TEST_CASE("plugin room controls ui prefers collapsing locals at narrow widths be
     CHECK(roomLabel->isVisible());
     CHECK(roomViewport->isVisible());
     CHECK(roomViewport->getWidth() >= 220);
+    CHECK(roomViewport->getWidth() <= 230);
+    CHECK(sidebarBounds.getX() - remoteBounds.getX() >= (sidebarBounds.getWidth() * 2) + 20);
+
+    expandButton->onClick();
+
+    CHECK(localStripLabel->isVisible());
+    CHECK(remoteStripLabel->isVisible());
+    CHECK(roomViewport->isVisible());
 }

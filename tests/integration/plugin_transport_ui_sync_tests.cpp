@@ -295,14 +295,31 @@ TEST_CASE("plugin transport ui sync keeps timing text and sync assist visible in
 
     auto* transportLabel = findDirectLabelWithText(*harness.editor, "120 BPM | 16 BPI");
     auto* syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+    auto* masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
 
     REQUIRE(transportLabel != nullptr);
     REQUIRE(syncButton != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
 
     CHECK(transportLabel->isVisible());
     CHECK(syncButton->isVisible());
     CHECK(transportLabel->getY() > harness.editor->getHeight() / 2);
     CHECK(syncButton->getY() > harness.editor->getHeight() / 2);
+
+    harness.editor->setSize(760, 760);
+    harness.editor->resized();
+
+    transportLabel = findDirectLabelWithText(*harness.editor, "120 BPM | 16 BPI");
+    syncButton = findDirectButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+    masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
+
+    REQUIRE(transportLabel != nullptr);
+    REQUIRE(syncButton != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
+
+    CHECK(transportLabel->getWidth() <= 220);
+    CHECK(syncButton->getWidth() <= 176);
+    CHECK(syncButton->getRight() < masterOutputLabel->getX());
 
     harness.transport.syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::TimingLost;
     harness.transport.hasServerTiming = false;
