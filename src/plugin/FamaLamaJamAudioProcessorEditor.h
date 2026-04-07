@@ -389,6 +389,7 @@ public:
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] juce::String getDiagnosticsTextForTesting() const;
     [[nodiscard]] bool isDiagnosticsExpandedForTesting() const noexcept;
+    [[nodiscard]] bool isLocalLaneCollapsedForTesting() const noexcept;
     [[nodiscard]] juce::String getServerSettingsSummaryForTesting() const;
     [[nodiscard]] juce::String getStemCaptureDirectoryForTesting() const;
     [[nodiscard]] juce::String getStemCaptureStatusTextForTesting() const;
@@ -425,6 +426,7 @@ private:
     {
         std::string sourceId;
         std::string groupId;
+        MixerStripKind kind { MixerStripKind::RemoteDelayed };
         juce::Label groupLabel;
         juce::Label titleLabel;
         juce::Label subtitleLabel;
@@ -470,6 +472,7 @@ private:
     void updateTransmitButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
     void updateVoiceModeButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
     [[nodiscard]] RoomVoteKind getActiveRoomVoteKind() const noexcept;
+    [[nodiscard]] bool isLocalLaneCollapsed() const noexcept;
     [[nodiscard]] bool isRoomFeedNearBottom() const noexcept;
     void scrollRoomFeedToBottom();
     bool applyStemCaptureSettingsFromUi(bool enabled);
@@ -477,6 +480,7 @@ private:
     [[nodiscard]] juce::String getCollapsedServerSummary() const;
     [[nodiscard]] juce::String getCollapsedServerSummaryAscii() const;
     [[nodiscard]] juce::String getDiagnosticsToggleText() const;
+    [[nodiscard]] juce::String getLocalLaneCollapseText() const;
     [[nodiscard]] juce::String getServerSettingsToggleText() const;
 
     SettingsGetter settingsGetter_;
@@ -575,6 +579,7 @@ private:
     juce::Viewport mixerViewport_;
     juce::Component mixerContent_;
     juce::Label localHeaderLabel_;
+    juce::TextButton localLaneCollapseButton_;
     juce::ToggleButton localHeaderTransmitToggle_;
     juce::ToggleButton localHeaderVoiceToggle_;
     juce::TextButton addLocalChannelButton_;
@@ -597,6 +602,7 @@ private:
     bool hostSyncAssistLastActionWasCancel_ { false };
     bool serverSettingsExpanded_ { true };
     bool diagnosticsExpanded_ { false };
+    bool localLaneManuallyCollapsed_ { false };
     bool updatingRoomVoteInputs_ { false };
     std::unique_ptr<juce::FileChooser> stemCaptureFolderChooser_;
     juce::String stemCaptureInlineStatusText_;

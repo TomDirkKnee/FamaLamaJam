@@ -822,6 +822,14 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     localHeaderLabel_.setJustificationType(juce::Justification::centredLeft);
     mixerContent_.addAndMakeVisible(localHeaderLabel_);
 
+    localLaneCollapseButton_.setButtonText(getLocalLaneCollapseText());
+    localLaneCollapseButton_.onClick = [this]() {
+        localLaneManuallyCollapsed_ = ! localLaneManuallyCollapsed_;
+        localLaneCollapseButton_.setButtonText(getLocalLaneCollapseText());
+        resized();
+    };
+    mixerContent_.addAndMakeVisible(localLaneCollapseButton_);
+
     localHeaderTransmitToggle_.setButtonText(kLocalHeaderTransmitLabel);
     localHeaderTransmitToggle_.onClick = [this]() {
         (void) transmitToggleHandler_();
@@ -845,7 +853,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     mixerContent_.addAndMakeVisible(addLocalChannelButton_);
 
     mixerViewport_.setViewedComponent(&mixerContent_, false);
-    mixerViewport_.setScrollBarsShown(true, false);
+    mixerViewport_.setScrollBarsShown(true, true);
     addAndMakeVisible(mixerViewport_);
 
     masterOutputLabel_.setText("Master Output", juce::dontSendNotification);
@@ -893,6 +901,7 @@ FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
     disconnectButton_.onClick = {};
     hostSyncAssistButton_.onClick = {};
     diagnosticsToggle_.onClick = {};
+    localLaneCollapseButton_.onClick = {};
     localHeaderTransmitToggle_.onClick = {};
     localHeaderVoiceToggle_.onClick = {};
     addLocalChannelButton_.onClick = {};
@@ -994,35 +1003,28 @@ void FamaLamaJamAudioProcessorEditor::resized()
     ++cpuDiagnosticSnapshot_.resizedCalls;
     auto area = getLocalBounds().reduced(12);
 
-    auto footer = area.removeFromBottom(22);
-    intervalProgressBar_.setBounds(footer);
+    constexpr int kShellGap = 12;
+    constexpr int kSidebarMinWidth = 220;
+    constexpr int kSidebarMaxWidth = 300;
+    constexpr int kFooterHeight = 112;
+    constexpr int kTopBarExpandedHeight = 172;
+    constexpr int kTopBarCollapsedHeight = 94;
+
+    auto footer = area.removeFromBottom(kFooterHeight);
     area.removeFromBottom(8);
+    auto topBar = area.removeFromTop(serverSettingsExpanded_ ? kTopBarExpandedHeight : kTopBarCollapsedHeight);
+    area.removeFromTop(8);
 
     titleLabel_.setVisible(false);
-
-    constexpr int kSidebarWidth = 320;
-    auto sidebar = area.removeFromRight(juce::jmin(kSidebarWidth, juce::jmax(220, area.getWidth() / 3)));
-    area.removeFromRight(12);
-    auto left = area;
-
-    auto settingsRow = [&](juce::Label& label, juce::Component& editor) {
-        auto current = left.removeFromTop(28);
-        label.setBounds(current.removeFromLeft(96));
-        editor.setBounds(current);
-        left.removeFromTop(4);
-    };
-
     serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
-    serverSettingsSummaryLabel_.setBounds(left.removeFromTop(22));
-    transportLabel_.setVisible(transportLabel_.getText().trim().isNotEmpty());
-    if (transportLabel_.isVisible())
-        transportLabel_.setBounds(left.removeFromTop(20));
-    left.removeFromTop(6);
 
-    auto serverSettingsHeaderRow = left.removeFromTop(28);
-    serverSettingsToggle_.setBounds(serverSettingsHeaderRow.removeFromLeft(220));
-    diagnosticsToggle_.setBounds(serverSettingsHeaderRow.removeFromLeft(140));
-    left.removeFromTop(2);
+    auto summaryRow = topBar.removeFromTop(24);
+    auto summaryActions = summaryRow.removeFromRight(322);
+    diagnosticsToggle_.setBounds(summaryActions.removeFromRight(132));
+    summaryActions.removeFromRight(8);
+    serverSettingsToggle_.setBounds(summaryActions.removeFromRight(182));
+    serverSettingsSummaryLabel_.setBounds(summaryRow);
+    topBar.removeFromTop(6);
 
     serverPickerLabel_.setVisible(serverSettingsExpanded_);
     serverPickerCombo_.setVisible(serverSettingsExpanded_);
@@ -1046,92 +1048,145 @@ void FamaLamaJamAudioProcessorEditor::resized()
     const bool showDiscoveryStatus = serverSettingsExpanded_ && discoveryStatusText.isNotEmpty();
     serverDiscoveryStatusLabel_.setVisible(showDiscoveryStatus);
 
+    auto layoutField = [](juce::Rectangle<int>& row,
+                          juce::Label& label,
+                          juce::Component& editor,
+                          int labelWidth,
+                          int editorWidth) {
+        label.setBounds(row.removeFromLeft(labelWidth));
+        editor.setBounds(row.removeFromLeft(editorWidth));
+    };
+
     if (serverSettingsExpanded_)
     {
-        auto serverRow = left.removeFromTop(28);
-        serverPickerLabel_.setBounds(serverRow.removeFromLeft(96));
+        auto serverRow = topBar.removeFromTop(28);
+        serverPickerLabel_.setBounds(serverRow.removeFromLeft(60));
         refreshServersButton_.setBounds(serverRow.removeFromRight(90));
         serverRow.removeFromRight(8);
         serverPickerCombo_.setBounds(serverRow);
-        left.removeFromTop(4);
+        topBar.removeFromTop(4);
 
         if (showDiscoveryStatus)
         {
-            serverDiscoveryStatusLabel_.setBounds(left.removeFromTop(22));
-            left.removeFromTop(6);
+            serverDiscoveryStatusLabel_.setBounds(topBar.removeFromTop(20));
+            topBar.removeFromTop(4);
         }
 
-          settingsRow(hostLabel_, hostEditor_);
-          settingsRow(portLabel_, portEditor_);
-          settingsRow(usernameLabel_, usernameEditor_);
-          settingsRow(passwordLabel_, passwordEditor_);
+        auto endpointRow = topBar.removeFromTop(28);
+        layoutField(endpointRow, hostLabel_, hostEditor_, 40, juce::jmax(140, endpointRow.getWidth() / 2 - 52));
+        endpointRow.removeFromLeft(10);
+        layoutField(endpointRow, portLabel_, portEditor_, 34, juce::jmax(72, endpointRow.getWidth()));
+        topBar.removeFromTop(4);
 
-          auto stemRow = left.removeFromTop(28);
-          stemCaptureToggle_.setBounds(stemRow.removeFromLeft(130));
-          stemRow.removeFromLeft(8);
-          stemCaptureBrowseButton_.setBounds(stemRow.removeFromRight(126));
-          stemRow.removeFromRight(8);
-          stemCaptureNewRunButton_.setBounds(stemRow.removeFromRight(114));
-          left.removeFromTop(4);
+        auto identityRow = topBar.removeFromTop(28);
+        layoutField(identityRow, usernameLabel_, usernameEditor_, 68, juce::jmax(132, identityRow.getWidth() / 2 - 70));
+        identityRow.removeFromLeft(10);
+        layoutField(identityRow, passwordLabel_, passwordEditor_, 66, juce::jmax(132, identityRow.getWidth()));
+        topBar.removeFromTop(4);
 
-          auto stemPathRow = left.removeFromTop(22);
-          stemCapturePathLabel_.setBounds(stemPathRow.removeFromLeft(96));
-          stemCapturePathValueLabel_.setBounds(stemPathRow);
-          left.removeFromTop(2);
+        auto stemRow = topBar.removeFromTop(28);
+        stemCaptureToggle_.setBounds(stemRow.removeFromLeft(128));
+        stemRow.removeFromLeft(8);
+        stemCaptureBrowseButton_.setBounds(stemRow.removeFromRight(122));
+        stemRow.removeFromRight(8);
+        stemCaptureNewRunButton_.setBounds(stemRow.removeFromRight(112));
+        topBar.removeFromTop(4);
 
-          if (stemCaptureStatusLabel_.isVisible())
-          {
-              stemCaptureStatusLabel_.setBounds(left.removeFromTop(20));
-              left.removeFromTop(4);
-          }
+        auto stemPathRow = topBar.removeFromTop(20);
+        stemCapturePathLabel_.setBounds(stemPathRow.removeFromLeft(70));
+        stemCapturePathValueLabel_.setBounds(stemPathRow);
+        topBar.removeFromTop(2);
 
-          left.removeFromTop(2);
-      }
+        if (stemCaptureStatusLabel_.isVisible())
+        {
+            stemCaptureStatusLabel_.setBounds(topBar.removeFromTop(20));
+            topBar.removeFromTop(4);
+        }
+    }
 
-    auto controls = left.removeFromTop(34);
+    auto controls = topBar.removeFromTop(30);
     connectButton_.setBounds(controls.removeFromLeft(98));
     controls.removeFromLeft(8);
     disconnectButton_.setBounds(controls.removeFromLeft(108));
-    controls.removeFromLeft(8);
-    hostSyncAssistButton_.setBounds(controls.removeFromLeft(190));
-    controls.removeFromLeft(8);
-    metronomeToggle_.setBounds(controls.removeFromLeft(110));
-    controls.removeFromLeft(6);
-    metronomeVolumeSlider_.setBounds(controls.removeFromLeft(64).reduced(0, -4));
-    left.removeFromTop(6);
+    topBar.removeFromTop(4);
 
     authStatusLabel_.setVisible(authStatusLabel_.getText().trim().isNotEmpty());
     if (authStatusLabel_.isVisible())
     {
-        authStatusLabel_.setBounds(left.removeFromTop(22));
-        left.removeFromTop(4);
+        authStatusLabel_.setBounds(topBar.removeFromTop(20));
+        topBar.removeFromTop(2);
     }
 
     statusLabel_.setVisible(statusLabel_.getText().trim().isNotEmpty());
     if (statusLabel_.isVisible())
     {
-        statusLabel_.setBounds(left.removeFromTop(24));
-        left.removeFromTop(4);
+        statusLabel_.setBounds(topBar.removeFromTop(20));
+        topBar.removeFromTop(2);
     }
 
+    transportLabel_.setVisible(transportLabel_.getText().trim().isNotEmpty());
     hostSyncAssistStatusLabel_.setVisible(hostSyncAssistStatusLabel_.getText().trim().isNotEmpty());
-    if (hostSyncAssistStatusLabel_.isVisible())
+    hostSyncAssistTargetLabel_.setVisible(false);
+
+    intervalProgressBar_.setBounds(footer.removeFromTop(20));
+    footer.removeFromTop(8);
+
+    if (transportLabel_.isVisible())
     {
-        hostSyncAssistStatusLabel_.setBounds(left.removeFromTop(22));
-        left.removeFromTop(8);
+        auto footerInfoRow = footer.removeFromTop(22);
+        transportLabel_.setBounds(footerInfoRow.removeFromLeft(240));
+        footer.removeFromTop(4);
     }
     else
     {
-        left.removeFromTop(4);
+        transportLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
+    auto footerControls = footer.removeFromTop(34);
+    metronomeToggle_.setBounds(footerControls.removeFromLeft(110));
+    footerControls.removeFromLeft(6);
+    metronomeVolumeSlider_.setBounds(footerControls.removeFromLeft(64).reduced(0, -4));
+    footerControls.removeFromLeft(10);
+    hostSyncAssistButton_.setBounds(footerControls.removeFromLeft(192));
+    footerControls.removeFromLeft(10);
+    masterOutputLabel_.setBounds(footerControls.removeFromLeft(94));
+    masterOutputSlider_.setBounds(footerControls.removeFromLeft(juce::jmin(260, juce::jmax(160, footerControls.getWidth() / 2))));
+
+    if (hostSyncAssistStatusLabel_.isVisible())
+    {
+        footer.removeFromTop(6);
+        hostSyncAssistStatusLabel_.setBounds(footer.removeFromTop(20));
+    }
+    else
+    {
+        hostSyncAssistStatusLabel_.setBounds({ 0, 0, 0, 0 });
+    }
+
+    const auto sidebarWidth = juce::jlimit(kSidebarMinWidth,
+                                           kSidebarMaxWidth,
+                                           juce::jmax(kSidebarMinWidth, area.getWidth() / 3));
+    const bool hasLocalStrips = localHeaderLabel_.isVisible();
+    const bool localLaneCollapsed = hasLocalStrips && isLocalLaneCollapsed();
+    const int localHeaderHeight = hasLocalStrips ? 28 : 0;
+    const int localBodyHeight = (hasLocalStrips && ! localLaneCollapsed) ? 124 : 0;
+    const int localLaneHeight = hasLocalStrips ? localHeaderHeight + (localBodyHeight > 0 ? localBodyHeight + 8 : 0) : 0;
+
+    auto workspace = area;
+    const int mainWidth = juce::jmax(0, workspace.getWidth() - sidebarWidth - kShellGap);
+    const auto localArea = juce::Rectangle<int>(workspace.getX(), workspace.getY(), mainWidth, localLaneHeight);
+    if (localLaneHeight > 0)
+        workspace.removeFromTop(localLaneHeight + 8);
+    auto remoteArea = workspace;
+    auto sidebar = juce::Rectangle<int>(remoteArea.getRight() - sidebarWidth, remoteArea.getY(), sidebarWidth, remoteArea.getHeight());
+    remoteArea.setWidth(juce::jmax(0, remoteArea.getWidth() - sidebarWidth - kShellGap));
+
+    const auto mixerBounds = juce::Rectangle<int>(localArea.getX(),
+                                                  localArea.getY(),
+                                                  juce::jmax(localArea.getWidth(), remoteArea.getWidth()),
+                                                  remoteArea.getBottom() - localArea.getY());
     mixerSectionLabel_.setVisible(false);
-    mixerSectionLabel_.setBounds({ left.getX(), left.getY(), left.getWidth(), 0 });
-    auto masterOutputRow = left.removeFromBottom(28);
-    masterOutputLabel_.setBounds(masterOutputRow.removeFromLeft(110));
-    masterOutputSlider_.setBounds(masterOutputRow);
-    left.removeFromBottom(4);
-    mixerViewport_.setBounds(left);
+    mixerSectionLabel_.setBounds({ remoteArea.getX(), remoteArea.getY(), remoteArea.getWidth(), 0 });
+    mixerViewport_.setBounds(mixerBounds);
 
     if (diagnosticsExpanded_)
     {
@@ -1226,82 +1281,176 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
     roomFeedContent_.setSize(roomFeedWidth, juce::jmax(96, y));
 
-    y = 0;
-    const auto mixerContentWidth = juce::jmax(280, mixerViewport_.getWidth() - 16);
-    if (localHeaderLabel_.isVisible())
+    auto setStripVisibility = [](MixerStripWidgets& widget, bool visible) {
+        widget.groupLabel.setVisible(visible && widget.showsGroupLabel);
+        widget.titleLabel.setVisible(visible && ! widget.editableName);
+        widget.nameEditor.setVisible(visible && widget.editableName);
+        widget.subtitleLabel.setVisible(visible);
+        widget.statusLabel.setVisible(visible && widget.statusLabel.getText().isNotEmpty());
+        widget.meter.setVisible(visible);
+        widget.gainSlider.setVisible(visible);
+        widget.panSlider.setVisible(visible);
+        widget.soloToggle.setVisible(visible);
+        widget.muteToggle.setVisible(visible);
+        widget.outputSelector.setVisible(visible && widget.outputSelector.getNumItems() > 0);
+        widget.removeButton.setVisible(visible && widget.removable);
+        widget.transmitButton.setVisible(visible && widget.hasTransmitControl);
+        widget.voiceModeToggle.setVisible(visible && widget.hasVoiceModeControl);
+    };
+
+    std::vector<MixerStripWidgets*> localWidgets;
+    std::vector<MixerStripWidgets*> remoteWidgets;
+    localWidgets.reserve(mixerStripWidgets_.size());
+    remoteWidgets.reserve(mixerStripWidgets_.size());
+    for (auto& widget : mixerStripWidgets_)
     {
-        auto headerRow = juce::Rectangle<int>(0, y, mixerContentWidth, 26);
+        if (widget->kind == MixerStripKind::LocalMonitor)
+            localWidgets.push_back(widget.get());
+        else
+            remoteWidgets.push_back(widget.get());
+    }
+
+    int mixerContentWidth = juce::jmax(320, mixerViewport_.getWidth() - 16);
+    int contentY = 0;
+    if (hasLocalStrips)
+    {
+        auto headerRow = juce::Rectangle<int>(0, contentY, mixerContentWidth, localHeaderHeight);
         addLocalChannelButton_.setBounds(headerRow.removeFromRight(110));
+        headerRow.removeFromRight(8);
+        localLaneCollapseButton_.setBounds(headerRow.removeFromRight(126));
         headerRow.removeFromRight(8);
         localHeaderVoiceToggle_.setBounds(headerRow.removeFromRight(80));
         headerRow.removeFromRight(8);
         localHeaderTransmitToggle_.setBounds(headerRow.removeFromRight(96));
         headerRow.removeFromRight(8);
         localHeaderLabel_.setBounds(headerRow);
-        y += 34;
-    }
+        localLaneCollapseButton_.setButtonText(getLocalLaneCollapseText());
+        contentY += localHeaderHeight + 8;
 
-    for (auto& widget : mixerStripWidgets_)
-    {
-        if (widget->showsGroupLabel)
+        if (! localLaneCollapsed)
         {
-            widget->groupLabel.setBounds(0, y, mixerContentWidth, 20);
-            y += 22;
-        }
+            constexpr int kLocalCardWidth = 198;
+            constexpr int kLocalCardHeight = 116;
+            int localX = 0;
+            for (auto* widget : localWidgets)
+            {
+                setStripVisibility(*widget, true);
+                widget->groupLabel.setVisible(false);
 
-        auto titleRow = juce::Rectangle<int>(0, y, mixerContentWidth, 22);
-        if (widget->editableName)
-        {
-            widget->nameEditor.setBounds(titleRow.removeFromLeft(mixerContentWidth / 2));
-            titleRow.removeFromLeft(8);
-            widget->titleLabel.setBounds(0, y, 0, 0);
+                auto card = juce::Rectangle<int>(localX, contentY, kLocalCardWidth, kLocalCardHeight);
+                auto titleRow = card.removeFromTop(22);
+                if (widget->editableName)
+                {
+                    widget->nameEditor.setBounds(titleRow);
+                    widget->titleLabel.setBounds({ 0, 0, 0, 0 });
+                }
+                else
+                {
+                    widget->titleLabel.setBounds(titleRow);
+                    widget->nameEditor.setBounds({ 0, 0, 0, 0 });
+                }
+
+                widget->subtitleLabel.setBounds(card.removeFromTop(18));
+                card.removeFromTop(4);
+                widget->meter.setBounds(card.removeFromTop(18));
+                card.removeFromTop(4);
+                auto sliders = card.removeFromTop(24);
+                widget->gainSlider.setBounds(sliders.removeFromLeft((sliders.getWidth() - 8) / 2));
+                sliders.removeFromLeft(8);
+                widget->panSlider.setBounds(sliders);
+                card.removeFromTop(4);
+                auto buttons = card.removeFromTop(24);
+                widget->muteToggle.setBounds(buttons.removeFromLeft(62));
+                buttons.removeFromLeft(6);
+                widget->soloToggle.setBounds(buttons.removeFromLeft(62));
+                if (widget->removable)
+                {
+                    buttons.removeFromLeft(6);
+                    widget->removeButton.setBounds(buttons);
+                }
+                if (widget->statusLabel.getText().isNotEmpty())
+                    widget->statusLabel.setBounds(card);
+                else
+                    widget->statusLabel.setBounds({ 0, 0, 0, 0 });
+
+                localX += kLocalCardWidth + 12;
+            }
+
+            mixerContentWidth = juce::jmax(mixerContentWidth, juce::jmax(0, localX - 12));
+            contentY += kLocalCardHeight + 12;
         }
         else
         {
-            widget->titleLabel.setBounds(titleRow.removeFromLeft(mixerContentWidth / 2));
+            for (auto* widget : localWidgets)
+                setStripVisibility(*widget, false);
+        }
+    }
+    else
+    {
+        localLaneCollapseButton_.setBounds({ 0, 0, 0, 0 });
+    }
+
+    const auto remoteContentWidth = juce::jmax(320, mixerViewport_.getWidth() - 16);
+    mixerContentWidth = juce::jmax(mixerContentWidth, remoteContentWidth);
+    std::string previousRemoteGroupId;
+    for (auto* widget : remoteWidgets)
+    {
+        setStripVisibility(*widget, true);
+        widget->showsGroupLabel = previousRemoteGroupId != widget->groupId;
+        previousRemoteGroupId = widget->groupId;
+
+        if (widget->showsGroupLabel)
+        {
+            widget->groupLabel.setBounds(0, contentY, remoteContentWidth, 20);
+            widget->groupLabel.setVisible(true);
+            contentY += 24;
+        }
+        else
+        {
+            widget->groupLabel.setBounds({ 0, 0, 0, 0 });
+            widget->groupLabel.setVisible(false);
+        }
+
+        auto titleRow = juce::Rectangle<int>(0, contentY, remoteContentWidth, 22);
+        if (widget->editableName)
+        {
+            widget->nameEditor.setBounds(titleRow.removeFromLeft(remoteContentWidth / 2));
             titleRow.removeFromLeft(8);
-            widget->nameEditor.setBounds(0, y, 0, 0);
+            widget->titleLabel.setBounds({ 0, 0, 0, 0 });
+        }
+        else
+        {
+            widget->titleLabel.setBounds(titleRow.removeFromLeft(remoteContentWidth / 2));
+            titleRow.removeFromLeft(8);
+            widget->nameEditor.setBounds({ 0, 0, 0, 0 });
         }
         widget->subtitleLabel.setBounds(titleRow);
-        y += 24;
+        contentY += 24;
 
-        widget->statusLabel.setVisible(widget->statusLabel.getText().isNotEmpty());
-        if (widget->statusLabel.isVisible())
+        if (widget->statusLabel.getText().isNotEmpty())
         {
-            widget->statusLabel.setBounds(0, y, mixerContentWidth, 20);
-            y += 22;
+            widget->statusLabel.setBounds(0, contentY, remoteContentWidth, 20);
+            widget->statusLabel.setVisible(true);
+            contentY += 22;
+        }
+        else
+        {
+            widget->statusLabel.setBounds({ 0, 0, 0, 0 });
+            widget->statusLabel.setVisible(false);
         }
 
-        auto controlRow = juce::Rectangle<int>(0, y, mixerContentWidth, 42);
+        auto controlRow = juce::Rectangle<int>(0, contentY, remoteContentWidth, 42);
         const auto muteWidth = 76;
         const auto soloWidth = 70;
-        const auto transmitWidth = 150;
-        const auto voiceWidth = 96;
         const auto outputWidth = 132;
-        const auto removeWidth = 96;
-        const auto meterWidth = juce::jlimit(120, 220, mixerContentWidth / 3);
+        const auto meterWidth = juce::jlimit(120, 220, remoteContentWidth / 3);
         widget->meter.setBounds(controlRow.removeFromLeft(meterWidth));
         controlRow.removeFromLeft(8);
 
         auto rightControls = controlRow;
-        if (widget->outputSelector.isVisible())
+        if (widget->outputSelector.getNumItems() > 0)
         {
             widget->outputSelector.setBounds(rightControls.removeFromRight(outputWidth));
-            rightControls.removeFromRight(8);
-        }
-        if (widget->hasVoiceModeControl)
-        {
-            widget->voiceModeToggle.setBounds(rightControls.removeFromRight(voiceWidth));
-            rightControls.removeFromRight(8);
-        }
-        if (widget->hasTransmitControl)
-        {
-            widget->transmitButton.setBounds(rightControls.removeFromRight(transmitWidth));
-            rightControls.removeFromRight(8);
-        }
-        if (widget->removable)
-        {
-            widget->removeButton.setBounds(rightControls.removeFromRight(removeWidth));
             rightControls.removeFromRight(8);
         }
         widget->muteToggle.setBounds(rightControls.removeFromRight(muteWidth));
@@ -1313,10 +1462,10 @@ void FamaLamaJamAudioProcessorEditor::resized()
         widget->panSlider.setBounds(rightControls.removeFromRight(panWidth));
         rightControls.removeFromRight(8);
         widget->gainSlider.setBounds(rightControls);
-        y += 50;
+        contentY += 50;
     }
 
-    mixerContent_.setSize(mixerContentWidth, y + 8);
+    mixerContent_.setSize(mixerContentWidth, contentY + 8);
 }
 
 void FamaLamaJamAudioProcessorEditor::timerCallback()
@@ -1585,6 +1734,17 @@ juce::String FamaLamaJamAudioProcessorEditor::getCollapsedServerSummaryAscii() c
 juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsToggleText() const
 {
     return diagnosticsExpanded_ ? "Hide Diagnostics" : "Show Diagnostics";
+}
+
+bool FamaLamaJamAudioProcessorEditor::isLocalLaneCollapsed() const noexcept
+{
+    constexpr int kAutoCollapseWidth = 860;
+    return localLaneManuallyCollapsed_ || getWidth() <= kAutoCollapseWidth;
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getLocalLaneCollapseText() const
+{
+    return isLocalLaneCollapsed() ? "Expand Locals" : "Collapse Locals";
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getServerSettingsToggleText() const
@@ -1949,6 +2109,8 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
     });
     const bool hasLocalStrips = firstLocalStrip != allStrips.end();
     localHeaderLabel_.setVisible(hasLocalStrips);
+    localLaneCollapseButton_.setVisible(hasLocalStrips);
+    localLaneCollapseButton_.setButtonText(getLocalLaneCollapseText());
     localHeaderTransmitToggle_.setVisible(hasLocalStrips);
     localHeaderVoiceToggle_.setVisible(hasLocalStrips);
     addLocalChannelButton_.setVisible(hasLocalStrips);
@@ -2089,6 +2251,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         auto widgets = std::make_unique<MixerStripWidgets>();
         widgets->sourceId = strip.sourceId;
         widgets->groupId = strip.groupId;
+        widgets->kind = strip.kind;
         widgets->showsGroupLabel = previousGroupId != strip.groupId
                                     && strip.groupLabel != strip.displayName;
         previousGroupId = strip.groupId;
@@ -2677,6 +2840,11 @@ juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsTextForTesting() con
 bool FamaLamaJamAudioProcessorEditor::isDiagnosticsExpandedForTesting() const noexcept
 {
     return diagnosticsExpanded_;
+}
+
+bool FamaLamaJamAudioProcessorEditor::isLocalLaneCollapsedForTesting() const noexcept
+{
+    return isLocalLaneCollapsed();
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getServerSettingsSummaryForTesting() const

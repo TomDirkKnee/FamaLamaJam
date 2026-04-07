@@ -231,7 +231,7 @@ TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane
     auto* statusLabel =
         findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
     auto* localLaneLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
-    auto* transportLabel = findDirectLabelWithText(*harness.editor, harness.editor->getTransportStatusTextForTesting());
+    auto* masterOutputLabel = findDirectLabelWithText(*harness.editor, "Master Output");
     auto* roomLabel = findDirectLabelWithText(*harness.editor, "Room Chat");
 
     REQUIRE(hostLabel != nullptr);
@@ -239,7 +239,7 @@ TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane
     REQUIRE(connectButton != nullptr);
     REQUIRE(statusLabel != nullptr);
     REQUIRE(localLaneLabel != nullptr);
-    REQUIRE(transportLabel != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
 
     CHECK(hostLabel->isVisible());
@@ -250,12 +250,12 @@ TEST_CASE("plugin rehearsal ui flow keeps a compact top bar above the local lane
     const auto connectBounds = getBoundsInEditor(*harness.editor, *connectButton);
     const auto localLaneBounds = getBoundsInEditor(*harness.editor, *localLaneLabel);
     const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
-    const auto transportBounds = getBoundsInEditor(*harness.editor, *transportLabel);
+    const auto footerBounds = getBoundsInEditor(*harness.editor, *masterOutputLabel);
 
     CHECK(statusBounds.getBottom() < localLaneBounds.getY());
     CHECK(connectBounds.getBottom() < localLaneBounds.getY());
     CHECK(localLaneBounds.getBottom() < roomBounds.getY());
-    CHECK(transportBounds.getY() > roomBounds.getBottom());
+    CHECK(footerBounds.getY() > roomBounds.getBottom());
     CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
 }
 
