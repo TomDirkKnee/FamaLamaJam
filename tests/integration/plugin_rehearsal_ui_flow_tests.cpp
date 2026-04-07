@@ -307,6 +307,31 @@ TEST_CASE("plugin rehearsal ui flow keeps the disconnected setup above a strip-o
     CHECK(statusBounds.getBottom() < localHeaderBounds.getY());
     CHECK(aliceBounds.getX() > localHeaderBounds.getRight());
     CHECK(std::abs(aliceBounds.getY() - localHeaderBounds.getY()) <= 24);
+
+    harness.editor->setSize(980, 720);
+    harness.editor->resized();
+
+    connectButton = findDirectButtonWithText(*harness.editor, "Connect");
+    statusLabel = findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
+    localHeaderLabel = findComponent<juce::Label>(
+        *harness.editor,
+        [](const juce::Label& label) { return label.getText() == FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle; });
+    aliceGroupLabel =
+        findComponent<juce::Label>(*harness.editor, [](const juce::Label& label) { return label.getText() == "alice"; });
+
+    REQUIRE(connectButton != nullptr);
+    REQUIRE(statusLabel != nullptr);
+    REQUIRE(localHeaderLabel != nullptr);
+    REQUIRE(aliceGroupLabel != nullptr);
+
+    const auto resizedConnectBounds = getBoundsInEditor(*harness.editor, *connectButton);
+    const auto resizedStatusBounds = getBoundsInEditor(*harness.editor, *statusLabel);
+    const auto resizedLocalHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
+    const auto resizedAliceBounds = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
+
+    CHECK(resizedConnectBounds.getBottom() < resizedLocalHeaderBounds.getY());
+    CHECK(resizedStatusBounds.getBottom() < resizedLocalHeaderBounds.getY());
+    CHECK(resizedAliceBounds.getX() > resizedLocalHeaderBounds.getRight());
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure copy near the connect controls",

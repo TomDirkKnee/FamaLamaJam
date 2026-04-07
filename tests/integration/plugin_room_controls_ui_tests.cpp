@@ -700,4 +700,20 @@ TEST_CASE("plugin room controls ui keeps the sidebar beside a shared local-first
     CHECK(stripLabels[3] == "bob - bass");
     CHECK_FALSE(harness.editor->isRoomSectionAboveMixerForTesting());
     CHECK(sidebarBounds.getX() > harness.editor->getWidth() / 2);
+
+    harness.editor->setSize(980, 720);
+    harness.editor->resized();
+
+    roomViewport = findRoomSidebarViewport(*harness.editor);
+    REQUIRE(roomViewport != nullptr);
+
+    const auto resizedSidebarBounds = getBoundsInEditor(*harness.editor, *roomViewport);
+    const auto resizedStripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
+
+    REQUIRE(resizedStripLabels.size() == 4);
+    CHECK(resizedStripLabels[0] == "Main");
+    CHECK(resizedStripLabels[1] == "Bass");
+    CHECK(resizedStripLabels[2] == "alice - guitar");
+    CHECK(resizedStripLabels[3] == "bob - bass");
+    CHECK(resizedSidebarBounds.getX() > harness.editor->getWidth() / 2);
 }

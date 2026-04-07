@@ -326,6 +326,20 @@ TEST_CASE("plugin transport ui sync keeps timing text and sync assist in a foote
 
     CHECK(syncButton->getRight() < masterOutputLabel->getX());
     CHECK(transportLabel->getBottom() <= masterOutputLabel->getBottom() + 10);
+
+    harness.editor->setSize(700, 760);
+    harness.editor->resized();
+
+    transportLabel = findLabelWithText(*harness.editor, "120 BPM | 16 BPI");
+    syncButton = findButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+    masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
+
+    REQUIRE(transportLabel != nullptr);
+    REQUIRE(syncButton != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
+
+    CHECK(syncButton->getRight() < masterOutputLabel->getX());
+    CHECK(transportLabel->getBottom() <= masterOutputLabel->getBottom() + 10);
 }
 
 TEST_CASE("plugin transport ui sync disables the arm control with explicit blocked guidance",

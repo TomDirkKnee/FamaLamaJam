@@ -496,8 +496,11 @@ TEST_CASE("plugin mixer ui keeps add remove and collapse on the local group head
 
     CHECK(removeBounds.getCentreY() >= localHeaderBounds.getY());
     CHECK(removeBounds.getCentreY() <= localHeaderBounds.getBottom());
+    CHECK(removeBounds.getWidth() <= 20);
     CHECK(addBounds.getX() > removeBounds.getRight());
+    CHECK(addBounds.getWidth() <= 20);
     CHECK(collapseBounds.getX() > addBounds.getRight());
+    CHECK(collapseBounds.getWidth() <= 56);
 }
 
 TEST_CASE("plugin mixer ui reveals the next hidden local slot and removes it from the local header without losing prior state",
@@ -606,6 +609,10 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
     CHECK(outputSelector->getItemText(1) == "Remote Out 1");
     CHECK(outputSelector->getItemText(2) == "Remote Out 2");
     CHECK(outputSelector->getItemText(7) == "Remote Out 7");
+
+    const auto selectorBounds = getBoundsInEditor(*harness.editor, *outputSelector);
+    CHECK(selectorBounds.getWidth() <= 40);
+    CHECK(selectorBounds.getHeight() <= 38);
 }
 
 TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and compact pan pots",
@@ -720,12 +727,18 @@ TEST_CASE("plugin mixer ui collapses locals into visible mini strips without hol
 
     const auto visibleMeters = findVisibleComponents<famalamajam::plugin::StereoMeterComponent>(*harness.editor);
     int localMeterCount = 0;
+    int tallestLocalMeter = 0;
     for (auto* meter : visibleMeters)
     {
         const auto meterBounds = getBoundsInEditor(*harness.editor, *meter);
         if (meterBounds.getRight() < aliceBoundsAfter.getX())
+        {
             ++localMeterCount;
+            tallestLocalMeter = std::max(tallestLocalMeter, meterBounds.getHeight());
+            CHECK(meterBounds.getWidth() <= 32);
+        }
     }
 
     CHECK(localMeterCount == 2);
+    CHECK(tallestLocalMeter >= 192);
 }
