@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: blocked
-stopped_at: Completed 09-04-PLAN.md
-last_updated: "2026-04-07T14:40:00.000Z"
-last_activity: 2026-04-07 - Completed 09-04 by recording a failed Ableton host verdict for all five Phase 09 layout scenarios and naming the missing Connect action plus sparse layout as the residual blocker.
+status: in_progress
+stopped_at: Completed 09.1-01-PLAN.md
+last_updated: "2026-04-07T20:46:48.1238039Z"
+last_activity: 2026-04-07 - Completed 09.1-01 by locking the strip-only recovery shell: the stable footer/sidebar shell is preserved, locals and remotes now share one horizontal mixer plane, and collapsed locals remain visible as meter-only mini strips.
 progress:
-  total_phases: 19
+  total_phases: 20
   completed_phases: 15
-  total_plans: 64
-  completed_plans: 60
-  percent: 94
+  total_plans: 67
+  completed_plans: 61
+  percent: 91
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 09 now has explicit host evidence, and that evidence is negative: the next required work is a follow-up layout fix that restores the disconnected-state `Connect` action and recovers practical Ableton ergonomics.
+**Current focus:** Phase 09.1 is underway. Plan 01 locked the strip-only recovery shell around the stable reverted page layout, so the next work is the narrow strip-widget conversion without reopening the broader page redesign.
 
 ## Current Position
 
-Phase: 09 - JamTaba-Inspired Layout & Mixer Parity  
-Plan: 04 - Completed  
-Status: Blocked by failed Ableton host validation  
-Last activity: 2026-04-07 - Completed 09-04 by recording a failed Ableton host verdict for all five Phase 09 layout scenarios and naming the missing `Connect` action plus sparse layout as the residual blocker.
+Phase: 09.1 - Strip-Only Mixer Rebuild On Stable Layout  
+Plan: 01 - Completed  
+Status: In Progress  
+Last activity: 2026-04-07 - Completed 09.1-01 by locking the strip-only recovery shell: stable footer/sidebar shell preserved, horizontal local-first strip plane landed, and collapsed locals now stay visible as meter-only mini strips.
 
-Progress: 94%
+Progress: 91%
 
 ## Accumulated Context
 
@@ -111,6 +111,8 @@ Progress: 94%
 - [Phase 09]: Slim the sidebar and footer before sacrificing sidebar visibility, keeping grouped remote strips as the dominant workspace.
 - [Phase 09]: Treat Phase 09 as host-rejected rather than host-proven — Manual Ableton validation failed all five layout scenarios, so automation-backed geometry is insufficient evidence for ergonomic closure.
 - [Phase 09]: Use the missing disconnected-state Connect action and sparse host presentation as the named residual Ableton gap — The follow-up should target the practical usability regression surfaced by the host verdict instead of re-running documentation-only validation.
+- [Phase 09.1]: Keep the pre-Phase-9 top bar, right sidebar, and footer shell intact and limit the recovery to the mixer viewport.
+- [Phase 09.1]: Make the local header own add/remove/collapse controls while collapsed locals retain visible meter-only mini strips.
 
 ### Roadmap Evolution
 
@@ -128,7 +130,7 @@ Progress: 94%
 
 - Keep using the verified `build-vs-2026` validation path until the local `build-vs` NMake tree stops failing with `U1076 name too long`.
 - Run the every-four-beat Ableton repro on the same machine to judge how much CPU risk remains after the editor-churn mitigation.
-- Plan a focused Phase 09 follow-up that restores a visible disconnected-state `Connect` action and tightens the host layout so the plugin no longer feels sparse or awkward in Ableton.
+- Execute Phase 09.1 plan 02 to convert the strip shell into the narrower integrated strip widget while preserving the stable page shell from plan 01.
 
 ### Blockers/Concerns
 
@@ -169,9 +171,10 @@ Progress: 94%
 - 2026-04-07: Completed Phase 09 plan 02 in 19 min across 2 task commits and 7 modified files; local transmit and voice actions now live on strip cards, remote strips render in grouped user clusters, and the focused strip-anatomy gate passes on `build-vs-2026`.
 - 2026-04-07: Completed Phase 09 plan 03 in 8 min across 2 task commits and 8 modified files; narrow-width local reopening, slimmer sidebar/footer geometry, and the dedicated Phase 09 Ableton layout matrix are now in place, while manual host verdict rows remain pending.
 - 2026-04-07: Completed Phase 09 plan 04 in 5 min with 1 task commit and 4 modified files; the Phase 09 Ableton matrix now records five explicit failures, and the phase remains blocked by a missing disconnected-state `Connect` action plus broader host-layout regression.
+- 2026-04-07: Completed Phase 09.1 plan 01 in 12 min across 2 task commits and 6 modified files; the stable page shell is preserved while the mixer now runs as a horizontal local-first strip plane with header-owned local controls and collapsed meter-only mini strips.
 
 ## Session Continuity
 
-Last session: 2026-04-07T14:39:12.537Z
-Stopped at: Completed 09-04-PLAN.md
+Last session: 2026-04-07T20:46:19.924Z
+Stopped at: Completed 09.1-01-PLAN.md
 Resume file: None
