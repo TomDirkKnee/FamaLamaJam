@@ -58,6 +58,9 @@ struct EditorHarness
     ConnectionLifecycleSnapshot lifecycle;
     FamaLamaJamAudioProcessorEditor::TransportUiState transport;
     std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> mixerStrips;
+    int transmitToggleCount { 0 };
+    int voiceToggleCount { 0 };
+    bool localVoiceModeEnabled { false };
     std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor;
 
     EditorHarness()
@@ -137,25 +140,35 @@ struct EditorHarness
             FamaLamaJamAudioProcessorEditor::MixerStripOutputAssignmentSetter {},
             FamaLamaJamAudioProcessorEditor::LocalChannelVisibilitySetter {},
             FamaLamaJamAudioProcessorEditor::CommandHandler {},
-            [](const std::string&) { return true; },
-            [](const std::string&) { return true; });
+            [this]() {
+                ++transmitToggleCount;
+                for (auto& strip : mixerStrips)
+                {
+                    if (strip.kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
+                    {
+                        strip.transmitState = strip.transmitState == FamaLamaJamAudioProcessorEditor::TransmitState::Disabled
+                            ? FamaLamaJamAudioProcessorEditor::TransmitState::Active
+                            : FamaLamaJamAudioProcessorEditor::TransmitState::Disabled;
+                    }
+                }
+                return true;
+            },
+            [this]() {
+                ++voiceToggleCount;
+                localVoiceModeEnabled = ! localVoiceModeEnabled;
+                for (auto& strip : mixerStrips)
+                {
+                    if (strip.kind == FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor)
+                    {
+                        strip.localChannelMode = localVoiceModeEnabled
+                            ? FamaLamaJamAudioProcessorEditor::LocalChannelMode::Voice
+                            : FamaLamaJamAudioProcessorEditor::LocalChannelMode::Interval;
+                    }
+                }
+                return true;
+            });
     }
 };
-
-template <typename ComponentType, typename Matcher>
-ComponentType* findDirectChild(juce::Component& parent, Matcher&& matcher)
-{
-    for (int index = 0; index < parent.getNumChildComponents(); ++index)
-    {
-        if (auto* child = dynamic_cast<ComponentType*>(parent.getChildComponent(index)))
-        {
-            if (matcher(*child))
-                return child;
-        }
-    }
-
-    return nullptr;
-}
 } // namespace
 
 TEST_CASE("plugin transmit controls ui reserves local strip projection fields for transmit and solo",
@@ -174,7 +187,7 @@ TEST_CASE("plugin transmit controls ui reserves unsupported-voice badges in norm
     CHECK(hasLocalChannelModeField<FamaLamaJamAudioProcessorEditor::MixerStripState>);
 }
 
-TEST_CASE("plugin transmit controls ui keeps transmit off the transport row and on the local strip",
+TEST_CASE("plugin transmit controls ui keeps compact transmit and mode controls on every local strip",
           "[plugin_transmit_controls_ui]")
 {
     EditorHarness harness;
@@ -185,28 +198,23 @@ TEST_CASE("plugin transmit controls ui keeps transmit off the transport row and 
     CHECK(stripLabels[0] == "Main");
     CHECK(stripLabels[1] == "Bass");
     CHECK(stripLabels[2] == "alice - guitar");
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
-          .isNotEmpty());
-    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
-          .isNotEmpty());
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId) == "TX");
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId) == "INT");
+    CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId) == "TX");
+    CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId) == "INT");
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("alice#0").isEmpty());
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("alice#0").isEmpty());
 
-    bool localVoiceEnabled = false;
-    CHECK(harness.editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
-                                                                  localVoiceEnabled));
-    CHECK_FALSE(localVoiceEnabled);
-    CHECK(harness.editor->clickMixerStripTransmitForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId));
-    CHECK(harness.editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId));
-
+    bool mainVoiceEnabled = false;
     bool sendVoiceEnabled = false;
+    CHECK(harness.editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  mainVoiceEnabled));
     CHECK(harness.editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId,
                                                                   sendVoiceEnabled));
+    CHECK_FALSE(mainVoiceEnabled);
     CHECK_FALSE(sendVoiceEnabled);
     CHECK(harness.editor->clickMixerStripTransmitForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
     CHECK(harness.editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
+    CHECK(harness.transmitToggleCount == 1);
+    CHECK(harness.voiceToggleCount == 1);
 }

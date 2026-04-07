@@ -57,10 +57,8 @@ TEST_CASE("plugin voice mode toggle exposes a dedicated local-strip voice contro
         dynamic_cast<FamaLamaJamAudioProcessorEditor*>(processor.createEditor()));
 
     REQUIRE(editor != nullptr);
-    CHECK(editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          .isNotEmpty());
-    CHECK(editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          .isNotEmpty());
+    CHECK(editor->getMixerStripTransmitButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId) == "TX");
+    CHECK(editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId) == "INT");
 
     bool voiceEnabled = true;
     REQUIRE(editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId,
@@ -71,6 +69,7 @@ TEST_CASE("plugin voice mode toggle exposes a dedicated local-strip voice contro
     CHECK(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
           == "Voice mode ready");
+    CHECK(editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId) == "VOX");
     REQUIRE(editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId,
                                                             voiceEnabled));
     CHECK(voiceEnabled);

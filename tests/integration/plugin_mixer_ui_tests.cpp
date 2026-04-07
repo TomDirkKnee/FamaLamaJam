@@ -606,6 +606,57 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
     CHECK(outputSelector->getItemText(7) == "Remote Out 7");
 }
 
+TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and compact pan pots",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::WarmingUp,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true,
+          .outputAssignmentIndex = 0,
+          .outputAssignmentLabels = { FamaLamaJamAudioProcessorEditor::kMainOutputLabel, "Remote Out 1" } },
+    });
+
+    const auto sliders = findVisibleComponents<juce::Slider>(*harness.editor);
+    int verticalStripSliderCount = 0;
+    int rotaryPanPotCount = 0;
+    for (const auto* slider : sliders)
+    {
+        if (slider->getSliderStyle() == juce::Slider::LinearVertical)
+            ++verticalStripSliderCount;
+        if (slider->getSliderStyle() == juce::Slider::RotaryVerticalDrag)
+            ++rotaryPanPotCount;
+    }
+
+    CHECK(verticalStripSliderCount == 3);
+    CHECK(rotaryPanPotCount == 3);
+}
+
 TEST_CASE("plugin mixer ui collapses locals into visible mini strips without holding remote groups open",
           "[plugin_mixer_ui]")
 {
