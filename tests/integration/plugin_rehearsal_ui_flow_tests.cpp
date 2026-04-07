@@ -394,7 +394,7 @@ TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Reconnecting room timing.");
 }
 
-TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport workflow", "[plugin_rehearsal_ui_flow]")
+TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the footer transport workflow", "[plugin_rehearsal_ui_flow]")
 {
     EditorHarness harness(ConnectionLifecycleSnapshot {
                               .state = ConnectionState::Active,
@@ -448,7 +448,8 @@ TEST_CASE("plugin rehearsal ui flow keeps host sync assist in the top transport 
     REQUIRE(mixerSectionLabel != nullptr);
 
     CHECK(syncButton->isVisible());
-    CHECK(syncButton->getBottom() < mixerSectionLabel->getY());
+    CHECK(syncButton->getY() > harness.editor->getHeight() / 2);
+    CHECK(syncButton->getY() > mixerSectionLabel->getY());
     CHECK(harness.editor->getServerSettingsSummaryForTesting() == "Connected as Dirk | jam.example.net:2049");
     CHECK(harness.editor->getTransportStatusTextForTesting() == "120 BPM | 16 BPI");
 }

@@ -498,7 +498,7 @@ TEST_CASE("plugin mixer ui keeps add remove and collapse on the local group head
     CHECK(collapseBounds.getX() > addBounds.getRight());
 }
 
-TEST_CASE("plugin mixer ui reveals the next hidden local slot and confirms live hide without losing prior state",
+TEST_CASE("plugin mixer ui reveals the next hidden local slot and removes it from the local header without losing prior state",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -535,20 +535,15 @@ TEST_CASE("plugin mixer ui reveals the next hidden local slot and confirms live 
     });
 
     auto* addButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kAddLocalChannelLabel);
+    auto* removeButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kRemoveLocalChannelLabel);
     REQUIRE(addButton != nullptr);
+    REQUIRE(removeButton != nullptr);
     REQUIRE(addButton->onClick != nullptr);
     addButton->onClick();
 
     auto visibleStrips = harness.editor->getVisibleMixerStripLabelsForTesting();
     REQUIRE(visibleStrips.size() == 2);
     CHECK(visibleStrips[1] == "Bass");
-
-    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
-          == FamaLamaJamAudioProcessorEditor::kHideLocalChannelLabel);
-    REQUIRE(harness.editor->clickMixerStripRemoveForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
-    CHECK(harness.editor->getMixerStripRemoveButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
-          == FamaLamaJamAudioProcessorEditor::kConfirmHideLocalChannelLabel);
-    CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
 
     REQUIRE(harness.editor->clickMixerStripRemoveForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
     visibleStrips = harness.editor->getVisibleMixerStripLabelsForTesting();

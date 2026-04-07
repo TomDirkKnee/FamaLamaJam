@@ -50,7 +50,10 @@ public:
     static constexpr const char* kLocalHeaderTitle = "Local Sends";
     static constexpr const char* kLocalHeaderTransmitLabel = "Transmit";
     static constexpr const char* kLocalHeaderVoiceLabel = "Voice";
-    static constexpr const char* kAddLocalChannelLabel = "Add channel";
+    static constexpr const char* kAddLocalChannelLabel = "+";
+    static constexpr const char* kRemoveLocalChannelLabel = "-";
+    static constexpr const char* kCollapseLocalChannelLabel = "Collapse";
+    static constexpr const char* kExpandLocalChannelLabel = "Expand";
     static constexpr const char* kHideLocalChannelLabel = "Hide";
     static constexpr const char* kConfirmHideLocalChannelLabel = "Confirm hide";
     static constexpr const char* kMainOutputLabel = "FLJ Main Output";
@@ -267,7 +270,7 @@ public:
     using StemCaptureUiGetter = std::function<StemCaptureUiState()>;
     using StemCaptureSettingsSetter = std::function<bool(app::session::StemCaptureSettings)>;
     using StemCaptureNewRunHandler = std::function<bool()>;
-    using MixerStripCommandHandler = std::function<bool(const std::string&)>;
+    using VoiceModeToggleHandler = std::function<bool()>;
 
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
@@ -299,8 +302,8 @@ public:
                                     MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
                                     LocalChannelVisibilitySetter localChannelVisibilitySetter = {},
                                     CommandHandler addLocalChannelHandler = {},
-                                    MixerStripCommandHandler transmitToggleHandler = {},
-                                    MixerStripCommandHandler voiceModeToggleHandler = {},
+                                    CommandHandler transmitToggleHandler = {},
+                                    VoiceModeToggleHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
@@ -330,8 +333,8 @@ public:
                                     MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
                                     LocalChannelVisibilitySetter localChannelVisibilitySetter = {},
                                     CommandHandler addLocalChannelHandler = {},
-                                    MixerStripCommandHandler transmitToggleHandler = {},
-                                    MixerStripCommandHandler voiceModeToggleHandler = {},
+                                    CommandHandler transmitToggleHandler = {},
+                                    VoiceModeToggleHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
     ~FamaLamaJamAudioProcessorEditor() override;
 
@@ -389,7 +392,7 @@ public:
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] juce::String getDiagnosticsTextForTesting() const;
     [[nodiscard]] bool isDiagnosticsExpandedForTesting() const noexcept;
-    [[nodiscard]] bool isLocalLaneCollapsedForTesting() const noexcept;
+    [[nodiscard]] bool isLocalGroupCollapsedForTesting() const noexcept;
     [[nodiscard]] juce::String getServerSettingsSummaryForTesting() const;
     [[nodiscard]] juce::String getStemCaptureDirectoryForTesting() const;
     [[nodiscard]] juce::String getStemCaptureStatusTextForTesting() const;
@@ -426,7 +429,6 @@ private:
     {
         std::string sourceId;
         std::string groupId;
-        MixerStripKind kind { MixerStripKind::RemoteDelayed };
         juce::Label groupLabel;
         juce::Label titleLabel;
         juce::Label subtitleLabel;
@@ -448,13 +450,6 @@ private:
         bool showsGroupLabel { false };
         float lastMeterLeft { 0.0f };
         float lastMeterRight { 0.0f };
-    };
-
-    enum class LocalLaneCollapseMode
-    {
-        Auto,
-        ForceExpanded,
-        ForceCollapsed,
     };
 
     void timerCallback() override;
@@ -479,7 +474,6 @@ private:
     void updateTransmitButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
     void updateVoiceModeButtonAppearance(MixerStripWidgets& widgets, const MixerStripState& strip);
     [[nodiscard]] RoomVoteKind getActiveRoomVoteKind() const noexcept;
-    [[nodiscard]] bool isLocalLaneCollapsed() const noexcept;
     [[nodiscard]] bool isRoomFeedNearBottom() const noexcept;
     void scrollRoomFeedToBottom();
     bool applyStemCaptureSettingsFromUi(bool enabled);
@@ -487,7 +481,6 @@ private:
     [[nodiscard]] juce::String getCollapsedServerSummary() const;
     [[nodiscard]] juce::String getCollapsedServerSummaryAscii() const;
     [[nodiscard]] juce::String getDiagnosticsToggleText() const;
-    [[nodiscard]] juce::String getLocalLaneCollapseText() const;
     [[nodiscard]] juce::String getServerSettingsToggleText() const;
 
     SettingsGetter settingsGetter_;
@@ -520,8 +513,8 @@ private:
     StemCaptureSettingsSetter stemCaptureSettingsSetter_;
     StemCaptureNewRunHandler stemCaptureNewRunHandler_;
     CommandHandler addLocalChannelHandler_;
-    MixerStripCommandHandler transmitToggleHandler_;
-    MixerStripCommandHandler voiceModeToggleHandler_;
+    CommandHandler transmitToggleHandler_;
+    VoiceModeToggleHandler voiceModeToggleHandler_;
 
     juce::Label titleLabel_;
     juce::TextButton serverSettingsToggle_;
@@ -586,10 +579,11 @@ private:
     juce::Viewport mixerViewport_;
     juce::Component mixerContent_;
     juce::Label localHeaderLabel_;
-    juce::TextButton localLaneCollapseButton_;
     juce::ToggleButton localHeaderTransmitToggle_;
     juce::ToggleButton localHeaderVoiceToggle_;
+    juce::TextButton removeLocalChannelButton_;
     juce::TextButton addLocalChannelButton_;
+    juce::TextButton collapseLocalChannelButton_;
     juce::Label masterOutputLabel_;
     juce::Slider masterOutputSlider_;
     std::vector<std::unique_ptr<MixerStripWidgets>> mixerStripWidgets_;
@@ -609,7 +603,7 @@ private:
     bool hostSyncAssistLastActionWasCancel_ { false };
     bool serverSettingsExpanded_ { true };
     bool diagnosticsExpanded_ { false };
-    LocalLaneCollapseMode localLaneCollapseMode_ { LocalLaneCollapseMode::Auto };
+    bool localGroupCollapsed_ { false };
     bool updatingRoomVoteInputs_ { false };
     std::unique_ptr<juce::FileChooser> stemCaptureFolderChooser_;
     juce::String stemCaptureInlineStatusText_;

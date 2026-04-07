@@ -534,7 +534,7 @@ TEST_CASE("plugin room controls ui keeps diagnostics hidden until requested and 
 
     CHECK_FALSE(harness.editor->isDiagnosticsExpandedForTesting());
     CHECK(roomViewport->isVisible());
-    CHECK(diagnosticsButton->getX() < roomLabel->getX());
+    CHECK(diagnosticsButton->getY() < roomLabel->getY());
 
     harness.editor->clickDiagnosticsToggleForTesting();
 
@@ -686,23 +686,18 @@ TEST_CASE("plugin room controls ui keeps the sidebar beside a shared local-first
     };
     harness.editor->refreshForTesting();
 
-    auto* localHeaderLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
-    auto* aliceGroupLabel = findLabelWithText(*harness.editor, "alice");
-    auto* bobGroupLabel = findLabelWithText(*harness.editor, "bob");
     auto* roomViewport = findRoomSidebarViewport(*harness.editor);
 
-    REQUIRE(localHeaderLabel != nullptr);
-    REQUIRE(aliceGroupLabel != nullptr);
-    REQUIRE(bobGroupLabel != nullptr);
     REQUIRE(roomViewport != nullptr);
 
-    const auto localHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
-    const auto aliceBounds = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
-    const auto bobBounds = getBoundsInEditor(*harness.editor, *bobGroupLabel);
     const auto sidebarBounds = getBoundsInEditor(*harness.editor, *roomViewport);
+    const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
 
-    CHECK(aliceBounds.getX() > localHeaderBounds.getRight());
-    CHECK(bobBounds.getX() > aliceBounds.getRight());
-    CHECK(std::abs(aliceBounds.getY() - localHeaderBounds.getY()) <= 24);
-    CHECK(sidebarBounds.getX() > bobBounds.getRight());
+    REQUIRE(stripLabels.size() == 4);
+    CHECK(stripLabels[0] == "Main");
+    CHECK(stripLabels[1] == "Bass");
+    CHECK(stripLabels[2] == "alice - guitar");
+    CHECK(stripLabels[3] == "bob - bass");
+    CHECK_FALSE(harness.editor->isRoomSectionAboveMixerForTesting());
+    CHECK(sidebarBounds.getX() > harness.editor->getWidth() / 2);
 }
