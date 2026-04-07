@@ -267,7 +267,7 @@ public:
     using StemCaptureUiGetter = std::function<StemCaptureUiState()>;
     using StemCaptureSettingsSetter = std::function<bool(app::session::StemCaptureSettings)>;
     using StemCaptureNewRunHandler = std::function<bool()>;
-    using VoiceModeToggleHandler = std::function<bool()>;
+    using MixerStripCommandHandler = std::function<bool(const std::string&)>;
 
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
@@ -299,8 +299,8 @@ public:
                                     MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
                                     LocalChannelVisibilitySetter localChannelVisibilitySetter = {},
                                     CommandHandler addLocalChannelHandler = {},
-                                    CommandHandler transmitToggleHandler = {},
-                                    VoiceModeToggleHandler voiceModeToggleHandler = {},
+                                    MixerStripCommandHandler transmitToggleHandler = {},
+                                    MixerStripCommandHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
     FamaLamaJamAudioProcessorEditor(juce::AudioProcessor& processor,
                                     SettingsGetter settingsGetter,
@@ -330,8 +330,8 @@ public:
                                     MixerStripOutputAssignmentSetter mixerStripOutputAssignmentSetter = {},
                                     LocalChannelVisibilitySetter localChannelVisibilitySetter = {},
                                     CommandHandler addLocalChannelHandler = {},
-                                    CommandHandler transmitToggleHandler = {},
-                                    VoiceModeToggleHandler voiceModeToggleHandler = {},
+                                    MixerStripCommandHandler transmitToggleHandler = {},
+                                    MixerStripCommandHandler voiceModeToggleHandler = {},
                                     MixerStripSoloSetter mixerStripSoloSetter = {});
     ~FamaLamaJamAudioProcessorEditor() override;
 
@@ -513,8 +513,8 @@ private:
     StemCaptureSettingsSetter stemCaptureSettingsSetter_;
     StemCaptureNewRunHandler stemCaptureNewRunHandler_;
     CommandHandler addLocalChannelHandler_;
-    CommandHandler transmitToggleHandler_;
-    VoiceModeToggleHandler voiceModeToggleHandler_;
+    MixerStripCommandHandler transmitToggleHandler_;
+    MixerStripCommandHandler voiceModeToggleHandler_;
 
     juce::Label titleLabel_;
     juce::TextButton serverSettingsToggle_;

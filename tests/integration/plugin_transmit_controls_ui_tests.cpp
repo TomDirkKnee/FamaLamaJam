@@ -121,7 +121,24 @@ struct EditorHarness
             []() { return false; },
             [](bool) {},
             []() { return FamaLamaJamAudioProcessorEditor::ServerDiscoveryUiState {}; },
-            [](bool) { return false; });
+            [](bool) { return false; },
+            FamaLamaJamAudioProcessorEditor::RoomUiGetter {},
+            FamaLamaJamAudioProcessorEditor::RoomMessageHandler {},
+            FamaLamaJamAudioProcessorEditor::RoomVoteHandler {},
+            FamaLamaJamAudioProcessorEditor::DiagnosticsTextGetter {},
+            FamaLamaJamAudioProcessorEditor::FloatGetter {},
+            FamaLamaJamAudioProcessorEditor::FloatSetter {},
+            FamaLamaJamAudioProcessorEditor::FloatGetter {},
+            FamaLamaJamAudioProcessorEditor::FloatSetter {},
+            FamaLamaJamAudioProcessorEditor::StemCaptureUiGetter {},
+            FamaLamaJamAudioProcessorEditor::StemCaptureSettingsSetter {},
+            FamaLamaJamAudioProcessorEditor::StemCaptureNewRunHandler {},
+            FamaLamaJamAudioProcessorEditor::MixerStripNameSetter {},
+            FamaLamaJamAudioProcessorEditor::MixerStripOutputAssignmentSetter {},
+            FamaLamaJamAudioProcessorEditor::LocalChannelVisibilitySetter {},
+            FamaLamaJamAudioProcessorEditor::CommandHandler {},
+            [](const std::string&) { return true; },
+            [](const std::string&) { return true; });
     }
 };
 

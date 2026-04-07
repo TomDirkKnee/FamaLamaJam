@@ -2017,8 +2017,12 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
 
         return false;
     };
-    auto transmitToggleHandler = [this]() { return toggleTransmitEnabled(); };
-    auto voiceModeToggleHandler = [this]() { return toggleLocalVoiceMode(); };
+    auto transmitToggleHandler = [this](const std::string& sourceId) {
+        return findFixedLocalRoutingSlot(sourceId) != nullptr ? toggleTransmitEnabled() : false;
+    };
+    auto voiceModeToggleHandler = [this](const std::string& sourceId) {
+        return findFixedLocalRoutingSlot(sourceId) != nullptr ? toggleLocalVoiceMode() : false;
+    };
 
     return new FamaLamaJamAudioProcessorEditor(*this,
                                                std::move(settingsGetter),
