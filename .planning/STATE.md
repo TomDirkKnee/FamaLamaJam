@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-04-07T12:04:12.0090599Z"
-last_activity: 2026-04-07 - Completed Phase 09 plan 01 with the five-region JamTaba-inspired shell, local-lane collapse, persistent sidebar, and footer-pinned timing workflow.
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-04-07T12:52:30Z"
+last_activity: 2026-04-07 - Completed 09-02 with strip-owned local actions, grouped remote card clusters, and preserved solo parity inside the Phase 09 shell.
 progress:
-  total_phases: 18
-  completed_phases: 13
-  total_plans: 57
-  completed_plans: 53
-  percent: 93
+  total_phases: 19
+  completed_phases: 14
+  total_plans: 63
+  completed_plans: 58
+  percent: 92
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 09 now has its layout shell in place; the next work is strip-anatomy conversion and final responsive/manual validation inside that stable frame.
+**Current focus:** Phase 09 now has both the shell and strip anatomy in place; the remaining work is responsive polish plus the dedicated manual Ableton validation pass.
 
 ## Current Position
 
 Phase: 09 - JamTaba-Inspired Layout & Mixer Parity  
-Plan: 02 - Pending execution  
+Plan: 03 - Pending execution  
 Status: In Progress  
-Last activity: 2026-04-07 - Completed 09-01 and locked the editor into the five-region shell before the strip-control rewrite.
+Last activity: 2026-04-07 - Completed 09-02 and moved local transmit/voice ownership onto strip cards with grouped remote clusters.
 
-Progress: 93%
+Progress: 92%
 
 ## Accumulated Context
 
@@ -105,6 +105,8 @@ Progress: 93%
 - [Phase 08.3.4.2]: Extra local channels must become removable in the UI rather than add-only.
 - [Phase 09]: Land the five-region shell before the strip-control rewrite so later Phase 09 plans can change strip anatomy inside a stable editor frame.
 - [Phase 09]: Narrow widths collapse the local lane first at `860 px` or below while keeping the sidebar visible and the footer pinned.
+- [Phase 09]: Keep processor-owned local transmit and voice semantics mirrored across local strips while moving control ownership and discovery onto each strip widget.
+- [Phase 09]: Render remote channels as grouped card clusters under user headers instead of continuing the transitional full-width stacked rows.
 
 ### Roadmap Evolution
 
@@ -157,9 +159,10 @@ Progress: 93%
 - 2026-04-06: Follow-up Ableton reruns confirmed `Local Send 2` remote audibility and `ROUTE-03` routed-output isolation after rolling back the receive-timing regression; the remaining gaps are reopen persistence and removable extra-local-channel UX.
 - 2026-04-06: Closed Phase 08.3.4.1 as a functional first-pass implementation and inserted Phase 08.3.4.2 to pursue expanded bus counts, removable extra channels, and persistent input-side naming/routing.
 - 2026-04-07: Completed Phase 09 plan 01 in 33 min across 2 task commits and 6 modified files; the editor now uses the five-region shell with local collapse-first responsiveness and the focused layout gate passes on `build-vs-2026`.
+- 2026-04-07: Completed Phase 09 plan 02 in 19 min across 2 task commits and 7 modified files; local transmit and voice actions now live on strip cards, remote strips render in grouped user clusters, and the focused strip-anatomy gate passes on `build-vs-2026`.
 
 ## Session Continuity
 
-Last session: 2026-04-07T12:04:12.0090599Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-04-07T12:52:30Z
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
