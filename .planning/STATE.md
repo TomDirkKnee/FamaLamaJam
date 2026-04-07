@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Closed 08.3.4.1 as functionally complete and inserted 08.3.4.2
-last_updated: "2026-04-06T15:30:00.000Z"
-last_activity: 2026-04-06 - The fixed-bus Jim/Ben reruns now prove `Local Send 2` can publish and be heard remotely, and `P8.3.4.1-ROUTE-03` is manually passed; reopen persistence plus removable local-channel UX remain the open follow-on gaps.
+status: active
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-04-07T12:04:12.0090599Z"
+last_activity: 2026-04-07 - Completed Phase 09 plan 01 with the five-region JamTaba-inspired shell, local-lane collapse, persistent sidebar, and footer-pinned timing workflow.
 progress:
   total_phases: 18
   completed_phases: 13
   total_plans: 57
-  completed_plans: 52
-  percent: 91
+  completed_plans: 53
+  percent: 93
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 08.3.4.2 will expand the first fixed-bus implementation toward an eight-input/eight-output target, removable extra local channels, and persistent input-side channel naming/routing.
+**Current focus:** Phase 09 now has its layout shell in place; the next work is strip-anatomy conversion and final responsive/manual validation inside that stable frame.
 
 ## Current Position
 
-Phase: 08.3.4.2 - Expanded Fixed-Bus I/O And Persistent Input Mapping  
-Plan: Context/Planning  
-Status: Planning  
-Last activity: 2026-04-06 - Closed 08.3.4.1 as a functional first fixed-bus pass and moved the remaining routing-expansion, removable-channel, and input persistence goals into the new 08.3.4.2 phase.
+Phase: 09 - JamTaba-Inspired Layout & Mixer Parity  
+Plan: 02 - Pending execution  
+Status: In Progress  
+Last activity: 2026-04-07 - Completed 09-01 and locked the editor into the five-region shell before the strip-control rewrite.
 
-Progress: 91%
+Progress: 93%
 
 ## Accumulated Context
 
@@ -103,6 +103,8 @@ Progress: 91%
 - [Phase 08.3.4.2]: Treat eight inputs/eight outputs as the expansion target, but explicitly verify what Ableton/VST3 actually expose before promising the full count.
 - [Phase 08.3.4.2]: Persist input-side local channel identity and bus mapping, but do not assume remote output assignments should persist across arbitrary room membership changes.
 - [Phase 08.3.4.2]: Extra local channels must become removable in the UI rather than add-only.
+- [Phase 09]: Land the five-region shell before the strip-control rewrite so later Phase 09 plans can change strip anatomy inside a stable editor frame.
+- [Phase 09]: Narrow widths collapse the local lane first at `860 px` or below while keeping the sidebar visible and the footer pinned.
 
 ### Roadmap Evolution
 
@@ -154,9 +156,10 @@ Progress: 91%
 - 2026-04-05: Completed Phase 08.3.4.1 plan 03 in 25 min across 2 task commits and 6 modified files; the focused fixed-bus gate stayed green, but the first Ableton checkpoint showed only one receiving source (`jim#0`) after `Main` plus `Local Send 2`.
 - 2026-04-06: Follow-up Ableton reruns confirmed `Local Send 2` remote audibility and `ROUTE-03` routed-output isolation after rolling back the receive-timing regression; the remaining gaps are reopen persistence and removable extra-local-channel UX.
 - 2026-04-06: Closed Phase 08.3.4.1 as a functional first-pass implementation and inserted Phase 08.3.4.2 to pursue expanded bus counts, removable extra channels, and persistent input-side naming/routing.
+- 2026-04-07: Completed Phase 09 plan 01 in 33 min across 2 task commits and 6 modified files; the editor now uses the five-region shell with local collapse-first responsiveness and the focused layout gate passes on `build-vs-2026`.
 
 ## Session Continuity
 
-Last session: 2026-04-05T08:56:12.162Z
-Stopped at: Completed 08.3.4.1-03-PLAN.md
+Last session: 2026-04-07T12:04:12.0090599Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
