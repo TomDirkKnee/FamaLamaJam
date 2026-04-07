@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-04-07T12:52:30Z"
-last_activity: 2026-04-07 - Completed 09-02 with strip-owned local actions, grouped remote card clusters, and preserved solo parity inside the Phase 09 shell.
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-04-07T13:12:37.451Z"
+last_activity: 2026-04-07 - Completed 09-03 with narrow-width local reopening, slimmer sidebar/footer geometry, and the dedicated Phase 09 Ableton layout matrix.
 progress:
   total_phases: 19
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 63
-  completed_plans: 58
-  percent: 92
+  completed_plans: 59
+  percent: 94
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 09 now has both the shell and strip anatomy in place; the remaining work is responsive polish plus the dedicated manual Ableton validation pass.
+**Current focus:** Phase 09 layout work is implemented and documented; the remaining host-facing step is filling in the dedicated Ableton validation matrix before treating the ergonomics verdict as fully host-proven.
 
 ## Current Position
 
 Phase: 09 - JamTaba-Inspired Layout & Mixer Parity  
-Plan: 03 - Pending execution  
-Status: In Progress  
-Last activity: 2026-04-07 - Completed 09-02 and moved local transmit/voice ownership onto strip cards with grouped remote clusters.
+Plan: 03 - Completed  
+Status: Awaiting manual Ableton validation sign-off  
+Last activity: 2026-04-07 - Completed 09-03 with manual-reopen local collapse, slimmer sidebar/footer sizing, and the Phase 09 layout matrix.
 
-Progress: 92%
+Progress: 94%
 
 ## Accumulated Context
 
@@ -107,6 +107,8 @@ Progress: 92%
 - [Phase 09]: Narrow widths collapse the local lane first at `860 px` or below while keeping the sidebar visible and the footer pinned.
 - [Phase 09]: Keep processor-owned local transmit and voice semantics mirrored across local strips while moving control ownership and discovery onto each strip widget.
 - [Phase 09]: Render remote channels as grouped card clusters under user headers instead of continuing the transitional full-width stacked rows.
+- [Phase 09]: Use explicit auto/forced local-lane collapse modes so narrow-width auto-collapse can still be manually reopened.
+- [Phase 09]: Slim the sidebar and footer before sacrificing sidebar visibility, keeping grouped remote strips as the dominant workspace.
 
 ### Roadmap Evolution
 
@@ -124,6 +126,7 @@ Progress: 92%
 
 - Keep using the verified `build-vs-2026` validation path until the local `build-vs` NMake tree stops failing with `U1076 name too long`.
 - Run the every-four-beat Ableton repro on the same machine to judge how much CPU risk remains after the editor-churn mitigation.
+- Fill in `docs/validation/phase9-jamtaba-inspired-layout-and-mixer-parity.md` with the real Ableton verdict rows using the rebuilt Debug VST3 artifact.
 
 ### Blockers/Concerns
 
@@ -133,6 +136,8 @@ Progress: 92%
 - Phase 08.2 still carries forward unresolved same-machine CPU evidence, but it is now treated as a documented carry-forward concern rather than the active execution step.
 - Phase 08.3 is closed, but the local `build-vs` NMake tree still fails with `U1076 name too long`; continue using `build-vs-2026` until that environment issue is resolved.
 - Phase 08.3.4.2 now carries the remaining routing-expansion concerns: proving what extra buses Ableton/VST3 actually expose beyond `Local Send 2`, adding removable extra local channels, and persisting input-side local channel state across project restore.
+- Phase 09 code and automation are complete, but the new Ableton layout matrix still needs real host verdict rows before the ergonomics outcome should be treated as manually validated.
+- The full `ctest` sweep still reports unrelated failures in the Ogg/Vorbis concatenation unit test and one stem-capture integration test; both were logged to the Phase 09 deferred-items file because this plan did not touch codec or stem-capture code.
 
 ### Performance Metrics
 
@@ -160,9 +165,10 @@ Progress: 92%
 - 2026-04-06: Closed Phase 08.3.4.1 as a functional first-pass implementation and inserted Phase 08.3.4.2 to pursue expanded bus counts, removable extra channels, and persistent input-side naming/routing.
 - 2026-04-07: Completed Phase 09 plan 01 in 33 min across 2 task commits and 6 modified files; the editor now uses the five-region shell with local collapse-first responsiveness and the focused layout gate passes on `build-vs-2026`.
 - 2026-04-07: Completed Phase 09 plan 02 in 19 min across 2 task commits and 7 modified files; local transmit and voice actions now live on strip cards, remote strips render in grouped user clusters, and the focused strip-anatomy gate passes on `build-vs-2026`.
+- 2026-04-07: Completed Phase 09 plan 03 in 8 min across 2 task commits and 8 modified files; narrow-width local reopening, slimmer sidebar/footer geometry, and the dedicated Phase 09 Ableton layout matrix are now in place, while manual host verdict rows remain pending.
 
 ## Session Continuity
 
-Last session: 2026-04-07T12:52:30Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-04-07T13:12:37.447Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None

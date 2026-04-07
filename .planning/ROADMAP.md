@@ -26,7 +26,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 08.3.4: Host Multi-I/O Routing Research (INSERTED)** - Determine what JUCE/VST3/Ableton can expose for multiple local send inputs and per-stream DAW output routing before committing to implementation. (completed 2026-04-05)
 - [x] **Phase 08.3.4.1: Fixed-Bus Multi-Input And NINJAM Channel Implementation (INSERTED)** - Completed 2026-04-06 as a functional first pass: `Main` plus `Local Send 2` now transmit as separate remote channels and fixed remote output routing works in Ableton, with reopen persistence and removable extra-channel UX intentionally deferred. (completed 2026-04-06)
 - [ ] **Phase 08.3.4.2: Expanded Fixed-Bus I/O And Persistent Input Mapping (INSERTED)** - Expand the first fixed-bus implementation toward an eight-input/eight-output target, prove what additional Ableton/VST3 input buses are actually practical beyond `Local Send 2`, add removable extra local channels, and persist input-side names/routing across project restore.
-- [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Refresh the plugin layout with horizontal strips, integrated chat, and mixer parity features like solo.
+- [x] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - Completed 2026-04-07 with final responsive polish, grouped-strip layout parity, and a dedicated Ableton validation matrix ready for host verdict fill-in. (completed 2026-04-07)
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
 ## Phase Details
@@ -325,12 +325,12 @@ Plans:
 2. A right-side chat/room panel coexists cleanly with transport and mixer workflows.
 3. Mixer parity improves with solo support and clearer strip grouping/identity.
 4. The refreshed layout remains usable on typical Ableton plugin window sizes.
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
 - [x] 09-01-PLAN.md - Lock the five-region editor shell, local collapse-first responsiveness, and pinned footer/sidebar structure.
 - [x] 09-02-PLAN.md - Convert strip anatomy toward JamTaba-style local and remote strips with per-strip local actions and grouped remotes.
-- [ ] 09-03-PLAN.md - Finish responsive polish and record the dedicated Ableton validation matrix for the final Phase 09 layout.
+- [x] 09-03-PLAN.md - Finish responsive polish and record the dedicated Ableton validation matrix for the final Phase 09 layout. (completed 2026-04-07)
 
 ### Phase 10: Advanced NINJAM Parity Research
 **Goal**: Research and scope higher-risk NINJAM features before implementation commitments are made.
@@ -403,7 +403,7 @@ Plans:
 | 8.3.4. Host Multi-I/O Routing Research | 3/3 | Complete | 2026-04-05 |
 | 8.3.4.1. Fixed-Bus Multi-Input And NINJAM Channel Implementation | 3/3 | Complete | 2026-04-06 |
 | 8.3.4.2. Expanded Fixed-Bus I/O And Persistent Input Mapping | 0/TBD | Planned | - |
-| 9. JamTaba-Inspired Layout & Mixer Parity | 2/3 | In Progress | - |
+| 9. JamTaba-Inspired Layout & Mixer Parity | 3/3 | Complete | 2026-04-07 |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
 ---
