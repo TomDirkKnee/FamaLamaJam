@@ -1296,16 +1296,21 @@ void FamaLamaJamAudioProcessorEditor::resized()
     roomFeedContent_.setSize(roomFeedWidth, juce::jmax(96, y));
 
     y = 0;
-    constexpr int kGroupGap = 12;
+    constexpr int kGroupGap = 10;
     constexpr int kGroupPadding = 8;
     constexpr int kHeaderHeight = 24;
     constexpr int kHeaderGap = 8;
-    constexpr int kStripGap = 8;
+    constexpr int kStripGap = 6;
     constexpr int kRemoteGroupLabelHeight = 20;
     const int expandedStripWidth = juce::jlimit(112, 126, juce::jmax(116, mixerViewport_.getWidth() / 9));
     const int expandedStripHeight = 252;
     const int collapsedStripWidth = 40;
     const int collapsedStripHeight = 216;
+    constexpr int kCompactHeaderButtonWidth = 20;
+    constexpr int kCompactCollapseButtonWidth = 56;
+    constexpr int kCollapsedLocalHeaderControlWidth = kCompactHeaderButtonWidth + 4 + kCompactHeaderButtonWidth + 4
+        + kCompactCollapseButtonWidth;
+    constexpr int kRemoteRoutingControlHeight = 38;
 
     auto hideComponent = [](juce::Component& component) {
         component.setVisible(false);
@@ -1371,7 +1376,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
         inner.removeFromTop(4);
         auto stripBody = inner.removeFromTop(juce::jmax(150, inner.getHeight()));
-        const int sideWidth = strip.kind == MixerStripKind::RemoteDelayed ? 42 : 34;
+        const int sideWidth = strip.kind == MixerStripKind::RemoteDelayed ? 38 : 34;
         auto sideColumn = stripBody.removeFromRight(sideWidth);
         stripBody.removeFromRight(4);
         auto meterColumn = stripBody.removeFromLeft(12);
@@ -1418,7 +1423,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
         if (widget.outputSelector.isVisible())
         {
-            widget.outputSelector.setBounds(nextCompactSlot(42));
+            widget.outputSelector.setBounds(nextCompactSlot(kRemoteRoutingControlHeight));
             widget.outputSelector.setVisible(true);
         }
         else
@@ -1451,19 +1456,20 @@ void FamaLamaJamAudioProcessorEditor::resized()
     if (localHeaderLabel_.isVisible() && localStripCount > 0)
     {
         const int localGroupWidth = localGroupCollapsed_
-            ? (kGroupPadding * 2) + (localStripCount * collapsedStripWidth) + ((localStripCount - 1) * kStripGap) + 132
+            ? (kGroupPadding * 2) + (localStripCount * collapsedStripWidth) + ((localStripCount - 1) * kStripGap)
+                + kCollapsedLocalHeaderControlWidth
             : (kGroupPadding * 2) + (localStripCount * expandedStripWidth) + ((localStripCount - 1) * kStripGap);
         auto headerRow = juce::Rectangle<int>(contentX + kGroupPadding, y, localGroupWidth - (kGroupPadding * 2), kHeaderHeight);
         collapseLocalChannelButton_.setVisible(true);
         collapseLocalChannelButton_.setButtonText(localGroupCollapsed_ ? kExpandLocalChannelLabel
                                                                        : kCollapseLocalChannelLabel);
-        collapseLocalChannelButton_.setBounds(headerRow.removeFromRight(72));
-        headerRow.removeFromRight(6);
+        collapseLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactCollapseButtonWidth));
+        headerRow.removeFromRight(4);
         addLocalChannelButton_.setVisible(true);
-        addLocalChannelButton_.setBounds(headerRow.removeFromRight(24));
-        headerRow.removeFromRight(6);
+        addLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth));
+        headerRow.removeFromRight(4);
         removeLocalChannelButton_.setVisible(localStripCount > 1);
-        removeLocalChannelButton_.setBounds(headerRow.removeFromRight(24));
+        removeLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth));
         headerRow.removeFromRight(8);
         localHeaderLabel_.setBounds(headerRow);
 
