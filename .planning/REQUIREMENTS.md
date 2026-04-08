@@ -136,8 +136,8 @@
 | ROOM-02 | Phase 7 - Chat & Room Control Commands | Complete |
 | DISC-01 | Phase 8 / Phase 08.1 - Server Discovery & History / Server Discovery Polish & JamTaba Parity Check | Planned |
 | DISC-02 | Phase 8 / Phase 08.1 / Phase 08.3 / Phase 08.3.1 - Server Discovery & History / Server Discovery Polish & JamTaba Parity Check / Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / Private Server Recall + Compact Session UI Polish | Planned |
-| LAYOUT-01 | Phase 9 - JamTaba-Inspired Layout & Mixer Parity | Complete |
-| LAYOUT-02 | Phase 08.3 / Phase 9 - Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / JamTaba-Inspired Layout & Mixer Parity | Complete |
+| LAYOUT-01 | Phase 9 / Phase 09.1 - JamTaba-Inspired Layout & Mixer Parity / Strip-Only Mixer Rebuild On Stable Layout | Complete |
+| LAYOUT-02 | Phase 08.3 / Phase 9 / Phase 09.1 - Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / JamTaba-Inspired Layout & Mixer Parity / Strip-Only Mixer Rebuild On Stable Layout | Complete |
 | LAYOUT-03 | Phase 08.2 / Phase 08.3 / Phase 08.3.1 / Phase 9 - Pre-Layout CPU, Mixer, UI, and Auth Hardening / Functional Release Controls, Session UX, and Voice-Mode Compatibility Guard / Private Server Recall + Compact Session UI Polish / JamTaba-Inspired Layout & Mixer Parity | Complete |
 | VOICE-01 | Phase 08.3.2 - Voice Mode Research & Prototype | Planned |
 | VOICE-02 | Phase 08.3.2 - Voice Mode Research & Prototype | Planned |
@@ -159,4 +159,4 @@
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-04-06 after closing the first fixed-bus implementation pass and inserting the routing-expansion follow-on phase*
+*Last updated: 2026-04-08 after completing Phase 09.1 plan 05 and updating the strip-layout traceability.*

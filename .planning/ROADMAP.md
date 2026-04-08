@@ -27,7 +27,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 08.3.4.1: Fixed-Bus Multi-Input And NINJAM Channel Implementation (INSERTED)** - Completed 2026-04-06 as a functional first pass: `Main` plus `Local Send 2` now transmit as separate remote channels and fixed remote output routing works in Ableton, with reopen persistence and removable extra-channel UX intentionally deferred. (completed 2026-04-06)
 - [ ] **Phase 08.3.4.2: Expanded Fixed-Bus I/O And Persistent Input Mapping (INSERTED)** - Expand the first fixed-bus implementation toward an eight-input/eight-output target, prove what additional Ableton/VST3 input buses are actually practical beyond `Local Send 2`, add removable extra local channels, and persist input-side names/routing across project restore.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - All four plans are executed, but real Ableton validation failed: the disconnected state hides the primary `Connect` action and the refreshed host layout regresses practical usability, so the phase remains blocked pending follow-up.
-- [ ] **Phase 09.1: Strip-Only Mixer Rebuild On Stable Layout (INSERTED)** - All three plans are executed, but the focused Ableton strip validation failed across `P91-STRIP-01` through `P91-STRIP-05`, so the phase remains blocked pending another strip/layout follow-up.
+- [ ] **Phase 09.1: Strip-Only Mixer Rebuild On Stable Layout (INSERTED)** - Five of six plans are now executed; Wave 5 strip ergonomics are green, and the phase is in progress pending the combined rerun and final Ableton checkpoint in `09.1-06`.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
 ## Phase Details
@@ -344,14 +344,14 @@ Plans:
 3. Local strips support collapse to meter-led mini strips without wasting header space, while local add/remove/collapse controls stay discreet.
 4. Remote strips keep grouped-by-user presentation and compact output-routing affordances without widening the overall mixer excessively.
 5. The phase closes with focused Ableton checks specifically on strip usability, not a second broad whole-page redesign claim.
-**Plans**: 6 plans total, 4/6 executed, blocked pending the remaining strip-ergonomics follow-up and final Ableton rerun
+**Plans**: 6 plans total, 5/6 executed, in progress pending the combined rerun and final Ableton checkpoint
 
 Plans:
 - [x] 09.1-01-PLAN.md - Lock the strip-only recovery shell, local-header controls, and collapsed-local behavior on the stable reverted page layout.
 - [x] 09.1-02-PLAN.md - Convert the strip shell toward the narrower integrated strip widget and compact side-control model.
 - [x] 09.1-03-PLAN.md - Polish strip density, record the focused Ableton strip-usability validation matrix, and preserve the blocked host verdict. (completed 2026-04-08, blocked outcome)
 - [x] 09.1-04-PLAN.md - Recover shell width, always-visible connect actions, aligned settings fields, wider default editor geometry, and the full-width footer or metronome shell. (completed 2026-04-08)
-- [ ] 09.1-05-PLAN.md - Lean harder into Ableton-style strip ergonomics with taller integrated strips, larger pan pots, compact local TX-style controls, and tighter collapsed locals.
+- [x] 09.1-05-PLAN.md - Lean harder into Ableton-style strip ergonomics with taller integrated strips, larger pan pots, compact local TX-style controls, and tighter collapsed locals. (completed 2026-04-08)
 - [ ] 09.1-06-PLAN.md - Re-run the focused 09.1 automation and Ableton matrix, then record the authoritative rerun verdict in validation and planning state.
 
 ### Phase 10: Advanced NINJAM Parity Research
@@ -426,7 +426,7 @@ Plans:
 | 8.3.4.1. Fixed-Bus Multi-Input And NINJAM Channel Implementation | 3/3 | Complete | 2026-04-06 |
 | 8.3.4.2. Expanded Fixed-Bus I/O And Persistent Input Mapping | 0/TBD | Planned | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 4/4 | Blocked | - |
-| 9.1. Strip-Only Mixer Rebuild On Stable Layout | 3/3 | Blocked | - |
+| 9.1. Strip-Only Mixer Rebuild On Stable Layout | 5/6 | In Progress | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
 ---

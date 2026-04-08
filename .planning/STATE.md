@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Blocked - Focused Ableton strip validation failed
-stopped_at: Completed 09.1-04-PLAN.md
-last_updated: "2026-04-08T08:35:07.720Z"
-last_activity: 2026-04-08 - Completed 09.1-04 by compacting the expanded settings shell, widening the default editor, and restoring the full-width footer gate while Phase 09.1 stays blocked pending plans 05-06 and the final Ableton rerun.
+status: In Progress - Plan 09.1-06 combined rerun pending
+stopped_at: Completed 09.1-05-PLAN.md
+last_updated: "2026-04-08T09:00:33.579Z"
+last_activity: 2026-04-08 - Completed 09.1-05 by rebuilding the mixer strips into taller integrated meter-fader columns with larger pan pots, tighter local TX-style controls, and stronger collapsed-local reclaim width while Phase 09.1 moves to the final combined rerun in plan 06.
 progress:
   total_phases: 20
   completed_phases: 15
   total_plans: 70
-  completed_plans: 63
-  percent: 90
+  completed_plans: 64
+  percent: 91
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Plan 09.1-04 is complete, and the next work is the Plan 09.1-05 strip-ergonomics follow-up before the final combined rerun and Ableton checkpoint in Plan 09.1-06.
+**Current focus:** Plan 09.1-05 is complete, and the next work is Plan 09.1-06 for the combined strip-plus-shell rerun, Debug VST3 rebuild, and final Ableton checkpoint.
 
 ## Current Position
 
 Phase: 09.1 - Strip-Only Mixer Rebuild On Stable Layout  
-Plan: 04 - Completed  
-Status: Blocked - Focused Ableton strip validation failed  
-Last activity: 2026-04-08 - Completed 09.1-04 by compacting the expanded settings shell, widening the default editor, and restoring the full-width footer gate while Phase 09.1 stays blocked pending plans 05-06 and the final Ableton rerun.
+Plan: 05 - Completed  
+Status: In Progress - Plan 09.1-06 combined rerun pending  
+Last activity: 2026-04-08 - Completed 09.1-05 by rebuilding the mixer strips into taller integrated meter-fader columns with larger pan pots, tighter local TX-style controls, and stronger collapsed-local reclaim width while Phase 09.1 moves to the final combined rerun in plan 06.
 
-Progress: 90%
+Progress: 91%
 
 ## Accumulated Context
 
@@ -119,6 +119,8 @@ Progress: 90%
 - [Phase 09.1]: Keep Plan 03 scoped to compact-spacing polish and honest validation capture instead of reopening the broader page shell.
 - [Phase 09.1]: Widen the stable shell to a 1350 px default while keeping the pre-Phase-9 page structure.
 - [Phase 09.1]: Keep the expanded settings in a compact left column and offset the room sidebar so chat stays readable beside the settings rows.
+- [Phase 09.1]: Treat the gain slider and meter as one strip spine in layout and in the geometry seam so Wave 5 can assert the Ableton-style integrated control honestly.
+- [Phase 09.1]: Collapse locals to 28 px mini strips with a shortened 'Loc' header while keeping explicit '+', '-', and 'Expand' actions visible.
 
 ### Roadmap Evolution
 
@@ -148,7 +150,7 @@ Progress: 90%
 - Phase 08.3.4.2 now carries the remaining routing-expansion concerns: proving what extra buses Ableton/VST3 actually expose beyond `Local Send 2`, adding removable extra local channels, and persisting input-side local channel state across project restore.
 - The full `ctest` sweep still reports unrelated failures in the Ogg/Vorbis concatenation unit test and one stem-capture integration test; both were logged to the Phase 09 deferred-items file because this plan did not touch codec or stem-capture code.
 - Phase 09 host validation failed in Ableton: the disconnected layout hides the primary Connect action, collapse/reopen behavior does not recover a clear workflow, and the grouped room/chat presentation feels worse than the previous version.
-- Phase 09.1 focused Ableton strip validation also failed in Ableton: strips remain too sparse, collapsed locals still waste width, the connection shell steals space from chat, and the footer still needs full-width recovery plus a metronome volume knob.
+- Phase 09.1 Wave 5 strip ergonomics are now green, but the phase still needs Plan 09.1-06 to rerun the combined shell-plus-strip gate, rebuild the Debug VST3, and replace the blocked Ableton verdict with a fresh host result.
 
 ### Performance Metrics
 
@@ -182,9 +184,10 @@ Progress: 90%
 - 2026-04-07: Completed Phase 09.1 plan 02 in 28 min across 2 task commits and 5 modified files; narrow strip widgets now use vertical fader and meter spines with compact per-strip local TX and INT/VOX controls, and the focused mixer gate passes after a clean `build-vs-2026` rebuild.
 - 2026-04-08: Completed Phase 09.1 plan 03 in 9 min across 2 task commits and 4 modified files; compact-spacing polish, the focused strip gate, and the Debug VST3 rebuild all succeeded, but the five-row Ableton strip matrix failed and the phase remains blocked.
 - 2026-04-08: Completed Phase 09.1 plan 04 in 10 min across 2 task commits and 5 modified files; the expanded settings shell is compact and aligned, the default editor is wider, the full-width footer with metronome volume is restored, and the focused Wave 4 shell gate is green while the phase remains blocked on plans 05-06 plus the final Ableton rerun.
+- 2026-04-08: Completed Phase 09.1 plan 05 in 11 min across 2 task commits and 6 modified files; Wave 5 now proves taller integrated strips, larger pan pots, tighter local TX-style controls, and stronger collapsed-local reclaim width while the phase advances to the final 09.1-06 combined rerun.
 
 ## Session Continuity
 
-Last session: 2026-04-08T08:35:07.713Z
-Stopped at: Completed 09.1-04-PLAN.md
+Last session: 2026-04-08T08:59:37.042Z
+Stopped at: Completed 09.1-05-PLAN.md
 Resume file: None
