@@ -77,5 +77,5 @@ The current toggle styling does not match the strip button language and makes th
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `dfe9734`
+- Rollback: `git revert dfe9734`

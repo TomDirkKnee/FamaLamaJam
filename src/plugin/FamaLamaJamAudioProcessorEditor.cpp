@@ -1034,7 +1034,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     mixerContent_.addAndMakeVisible(collapseLocalChannelButton_);
 
     mixerViewport_.setViewedComponent(&mixerContent_, false);
-    mixerViewport_.setScrollBarsShown(true, false);
+    mixerViewport_.setScrollBarsShown(false, true);
+    mixerViewport_.setSingleStepSizes(36, 24);
     addAndMakeVisible(mixerViewport_);
 
     masterOutputLabel_.setText("Master Output", juce::dontSendNotification);
@@ -2880,6 +2881,21 @@ juce::Rectangle<int> FamaLamaJamAudioProcessorEditor::getMixerViewportBoundsForT
     return getLocalArea(&mixerViewport_, mixerViewport_.getLocalBounds());
 }
 
+bool FamaLamaJamAudioProcessorEditor::hasMixerHorizontalScrollbarForTesting() const noexcept
+{
+    return mixerViewport_.isVisible() && mixerViewport_.isHorizontalScrollBarShown();
+}
+
+int FamaLamaJamAudioProcessorEditor::getMixerViewPositionXForTesting() const noexcept
+{
+    return mixerViewport_.getViewPositionX();
+}
+
+int FamaLamaJamAudioProcessorEditor::getMixerContentWidthForTesting() const noexcept
+{
+    return mixerContent_.getWidth();
+}
+
 bool FamaLamaJamAudioProcessorEditor::getMixerStripLayoutSnapshotForTesting(
     const juce::String& sourceId,
     MixerStripLayoutSnapshotForTesting& snapshot) const
@@ -3254,6 +3270,11 @@ bool FamaLamaJamAudioProcessorEditor::setMixerStripSoloStateForTesting(const juc
     }
 
     return false;
+}
+
+void FamaLamaJamAudioProcessorEditor::setMixerViewPositionXForTesting(int x)
+{
+    mixerViewport_.setViewPosition(x, mixerViewport_.getViewPositionY());
 }
 
 FamaLamaJamAudioProcessorEditor::CpuDiagnosticSnapshot

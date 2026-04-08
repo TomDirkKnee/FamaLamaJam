@@ -471,6 +471,55 @@ TEST_CASE("plugin mixer ui removes dead default-strip controls and keeps local m
                        [](const juce::String& label) { return label == "Master Output"; }));
 }
 
+TEST_CASE("plugin mixer ui exposes a horizontal scrollbar when strip groups overflow the mixer width",
+          "[plugin_mixer_ui]")
+{
+    std::vector<FamaLamaJamAudioProcessorEditor::MixerStripState> strips;
+    strips.push_back({
+        .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+        .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+        .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+        .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+        .displayName = "Main",
+        .subtitle = "Live monitor",
+        .active = true,
+        .visible = true,
+        .editableName = true,
+    });
+
+    for (int userIndex = 0; userIndex < 8; ++userIndex)
+    {
+        for (int channelIndex = 0; channelIndex < 2; ++channelIndex)
+        {
+            const auto user = "user" + std::to_string(userIndex);
+            const auto sourceId = user + "#" + std::to_string(channelIndex);
+            const auto displayName = user + " - ch" + std::to_string(channelIndex + 1);
+            strips.push_back({
+                .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+                .sourceId = sourceId,
+                .groupId = user,
+                .groupLabel = user,
+                .displayName = displayName,
+                .subtitle = "remote",
+                .active = true,
+                .visible = true,
+                .outputAssignmentIndex = 0,
+                .outputAssignmentLabels = { FamaLamaJamAudioProcessorEditor::kMainOutputLabel, "Remote Out 1" },
+            });
+        }
+    }
+
+    EditorHarness harness(std::move(strips));
+
+    const auto viewportBounds = harness.editor->getMixerViewportBoundsForTesting();
+    CHECK(harness.editor->getMixerContentWidthForTesting() > viewportBounds.getWidth());
+    CHECK(harness.editor->hasMixerHorizontalScrollbarForTesting());
+
+    CHECK(harness.editor->getMixerViewPositionXForTesting() == 0);
+    harness.editor->setMixerViewPositionXForTesting(180);
+    CHECK(harness.editor->getMixerViewPositionXForTesting() > 0);
+}
+
 TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with orange explanatory status",
           "[plugin_mixer_ui]")
 {

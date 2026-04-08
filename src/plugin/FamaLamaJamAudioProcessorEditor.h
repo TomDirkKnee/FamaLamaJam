@@ -402,6 +402,9 @@ public:
     };
 
     [[nodiscard]] juce::Rectangle<int> getMixerViewportBoundsForTesting() const;
+    [[nodiscard]] bool hasMixerHorizontalScrollbarForTesting() const noexcept;
+    [[nodiscard]] int getMixerViewPositionXForTesting() const noexcept;
+    [[nodiscard]] int getMixerContentWidthForTesting() const noexcept;
     [[nodiscard]] bool getMixerStripLayoutSnapshotForTesting(const juce::String& sourceId,
                                                              MixerStripLayoutSnapshotForTesting& snapshot) const;
     [[nodiscard]] MixerLocalHeaderLayoutSnapshotForTesting getLocalHeaderLayoutSnapshotForTesting() const;
@@ -432,6 +435,7 @@ public:
     bool clickMixerStripVoiceToggleForTesting(const juce::String& sourceId);
     bool clickMixerStripRemoveForTesting(const juce::String& sourceId);
     bool setMixerStripSoloStateForTesting(const juce::String& sourceId, bool soloed);
+    void setMixerViewPositionXForTesting(int x);
     [[nodiscard]] CpuDiagnosticSnapshot getCpuDiagnosticSnapshotForTesting() const noexcept;
     void resetCpuDiagnosticSnapshotForTesting() noexcept;
     [[nodiscard]] juce::String getDiagnosticsTextForTesting() const;

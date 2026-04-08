@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `b7aa93c`
+- Current baseline commit before the next direct UI iteration: `dfe9734`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -15,8 +15,9 @@
 | `UI-003` | done | Refresh local strip layout immediately after add or remove so channels do not disappear until another resize | `85ef11e` | `fdc21f2` | `git revert fdc21f2` |
 | `UI-004` | done | Superimpose the gain fader on the meter and reset gain to 0 dB on double-click | `fdc21f2` | `f177eb2` | `git revert f177eb2` |
 | `UI-005` | done | Widen the full-height meter lane and enlarge the pan pot plus strip buttons to reduce dead space | `f177eb2` | `b7aa93c` | `git revert b7aa93c` |
-| `UI-006` | in_progress | Make mute, solo, and voice buttons use the boxed transmit style with state colors | `b7aa93c` | pending | `git revert <final-commit>` |
+| `UI-006` | done | Make mute, solo, and voice buttons use the boxed transmit style with state colors | `b7aa93c` | `dfe9734` | `git revert dfe9734` |
+| `UI-007` | in_progress | Add left/right mixer scrolling when strip groups overflow the available viewport width | `dfe9734` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-007`
+- Next feature entry: `UI-008`
