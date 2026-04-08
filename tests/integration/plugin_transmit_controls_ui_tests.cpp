@@ -218,3 +218,26 @@ TEST_CASE("plugin transmit controls ui keeps compact transmit and mode controls 
     CHECK(harness.transmitToggleCount == 1);
     CHECK(harness.voiceToggleCount == 1);
 }
+
+TEST_CASE("plugin transmit controls ui keeps local TX and INT buttons in a compact cluster beside the strip spine",
+          "[plugin_transmit_controls_ui]")
+{
+    EditorHarness harness;
+
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting mainLayout;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting sendLayout;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  mainLayout));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+                                                                  sendLayout));
+
+    CHECK(mainLayout.transmitBounds.getWidth() <= 28);
+    CHECK(mainLayout.voiceBounds.getWidth() <= 28);
+    CHECK(sendLayout.transmitBounds.getWidth() <= 28);
+    CHECK(sendLayout.voiceBounds.getWidth() <= 28);
+
+    CHECK(mainLayout.transmitBounds.getX() - mainLayout.gainBounds.getRight() <= 14);
+    CHECK(mainLayout.voiceBounds.getX() - mainLayout.gainBounds.getRight() <= 14);
+    CHECK(sendLayout.transmitBounds.getX() - sendLayout.gainBounds.getRight() <= 14);
+    CHECK(sendLayout.voiceBounds.getX() - sendLayout.gainBounds.getRight() <= 14);
+}

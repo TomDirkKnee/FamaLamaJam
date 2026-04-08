@@ -1,14 +1,17 @@
 #include <functional>
+#include <memory>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "plugin/FamaLamaJamAudioProcessor.h"
+#include "plugin/FamaLamaJamAudioProcessorEditor.h"
 #include "support/MiniNinjamServer.h"
 
 namespace
 {
 using famalamajam::plugin::FamaLamaJamAudioProcessor;
+using famalamajam::plugin::FamaLamaJamAudioProcessorEditor;
 using famalamajam::tests::integration::MiniNinjamServer;
 using famalamajam::tests::integration::fillRampBuffer;
 
@@ -272,5 +275,36 @@ TEST_CASE("plugin mixer controls keeps solo state available on both local and re
     REQUIRE(processor.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, snapshot));
     CHECK(snapshot.mix.soloed);
     REQUIRE(processor.getMixerStripSnapshot("alice#0", snapshot));
+    CHECK(snapshot.mix.soloed);
+}
+
+TEST_CASE("plugin mixer controls preserves gain pan mute and solo through editor strip helpers",
+          "[plugin_mixer_controls]")
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+    MiniNinjamServer server;
+    server.setInitialTiming(400, 1);
+    server.setRemotePeers({ { "alice", 0, 0 } });
+    REQUIRE(server.startServer());
+
+    FamaLamaJamAudioProcessor processor(true, true);
+    connectProcessor(processor, server);
+
+    auto buffer = makeProcessBuffer(processor, 512);
+    juce::MidiBuffer midi;
+    REQUIRE(processUntil(processor, buffer, midi, [&]() { return processor.isRemoteSourceActiveForTesting("alice#0"); }));
+
+    std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor(
+        dynamic_cast<FamaLamaJamAudioProcessorEditor*>(processor.createEditor()));
+    REQUIRE(editor != nullptr);
+
+    REQUIRE(editor->setMixerStripControlStateForTesting("alice#0", -9.0, 0.5, true));
+    REQUIRE(editor->setMixerStripSoloStateForTesting("alice#0", true));
+
+    FamaLamaJamAudioProcessor::MixerStripSnapshot snapshot;
+    REQUIRE(processor.getMixerStripSnapshot("alice#0", snapshot));
+    CHECK(snapshot.mix.gainDb == Catch::Approx(-9.0f));
+    CHECK(snapshot.mix.pan == Catch::Approx(0.5f));
+    CHECK(snapshot.mix.muted);
     CHECK(snapshot.mix.soloed);
 }

@@ -1382,6 +1382,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
                            const MixerStripState& strip,
                            juce::Rectangle<int> bounds,
                            bool collapsed) {
+        widget.stripBounds = bounds;
         widget.meter.setVisible(true);
         widget.groupLabel.setVisible(widget.showsGroupLabel);
 
@@ -2683,6 +2684,66 @@ std::vector<juce::String> FamaLamaJamAudioProcessorEditor::getVisibleMixerGroupL
             labels.push_back(widgets->groupLabel.getText());
     }
     return labels;
+}
+
+juce::Rectangle<int> FamaLamaJamAudioProcessorEditor::getMixerViewportBoundsForTesting() const
+{
+    return getLocalArea(&mixerViewport_, mixerViewport_.getLocalBounds());
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMixerStripLayoutSnapshotForTesting(
+    const juce::String& sourceId,
+    MixerStripLayoutSnapshotForTesting& snapshot) const
+{
+    const auto toEditorBounds = [this](const juce::Component& component) {
+        if (! component.isVisible() || component.getWidth() <= 0 || component.getHeight() <= 0)
+            return juce::Rectangle<int> {};
+
+        return getLocalArea(&component, component.getLocalBounds());
+    };
+
+    const auto source = sourceId.toStdString();
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId != source)
+            continue;
+
+        snapshot.stripBounds = widgets->stripBounds.isEmpty()
+            ? juce::Rectangle<int> {}
+            : getLocalArea(&mixerContent_, widgets->stripBounds);
+        snapshot.meterBounds = toEditorBounds(widgets->meter);
+        snapshot.gainBounds = toEditorBounds(widgets->gainSlider);
+        snapshot.panBounds = toEditorBounds(widgets->panSlider);
+        snapshot.soloBounds = toEditorBounds(widgets->soloToggle);
+        snapshot.muteBounds = toEditorBounds(widgets->muteToggle);
+        snapshot.transmitBounds = toEditorBounds(widgets->transmitButton);
+        snapshot.voiceBounds = toEditorBounds(widgets->voiceModeToggle);
+        snapshot.outputBounds = toEditorBounds(widgets->outputSelector);
+        return true;
+    }
+
+    return false;
+}
+
+FamaLamaJamAudioProcessorEditor::MixerLocalHeaderLayoutSnapshotForTesting
+FamaLamaJamAudioProcessorEditor::getLocalHeaderLayoutSnapshotForTesting() const
+{
+    const auto toEditorBounds = [this](const juce::Component& component) {
+        if (! component.isVisible() || component.getWidth() <= 0 || component.getHeight() <= 0)
+            return juce::Rectangle<int> {};
+
+        return getLocalArea(&component, component.getLocalBounds());
+    };
+
+    return {
+        .headerBounds = getLocalArea(&mixerContent_, localHeaderLabel_.getBounds().getUnion(removeLocalChannelButton_.getBounds())
+                                                         .getUnion(addLocalChannelButton_.getBounds())
+                                                         .getUnion(collapseLocalChannelButton_.getBounds())),
+        .labelBounds = toEditorBounds(localHeaderLabel_),
+        .removeBounds = toEditorBounds(removeLocalChannelButton_),
+        .addBounds = toEditorBounds(addLocalChannelButton_),
+        .collapseBounds = toEditorBounds(collapseLocalChannelButton_),
+    };
 }
 
 std::vector<juce::String> FamaLamaJamAudioProcessorEditor::getVisibleMixerStripLabelsForTesting() const

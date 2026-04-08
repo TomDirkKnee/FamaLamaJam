@@ -75,6 +75,24 @@ TEST_CASE("plugin voice mode toggle exposes a dedicated local-strip voice contro
     CHECK(voiceEnabled);
 }
 
+TEST_CASE("plugin voice mode toggle keeps the local voice button compact beside the integrated strip spine",
+          "[plugin_voice_mode_toggle]")
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+    FamaLamaJamAudioProcessor processor(true, true);
+    std::unique_ptr<FamaLamaJamAudioProcessorEditor> editor(
+        dynamic_cast<FamaLamaJamAudioProcessorEditor*>(processor.createEditor()));
+
+    REQUIRE(editor != nullptr);
+
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting layout;
+    REQUIRE(editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, layout));
+
+    CHECK(layout.gainBounds.contains(layout.meterBounds.getCentre()));
+    CHECK(layout.voiceBounds.getWidth() <= 28);
+    CHECK(layout.voiceBounds.getX() - layout.gainBounds.getRight() <= 14);
+}
+
 TEST_CASE("plugin voice mode toggle switches live into voice mode and returns through interval warmup",
           "[plugin_voice_mode_toggle]")
 {

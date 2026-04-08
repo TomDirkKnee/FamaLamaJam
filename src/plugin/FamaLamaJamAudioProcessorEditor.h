@@ -371,6 +371,32 @@ public:
     bool submitRoomComposerForTesting(bool useReturnKey);
     void setRoomVoteValueForTesting(RoomVoteKind kind, int value);
     bool submitRoomVoteForTesting(RoomVoteKind kind);
+    struct MixerStripLayoutSnapshotForTesting
+    {
+        juce::Rectangle<int> stripBounds;
+        juce::Rectangle<int> meterBounds;
+        juce::Rectangle<int> gainBounds;
+        juce::Rectangle<int> panBounds;
+        juce::Rectangle<int> soloBounds;
+        juce::Rectangle<int> muteBounds;
+        juce::Rectangle<int> transmitBounds;
+        juce::Rectangle<int> voiceBounds;
+        juce::Rectangle<int> outputBounds;
+    };
+
+    struct MixerLocalHeaderLayoutSnapshotForTesting
+    {
+        juce::Rectangle<int> headerBounds;
+        juce::Rectangle<int> labelBounds;
+        juce::Rectangle<int> removeBounds;
+        juce::Rectangle<int> addBounds;
+        juce::Rectangle<int> collapseBounds;
+    };
+
+    [[nodiscard]] juce::Rectangle<int> getMixerViewportBoundsForTesting() const;
+    [[nodiscard]] bool getMixerStripLayoutSnapshotForTesting(const juce::String& sourceId,
+                                                             MixerStripLayoutSnapshotForTesting& snapshot) const;
+    [[nodiscard]] MixerLocalHeaderLayoutSnapshotForTesting getLocalHeaderLayoutSnapshotForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerGroupLabelsForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerStripLabelsForTesting() const;
     [[nodiscard]] juce::String getMixerStripStatusTextForTesting(const juce::String& sourceId) const;
@@ -452,6 +478,7 @@ private:
         bool showsGroupLabel { false };
         float lastMeterLeft { 0.0f };
         float lastMeterRight { 0.0f };
+        juce::Rectangle<int> stripBounds;
     };
 
     void timerCallback() override;

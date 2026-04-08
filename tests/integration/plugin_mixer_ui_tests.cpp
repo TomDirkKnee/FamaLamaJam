@@ -666,6 +666,82 @@ TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and
     CHECK(rotaryPanPotCount == 3);
 }
 
+TEST_CASE("plugin mixer ui expects taller Ableton-style strips with an integrated meter-fader spine and larger pan pots",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true,
+          .outputAssignmentIndex = 0,
+          .outputAssignmentLabels = { FamaLamaJamAudioProcessorEditor::kMainOutputLabel, "Remote Out 1" } },
+    });
+
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting mainLayout;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting remoteLayout;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  mainLayout));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting("alice#0", remoteLayout));
+
+    const auto mixerViewportBounds = harness.editor->getMixerViewportBoundsForTesting();
+    CHECK(mainLayout.stripBounds.getHeight() >= (mixerViewportBounds.getHeight() * 2) / 3);
+    CHECK(remoteLayout.stripBounds.getHeight() >= (mixerViewportBounds.getHeight() * 2) / 3);
+
+    CHECK(mainLayout.gainBounds.contains(mainLayout.meterBounds.getCentre()));
+    CHECK(remoteLayout.gainBounds.contains(remoteLayout.meterBounds.getCentre()));
+
+    CHECK(mainLayout.panBounds.getWidth() >= 40);
+    CHECK(mainLayout.panBounds.getHeight() >= 40);
+    CHECK(remoteLayout.panBounds.getWidth() >= 40);
+    CHECK(remoteLayout.panBounds.getHeight() >= 40);
+}
+
+TEST_CASE("plugin mixer ui expects compact local M S TX and INT controls to hug the strip spine",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+    });
+
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting layout;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  layout));
+
+    CHECK(layout.muteBounds.getWidth() <= 28);
+    CHECK(layout.soloBounds.getWidth() <= 28);
+    CHECK(layout.transmitBounds.getWidth() <= 28);
+    CHECK(layout.voiceBounds.getWidth() <= 28);
+
+    CHECK(layout.muteBounds.getX() - layout.gainBounds.getRight() <= 14);
+    CHECK(layout.soloBounds.getX() - layout.gainBounds.getRight() <= 14);
+    CHECK(layout.transmitBounds.getX() - layout.gainBounds.getRight() <= 14);
+    CHECK(layout.voiceBounds.getX() - layout.gainBounds.getRight() <= 14);
+}
+
 TEST_CASE("plugin mixer ui collapses locals into visible mini strips without holding remote groups open",
           "[plugin_mixer_ui]")
 {
@@ -741,4 +817,77 @@ TEST_CASE("plugin mixer ui collapses locals into visible mini strips without hol
 
     CHECK(localMeterCount == 2);
     CHECK(tallestLocalMeter >= 192);
+}
+
+TEST_CASE("plugin mixer ui collapses locals into tighter mini strips while preserving + and - header affordances",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .meterLeft = 0.48f,
+          .meterRight = 0.44f,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .meterLeft = 0.31f,
+          .meterRight = 0.28f,
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .meterLeft = 0.65f,
+          .meterRight = 0.61f,
+          .active = true,
+          .visible = true },
+    });
+
+    auto* collapseButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kCollapseLocalChannelLabel);
+    auto* addButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kAddLocalChannelLabel);
+    auto* removeButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kRemoveLocalChannelLabel);
+    auto* aliceGroupLabel = findLabelWithText(*harness.editor, "alice");
+    REQUIRE(collapseButton != nullptr);
+    REQUIRE(addButton != nullptr);
+    REQUIRE(removeButton != nullptr);
+    REQUIRE(aliceGroupLabel != nullptr);
+    REQUIRE(collapseButton->onClick != nullptr);
+
+    const auto aliceBoundsBefore = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
+    collapseButton->onClick();
+
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting mainLayout;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting sendLayout;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  mainLayout));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+                                                                  sendLayout));
+
+    const auto headerLayout = harness.editor->getLocalHeaderLayoutSnapshotForTesting();
+    const auto aliceBoundsAfter = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
+
+    CHECK(addButton->isVisible());
+    CHECK(removeButton->isVisible());
+    CHECK(collapseButton->isVisible());
+    CHECK(collapseButton->getButtonText() == FamaLamaJamAudioProcessorEditor::kExpandLocalChannelLabel);
+    CHECK(headerLayout.labelBounds.getWidth() <= 36);
+    CHECK(mainLayout.stripBounds.getWidth() <= 28);
+    CHECK(sendLayout.stripBounds.getWidth() <= 28);
+    CHECK(mainLayout.meterBounds.getHeight() >= 192);
+    CHECK(sendLayout.meterBounds.getHeight() >= 192);
+    CHECK(aliceBoundsBefore.getX() - aliceBoundsAfter.getX() >= 70);
 }
