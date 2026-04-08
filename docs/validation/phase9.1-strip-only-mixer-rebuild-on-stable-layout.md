@@ -12,31 +12,29 @@ This matrix captures the final Phase 09.1 strip-usability checks that still need
 
 - Build target: `cmake --build build-vs-2026 --target famalamajam_plugin_VST3 --config Debug`
 - VST3 path: `build-vs-2026/famalamajam_plugin_artefacts/Debug/VST3/FamaLamaJam.vst3`
+- Pre-checkpoint handoff: run the focused Wave 6 automation gate first, then rebuild this Debug VST3 as a separate artifact-preparation step immediately before the Ableton rerun.
 - Focused automation already green for:
-  - compact local header controls and collapsed local mini-strip meter visibility
-  - compact remote routing selector sizing inside grouped remote strips
-  - disconnected setup, right sidebar, and footer timing/sync shell stability after the strip polish
+  - widened default shell geometry, visible connect/disconnect actions, and aligned settings rows
+  - taller integrated mixer strips with larger pan pots and tighter local TX-style controls
+  - tighter collapsed local reclaim width plus restored full-width footer and metronome knob
 
 ## Manual Matrix
 
 | ID | Requirement | Scenario | Ableton / FLJ Setup | Expected Result | Result | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| `P91-STRIP-01` | `LAYOUT-01` | Standard-width strip readability | Load the rebuilt Debug VST3 in Ableton at a practical plugin width with at least two local strips and at least one grouped remote user visible. | The strip field reads as the primary workspace, local strips stay compact, and no strip controls feel oversized relative to the stable shell. | fail | Channels only fill vertical space halfway; the gain fader is not integrated into the meter; local solo/mute/voice controls are obscured or pushed too far right; the pan pot is too small; overall plugin width should increase by about a quarter so more channels display before scrolling. |
-| `P91-STRIP-02` | `LAYOUT-02` | Collapsed locals keep useful mini strips | At a narrower plugin width, collapse the local group while meters are active. | Collapsed locals still show full-height visible meter mini strips, the header controls stay compact, and the collapse state recovers strip width instead of wasting it on controls. | fail | Collapse controls still waste width when locals are collapsed; add/remove local buttons need explicit `+` and `-` affordances. |
-| `P91-STRIP-03` | `LAYOUT-02` | Remote grouped strips stay readable with routing visible | Keep at least one remote user group visible and inspect the per-strip routing affordance at practical widths. | Remote groups remain readable, routing stays discoverable, and the routing affordance does not make the strips feel too wide or crowded. | fail | Overall strip width and density still leave too few visible channels before scrolling; compact routing and readability are not yet strong enough in practice. |
-| `P91-STRIP-04` | `LAYOUT-03` | Stable shell beside the rebuilt strip field | While disconnected and while connected, inspect the top connect/session area and the right room sidebar beside the rebuilt strip field. | The restored shell still reads naturally: the connect workflow stays usable above the mixer and the room sidebar remains available without the strip polish crowding it out. | fail | The server connection area is unnecessarily full width and steals room from chat; connect/disconnect only appears when settings are hidden and should also appear on the settings page; the boxes look visually misaligned because of the label/text layout. |
-| `P91-STRIP-05` | `LAYOUT-03` | Footer stability after strip polish | With room timing active, inspect the footer while resizing between standard and narrower widths. | Interval timing, sync assist, metronome, and master output remain readable below the strip field without the final strip polish destabilizing footer layout. | fail | The footer should be full width, and the metronome needs its volume control back as a knob/pot. |
+| `P91-STRIP-01` | `LAYOUT-01`, `LAYOUT-03` | Compact shell and settings visibility beside the strip field | Load the rebuilt Debug VST3 in Ableton at the widened default plugin size, then inspect both the disconnected shell and the expanded settings view. | The server settings shell no longer feels overly wide, connect or disconnect stays visible in both settings modes, and the settings boxes align cleanly without crowding the room sidebar. | pending rerun | Baseline blocked rerun failed because the connection area was too wide, hid connect/disconnect in settings mode, and left the label or field rows visually misaligned. |
+| `P91-STRIP-02` | `LAYOUT-01`, `LAYOUT-02` | Standard-width strip density and integrated meter or gain spine | Keep at least two local strips and one grouped remote user visible at the widened default width. | Strips use most of the available mixer height, the meter and gain read as one dominant vertical control, and the pan pot is materially larger without making the strip feel bloated. | pending rerun | Baseline blocked rerun failed because the strips used only about half of the available height, the gain felt detached from the meter, and the pan pot stayed too small. |
+| `P91-STRIP-03` | `LAYOUT-01`, `LAYOUT-02` | Compact local controls near the fader | With active local strips visible, inspect `M`, `S`, `TX`, and `INT/VOX` placement and readability at practical host widths. | Local controls stay compact, button-like, and close to the fader so the strip reads as one coherent control cluster. | pending rerun | Baseline blocked rerun failed because local side controls were obscured or drifted too far right from the fader. |
+| `P91-STRIP-04` | `LAYOUT-01` | Collapsed locals reclaim width with explicit affordances | Resize narrower, collapse the local group while meters are active, and inspect the local header actions. | Collapsed locals reclaim meaningful strip width while preserving readable mini strips and explicit `+` and `-` affordances in the header. | pending rerun | Baseline blocked rerun failed because collapsed locals still wasted width and the add/remove affordances were not explicit enough. |
+| `P91-STRIP-05` | `LAYOUT-03` | Footer and metronome geometry after the shell-plus-strip recovery | With room timing active, inspect the footer at the widened default size and one narrower size. | The footer spans the full editor width again, and the metronome volume knob is restored beside the transport and master controls. | pending rerun | Baseline blocked rerun failed because the footer did not span the full width and the metronome volume knob was missing. |
 
 ## Manual Outcome Summary
 
-- Automation is green for the focused strip compactness gate and for shell-stability regressions around the sidebar, session flow, and footer.
-- Real Ableton validation failed all five `P91-STRIP-*` scenarios, so Phase 09.1 still does not have a usable strip-only recovery verdict.
-- Preserve the host-design guidance for the next follow-up: use the Ableton fader template more literally, keep the meter long and genuinely integrated with gain, and make the local side controls button-like and TX-style rather than obscured tick-box-like controls.
+- The authoritative host verdict is still pending the fresh `09.1-06` Ableton rerun against the rebuilt Debug VST3.
+- The rerun must cover the recovered shell width, visible connect/disconnect actions, aligned settings rows, taller integrated strips, larger pan pot, compact local controls, tighter collapsed locals, full-width footer, and restored metronome knob.
+- Baseline guidance from the previously blocked rerun still applies if any rows fail again: keep the Ableton fader template literal, keep the meter genuinely integrated with gain, and keep local side controls button-like and TX-style rather than obscured tick-box-like controls.
 
 ## Host Verdict
 
-- Verdict: failed
-- Follow-up direction:
-  - Use the Ableton fader template more literally.
-  - Keep the meter long and actually integrated with gain.
-  - Make the local side controls button-like, closer to TX style, not obscured tick-box-like controls.
+- Verdict: pending rerun
+- Current authority: the blocked pre-revision Ableton pass remains the baseline until `09.1-06` records fresh row outcomes.
