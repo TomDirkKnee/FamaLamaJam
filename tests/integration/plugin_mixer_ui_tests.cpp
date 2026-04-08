@@ -693,9 +693,11 @@ TEST_CASE("plugin mixer ui keeps add remove in the local header and moves collap
 
     CHECK(removeBounds.getCentreY() >= localHeaderBounds.getY());
     CHECK(removeBounds.getCentreY() <= localHeaderBounds.getBottom());
-    CHECK(removeBounds.getWidth() <= 20);
+    CHECK(removeBounds.getY() > localHeaderBounds.getY());
+    CHECK(removeBounds.getWidth() <= 24);
     CHECK(addBounds.getX() > removeBounds.getRight());
-    CHECK(addBounds.getWidth() <= 20);
+    CHECK(addBounds.getY() > localHeaderBounds.getY());
+    CHECK(addBounds.getWidth() <= 24);
     CHECK(collapseBounds.getRight() <= localGroup.bounds.getRight() - 1);
     CHECK(collapseBounds.getX() >= localGroup.bounds.getRight() - 22);
     CHECK(collapseBounds.getX() > localHeaderBounds.getRight());

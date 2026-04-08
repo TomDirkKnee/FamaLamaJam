@@ -1,6 +1,6 @@
 # UI-009: Local Collapse Chevron Tab
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `380f09e`
@@ -74,5 +74,5 @@ The current collapse button still reads like a regular header control. A side-mo
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `0f86dbc`
+- Rollback: `git revert 0f86dbc`

@@ -380,6 +380,49 @@ LocalChevronTabLookAndFeel& getLocalChevronTabLookAndFeel()
     return lookAndFeel;
 }
 
+class CompactHeaderGlyphButtonLookAndFeel final : public juce::LookAndFeel_V4
+{
+public:
+    void drawButtonBackground(juce::Graphics& graphics,
+                              juce::Button& button,
+                              const juce::Colour&,
+                              bool shouldDrawButtonAsHighlighted,
+                              bool shouldDrawButtonAsDown) override
+    {
+        auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+        if (bounds.isEmpty())
+            return;
+
+        auto fill = juce::Colour::fromRGBA(39, 51, 66, 224);
+        if (shouldDrawButtonAsDown)
+            fill = fill.brighter(0.12f);
+        else if (shouldDrawButtonAsHighlighted)
+            fill = fill.brighter(0.07f);
+
+        graphics.setColour(fill);
+        graphics.fillRoundedRectangle(bounds, 5.0f);
+        graphics.setColour(juce::Colour::fromRGBA(120, 152, 188, 150));
+        graphics.drawRoundedRectangle(bounds, 5.0f, 1.0f);
+    }
+
+    void drawButtonText(juce::Graphics& graphics,
+                        juce::TextButton& button,
+                        bool,
+                        bool) override
+    {
+        auto bounds = button.getLocalBounds().reduced(1);
+        graphics.setColour(juce::Colours::white);
+        graphics.setFont(juce::FontOptions(16.0f, juce::Font::bold));
+        graphics.drawFittedText(button.getButtonText(), bounds.translated(0, 1), juce::Justification::centred, 1);
+    }
+};
+
+CompactHeaderGlyphButtonLookAndFeel& getCompactHeaderGlyphButtonLookAndFeel()
+{
+    static CompactHeaderGlyphButtonLookAndFeel lookAndFeel;
+    return lookAndFeel;
+}
+
 [[nodiscard]] bool serverDiscoveryEntryMatches(const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& lhs,
                                                const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& rhs)
 {
@@ -1104,6 +1147,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     localHeaderVoiceToggle_.setVisible(false);
 
     removeLocalChannelButton_.setButtonText(kRemoveLocalChannelLabel);
+    removeLocalChannelButton_.setLookAndFeel(&getCompactHeaderGlyphButtonLookAndFeel());
     removeLocalChannelButton_.onClick = [this]() {
         pendingLocalRemovalSourceId_.clear();
         for (auto stripIt = currentVisibleMixerStrips_.rbegin(); stripIt != currentVisibleMixerStrips_.rend(); ++stripIt)
@@ -1124,6 +1168,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     mixerContent_.addAndMakeVisible(removeLocalChannelButton_);
 
     addLocalChannelButton_.setButtonText(kAddLocalChannelLabel);
+    addLocalChannelButton_.setLookAndFeel(&getCompactHeaderGlyphButtonLookAndFeel());
     addLocalChannelButton_.onClick = [this]() {
         pendingLocalRemovalSourceId_.clear();
         if (addLocalChannelHandler_())
@@ -1626,7 +1671,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
     const int expandedStripHeight = juce::jmax(320, mixerViewport_.getHeight() - 48);
     const int collapsedStripWidth = 28;
     const int collapsedStripHeight = juce::jmax(236, mixerViewport_.getHeight() - 48);
-    constexpr int kCompactHeaderButtonWidth = 18;
+    constexpr int kCompactHeaderButtonWidth = 22;
+    constexpr int kCompactHeaderButtonHeight = 20;
     constexpr int kLocalChevronTabWidth = 18;
     constexpr int kLocalChevronTabHeight = 48;
     constexpr int kCollapsedLocalHeaderControlWidth = kCompactHeaderButtonWidth + 4 + kCompactHeaderButtonWidth;
@@ -1803,11 +1849,14 @@ void FamaLamaJamAudioProcessorEditor::resized()
             : (kGroupPadding * 2) + (localStripCount * expandedStripWidth) + ((localStripCount - 1) * kStripGap);
         auto headerRow = juce::Rectangle<int>(contentX + kGroupPadding, y, localGroupWidth - (kGroupPadding * 2), kHeaderHeight);
         auto countBounds = juce::Rectangle<int> {};
+        auto makeHeaderButtonBounds = [=](juce::Rectangle<int> slot) {
+            return slot.withSizeKeepingCentre(kCompactHeaderButtonWidth, kCompactHeaderButtonHeight).translated(0, 2);
+        };
         addLocalChannelButton_.setVisible(true);
-        addLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth));
+        addLocalChannelButton_.setBounds(makeHeaderButtonBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth)));
         headerRow.removeFromRight(4);
         removeLocalChannelButton_.setVisible(localStripCount > 1);
-        removeLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth));
+        removeLocalChannelButton_.setBounds(makeHeaderButtonBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth)));
         headerRow.removeFromRight(8);
         if (! localGroupCollapsed_ && headerRow.getWidth() > 88)
         {

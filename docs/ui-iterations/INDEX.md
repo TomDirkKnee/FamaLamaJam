@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `380f09e`
+- Current baseline commit before the next direct UI iteration: `0f86dbc`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -18,8 +18,9 @@
 | `UI-006` | done | Make mute, solo, and voice buttons use the boxed transmit style with state colors | `b7aa93c` | `dfe9734` | `git revert dfe9734` |
 | `UI-007` | done | Add left/right mixer scrolling when strip groups overflow the available viewport width | `dfe9734` | `cb6811c` | `git revert cb6811c` |
 | `UI-008` | done | Add subtle bordered group containers around local strips and each remote user group | `cb6811c` | `380f09e` | `git revert 380f09e` |
-| `UI-009` | in_progress | Replace the local collapse button with a side-mounted chevron tab attached to the group border | `380f09e` | pending | `git revert <final-commit>` |
+| `UI-009` | done | Replace the local collapse button with a side-mounted chevron tab attached to the group border | `380f09e` | `0f86dbc` | `git revert 0f86dbc` |
+| `UI-010` | in_progress | Enlarge and lower the local add/remove header buttons so the plus/minus render cleanly inside the header | `0f86dbc` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-010`
+- Next feature entry: `UI-011`
