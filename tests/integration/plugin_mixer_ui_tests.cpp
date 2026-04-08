@@ -640,7 +640,7 @@ TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with ora
     CHECK(harness.editor->getMixerStripVoiceButtonTextForTesting("voice-user#1").isEmpty());
 }
 
-TEST_CASE("plugin mixer ui keeps add remove and collapse on the local group header instead of header transmit voice toggles",
+TEST_CASE("plugin mixer ui keeps add remove in the local header and moves collapse to a side chevron tab",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -667,13 +667,15 @@ TEST_CASE("plugin mixer ui keeps add remove and collapse on the local group head
     auto* localHeaderLabel = findLabelWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle);
     auto* headerRemoveButton = findButtonWithText(*harness.editor, "-");
     auto* headerAddButton = findButtonWithText(*harness.editor, "+");
-    auto* headerCollapseButton = findButtonWithText(*harness.editor, "Collapse");
+    auto* headerCollapseButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kCollapseLocalChannelLabel);
+    FamaLamaJamAudioProcessorEditor::MixerGroupLayoutSnapshotForTesting localGroup;
 
     REQUIRE(localHeaderLabel != nullptr);
     REQUIRE(headerRemoveButton != nullptr);
     REQUIRE(headerAddButton != nullptr);
     REQUIRE(headerCollapseButton != nullptr);
     REQUIRE(findTextEditorWithText(*harness.editor, "Bass") != nullptr);
+    REQUIRE(harness.editor->getMixerGroupLayoutSnapshotForTesting("local", localGroup));
 
     CHECK(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderTransmitLabel) == nullptr);
     CHECK(findToggleWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kLocalHeaderVoiceLabel) == nullptr);
@@ -694,8 +696,12 @@ TEST_CASE("plugin mixer ui keeps add remove and collapse on the local group head
     CHECK(removeBounds.getWidth() <= 20);
     CHECK(addBounds.getX() > removeBounds.getRight());
     CHECK(addBounds.getWidth() <= 20);
-    CHECK(collapseBounds.getX() > addBounds.getRight());
-    CHECK(collapseBounds.getWidth() <= 56);
+    CHECK(collapseBounds.getRight() <= localGroup.bounds.getRight() - 1);
+    CHECK(collapseBounds.getX() >= localGroup.bounds.getRight() - 22);
+    CHECK(collapseBounds.getX() > localHeaderBounds.getRight());
+    CHECK(collapseBounds.getY() >= localHeaderBounds.getBottom() + 6);
+    CHECK(collapseBounds.getCentreY() < localGroup.bounds.getCentreY());
+    CHECK(collapseBounds.getWidth() <= 22);
 }
 
 TEST_CASE("plugin mixer ui reveals the next hidden local slot and removes it from the local header without losing prior state",
@@ -1027,7 +1033,7 @@ TEST_CASE("plugin mixer ui collapses locals into visible mini strips without hol
           .visible = true },
     });
 
-    auto* collapseButton = findButtonWithText(*harness.editor, "Collapse");
+    auto* collapseButton = findButtonWithText(*harness.editor, FamaLamaJamAudioProcessorEditor::kCollapseLocalChannelLabel);
     auto* aliceGroupLabel = findLabelWithText(*harness.editor, "alice");
 
     REQUIRE(collapseButton != nullptr);

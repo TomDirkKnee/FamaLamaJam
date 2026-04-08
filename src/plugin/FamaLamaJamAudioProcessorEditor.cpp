@@ -322,6 +322,64 @@ void applyStripButtonStyle(juce::TextButton& button,
     button.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
 }
 
+class LocalChevronTabLookAndFeel final : public juce::LookAndFeel_V4
+{
+public:
+    void drawButtonBackground(juce::Graphics& graphics,
+                              juce::Button& button,
+                              const juce::Colour&,
+                              bool shouldDrawButtonAsHighlighted,
+                              bool shouldDrawButtonAsDown) override
+    {
+        auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+        if (bounds.isEmpty())
+            return;
+
+        auto fill = juce::Colour::fromRGBA(28, 38, 52, 236);
+        if (shouldDrawButtonAsDown)
+            fill = fill.brighter(0.15f);
+        else if (shouldDrawButtonAsHighlighted)
+            fill = fill.brighter(0.08f);
+
+        juce::Path tabPath;
+        constexpr float radius = 8.0f;
+        tabPath.startNewSubPath(bounds.getX() + radius, bounds.getY());
+        tabPath.lineTo(bounds.getRight(), bounds.getY());
+        tabPath.lineTo(bounds.getRight(), bounds.getBottom());
+        tabPath.lineTo(bounds.getX() + radius, bounds.getBottom());
+        tabPath.quadraticTo(bounds.getX(), bounds.getBottom(), bounds.getX(), bounds.getBottom() - radius);
+        tabPath.lineTo(bounds.getX(), bounds.getY() + radius);
+        tabPath.quadraticTo(bounds.getX(), bounds.getY(), bounds.getX() + radius, bounds.getY());
+        tabPath.closeSubPath();
+
+        graphics.setColour(fill);
+        graphics.fillPath(tabPath);
+        graphics.setColour(juce::Colour::fromRGBA(98, 138, 186, 160));
+        graphics.strokePath(tabPath, juce::PathStrokeType(1.0f));
+
+        // Hide the border-side stroke so the tab reads as part of the local group border.
+        graphics.setColour(fill);
+        graphics.drawLine(bounds.getRight(), bounds.getY() + 1.0f, bounds.getRight(), bounds.getBottom() - 1.0f, 2.0f);
+    }
+
+    void drawButtonText(juce::Graphics& graphics,
+                        juce::TextButton& button,
+                        bool,
+                        bool) override
+    {
+        auto bounds = button.getLocalBounds().reduced(1);
+        graphics.setColour(juce::Colours::white);
+        graphics.setFont(juce::FontOptions(17.0f, juce::Font::bold));
+        graphics.drawFittedText(button.getButtonText(), bounds, juce::Justification::centred, 1);
+    }
+};
+
+LocalChevronTabLookAndFeel& getLocalChevronTabLookAndFeel()
+{
+    static LocalChevronTabLookAndFeel lookAndFeel;
+    return lookAndFeel;
+}
+
 [[nodiscard]] bool serverDiscoveryEntryMatches(const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& lhs,
                                                const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& rhs)
 {
@@ -1074,6 +1132,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     mixerContent_.addAndMakeVisible(addLocalChannelButton_);
 
     collapseLocalChannelButton_.setButtonText(kCollapseLocalChannelLabel);
+    collapseLocalChannelButton_.setLookAndFeel(&getLocalChevronTabLookAndFeel());
     collapseLocalChannelButton_.onClick = [this]() {
         localGroupCollapsed_ = ! localGroupCollapsed_;
         collapseLocalChannelButton_.setButtonText(localGroupCollapsed_ ? kExpandLocalChannelLabel
@@ -1568,9 +1627,9 @@ void FamaLamaJamAudioProcessorEditor::resized()
     const int collapsedStripWidth = 28;
     const int collapsedStripHeight = juce::jmax(236, mixerViewport_.getHeight() - 48);
     constexpr int kCompactHeaderButtonWidth = 18;
-    constexpr int kCompactCollapseButtonWidth = 46;
-    constexpr int kCollapsedLocalHeaderControlWidth = kCompactHeaderButtonWidth + 4 + kCompactHeaderButtonWidth + 4
-        + kCompactCollapseButtonWidth;
+    constexpr int kLocalChevronTabWidth = 18;
+    constexpr int kLocalChevronTabHeight = 48;
+    constexpr int kCollapsedLocalHeaderControlWidth = kCompactHeaderButtonWidth + 4 + kCompactHeaderButtonWidth;
     constexpr int kRemoteRoutingControlHeight = 34;
 
     auto hideComponent = [](juce::Component& component) {
@@ -1744,11 +1803,6 @@ void FamaLamaJamAudioProcessorEditor::resized()
             : (kGroupPadding * 2) + (localStripCount * expandedStripWidth) + ((localStripCount - 1) * kStripGap);
         auto headerRow = juce::Rectangle<int>(contentX + kGroupPadding, y, localGroupWidth - (kGroupPadding * 2), kHeaderHeight);
         auto countBounds = juce::Rectangle<int> {};
-        collapseLocalChannelButton_.setVisible(true);
-        collapseLocalChannelButton_.setButtonText(localGroupCollapsed_ ? kExpandLocalChannelLabel
-                                                                       : kCollapseLocalChannelLabel);
-        collapseLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactCollapseButtonWidth));
-        headerRow.removeFromRight(4);
         addLocalChannelButton_.setVisible(true);
         addLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth));
         headerRow.removeFromRight(4);
@@ -1784,6 +1838,17 @@ void FamaLamaJamAudioProcessorEditor::resized()
         }
 
         const int localGroupHeight = (stripY + localStripHeight + kGroupPadding) - y;
+        collapseLocalChannelButton_.setVisible(true);
+        collapseLocalChannelButton_.setButtonText(localGroupCollapsed_ ? kExpandLocalChannelLabel
+                                                                       : kCollapseLocalChannelLabel);
+        const int chevronInset = 1;
+        const int chevronTop = juce::jlimit(y + 10,
+                                            y + localGroupHeight - kLocalChevronTabHeight - 6,
+                                            stripY + kLocalChevronTabHeight + 10);
+        collapseLocalChannelButton_.setBounds(contentX + localGroupWidth - kLocalChevronTabWidth - chevronInset,
+                                              chevronTop,
+                                              kLocalChevronTabWidth,
+                                              kLocalChevronTabHeight);
         groupDecorations.push_back({
             .groupId = kLocalMixerGroupId,
             .title = localGroupCollapsed_ ? "Loc" : kLocalHeaderTitle,
@@ -3045,8 +3110,7 @@ FamaLamaJamAudioProcessorEditor::getLocalHeaderLayoutSnapshotForTesting() const
 
     return {
         .headerBounds = getLocalArea(&mixerContent_, localHeaderLabel_.getBounds().getUnion(removeLocalChannelButton_.getBounds())
-                                                         .getUnion(addLocalChannelButton_.getBounds())
-                                                         .getUnion(collapseLocalChannelButton_.getBounds())),
+                                                         .getUnion(addLocalChannelButton_.getBounds())),
         .labelBounds = toEditorBounds(localHeaderLabel_),
         .removeBounds = toEditorBounds(removeLocalChannelButton_),
         .addBounds = toEditorBounds(addLocalChannelButton_),

@@ -1,6 +1,6 @@
 # UI-008: Group Borders Around Local And Remote Users
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `cb6811c`
@@ -73,5 +73,5 @@ Once the mixer gets busy, the strip lane is harder to scan by user. Group contai
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `380f09e`
+- Rollback: `git revert 380f09e`

@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `cb6811c`
+- Current baseline commit before the next direct UI iteration: `380f09e`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -17,8 +17,9 @@
 | `UI-005` | done | Widen the full-height meter lane and enlarge the pan pot plus strip buttons to reduce dead space | `f177eb2` | `b7aa93c` | `git revert b7aa93c` |
 | `UI-006` | done | Make mute, solo, and voice buttons use the boxed transmit style with state colors | `b7aa93c` | `dfe9734` | `git revert dfe9734` |
 | `UI-007` | done | Add left/right mixer scrolling when strip groups overflow the available viewport width | `dfe9734` | `cb6811c` | `git revert cb6811c` |
-| `UI-008` | in_progress | Add subtle bordered group containers around local strips and each remote user group | `cb6811c` | pending | `git revert <final-commit>` |
+| `UI-008` | done | Add subtle bordered group containers around local strips and each remote user group | `cb6811c` | `380f09e` | `git revert 380f09e` |
+| `UI-009` | in_progress | Replace the local collapse button with a side-mounted chevron tab attached to the group border | `380f09e` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-009`
+- Next feature entry: `UI-010`

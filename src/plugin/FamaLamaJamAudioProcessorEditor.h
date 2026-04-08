@@ -74,8 +74,8 @@ public:
     static constexpr const char* kLocalHeaderVoiceLabel = "Voice";
     static constexpr const char* kAddLocalChannelLabel = "+";
     static constexpr const char* kRemoveLocalChannelLabel = "-";
-    static constexpr const char* kCollapseLocalChannelLabel = "Collapse";
-    static constexpr const char* kExpandLocalChannelLabel = "Expand";
+    static constexpr const char* kCollapseLocalChannelLabel = "<";
+    static constexpr const char* kExpandLocalChannelLabel = ">";
     static constexpr const char* kHideLocalChannelLabel = "Hide";
     static constexpr const char* kConfirmHideLocalChannelLabel = "Confirm hide";
     static constexpr const char* kMainOutputLabel = "FLJ Main Output";
