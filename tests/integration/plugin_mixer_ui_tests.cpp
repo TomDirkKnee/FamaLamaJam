@@ -956,6 +956,59 @@ TEST_CASE("plugin mixer ui configures strip gain sliders to reset to 0 dB on dou
     CHECK(resetValue == Catch::Approx(0.0));
 }
 
+TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lines",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
+          .statusText = "Transmitting",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .statusText = "Warming up",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .statusText = "Receiving interval audio",
+          .active = true,
+          .visible = true,
+          .outputAssignmentIndex = 0,
+          .outputAssignmentLabels = { FamaLamaJamAudioProcessorEditor::kMainOutputLabel, "Remote Out 1" } },
+    });
+
+    CHECK(findTextEditorWithText(*harness.editor, "Main") != nullptr);
+    CHECK(findTextEditorWithText(*harness.editor, "Bass") != nullptr);
+    CHECK(findLabelWithText(*harness.editor, "alice - guitar") != nullptr);
+
+    CHECK(findLabelWithText(*harness.editor, "Live monitor") == nullptr);
+    CHECK(findLabelWithText(*harness.editor, "Local Send 2") == nullptr);
+    CHECK(findLabelWithText(*harness.editor, "guitar") == nullptr);
+
+    CHECK(harness.editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          == "Transmitting");
+    CHECK(harness.editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          == "Warming up");
+    CHECK(harness.editor->getMixerStripStatusTextForTesting("alice#0") == "Receiving interval audio");
+}
+
 TEST_CASE("plugin mixer ui expects larger local M S TX and INT controls to fill the right strip column",
           "[plugin_mixer_ui]")
 {

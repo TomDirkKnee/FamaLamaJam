@@ -1726,9 +1726,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
             hideComponent(widget.nameEditor);
         }
 
-        inner.removeFromTop(3);
-        widget.subtitleLabel.setVisible(true);
-        widget.subtitleLabel.setBounds(inner.removeFromTop(14));
+        hideComponent(widget.subtitleLabel);
 
         if (widget.statusLabel.getText().isNotEmpty())
         {
@@ -2655,10 +2653,10 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         widgets.titleLabel.setText(strip.displayName, juce::dontSendNotification);
         widgets.nameEditor.setText(strip.displayName, juce::dontSendNotification);
         widgets.nameEditor.setVisible(strip.editableName);
-        widgets.subtitleLabel.setText(strip.subtitle, juce::dontSendNotification);
+        widgets.subtitleLabel.setText({}, juce::dontSendNotification);
         widgets.titleLabel.setColour(juce::Label::textColourId, stripAccentColour(strip));
         widgets.titleLabel.setVisible(! strip.editableName);
-        widgets.subtitleLabel.setAlpha(strip.active ? 1.0f : 0.7f);
+        widgets.subtitleLabel.setVisible(false);
         widgets.statusLabel.setText(strip.statusText, juce::dontSendNotification);
         widgets.statusLabel.setColour(juce::Label::textColourId, stripStatusColour(strip));
         widgets.statusLabel.setAlpha(strip.statusText.empty() ? 0.0f : 1.0f);
@@ -2754,9 +2752,6 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
                 refreshMixerStrips();
         };
         mixerContent_.addAndMakeVisible(widgets->nameEditor);
-
-        widgets->subtitleLabel.setJustificationType(juce::Justification::centredLeft);
-        mixerContent_.addAndMakeVisible(widgets->subtitleLabel);
 
         widgets->statusLabel.setJustificationType(juce::Justification::centredLeft);
         widgets->statusLabel.setFont(juce::FontOptions(13.0f));

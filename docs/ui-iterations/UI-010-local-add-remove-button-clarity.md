@@ -1,6 +1,6 @@
 # UI-010: Local Add Remove Button Clarity
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `0f86dbc`
@@ -67,5 +67,5 @@ The current add/remove buttons are too cramped, which makes the plus/minus marks
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `3463247`
+- Rollback: `git revert 3463247`
