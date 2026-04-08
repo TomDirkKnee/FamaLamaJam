@@ -1,6 +1,6 @@
 # UI-015: Strip Status Tooltips With Full Wording
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `d707574`
@@ -78,5 +78,5 @@ The shortened status labels fit much better in the narrow strips, but some of th
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `b916b95`
+- Rollback: `git revert b916b95`

@@ -173,6 +173,24 @@ constexpr auto kLocalMixerGroupId = "local";
     return count > 1;
 }
 
+[[nodiscard]] juce::String makeCompactOutputAssignmentLabel(const std::string& label)
+{
+    auto text = juce::String(label).trim();
+    if (text.isEmpty())
+        return {};
+
+    if (text == FamaLamaJamAudioProcessorEditor::kMainOutputLabel)
+        return "Main";
+
+    if (text.startsWith("Remote Out "))
+        return "Out " + text.substring(11);
+
+    if (text.length() <= 12)
+        return text;
+
+    return text.substring(0, 9) + "...";
+}
+
 class IntegratedMeterGainLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
@@ -1814,7 +1832,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
         if (widget.outputSelector.isVisible())
         {
-            widget.outputSelector.setBounds(routeRow.removeFromLeft(40));
+            widget.outputSelector.setBounds(routeRow);
             widget.outputSelector.setVisible(true);
         }
         else
@@ -2702,6 +2720,14 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
                                                  juce::jmax(1, widgets.outputSelector.getNumItems()),
                                                  strip.outputAssignmentIndex + 1);
             widgets.outputSelector.setSelectedId(selectedId, juce::dontSendNotification);
+            const auto selectedIndex = juce::jlimit(0,
+                                                    static_cast<int>(strip.outputAssignmentLabels.size() - 1),
+                                                    strip.outputAssignmentIndex);
+            widgets.outputSelector.setTooltip(juce::String(strip.outputAssignmentLabels[static_cast<std::size_t>(selectedIndex)]));
+        }
+        else
+        {
+            widgets.outputSelector.setTooltip({});
         }
         updateTransmitButtonAppearance(widgets, strip);
         updateVoiceModeButtonAppearance(widgets, strip);
@@ -2814,6 +2840,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
             if (mixerStripOutputAssignmentSetter_(raw->sourceId, selectedIndex))
                 refreshMixerStrips();
         };
+        widgets->outputSelector.setJustificationType(juce::Justification::centredLeft);
         mixerContent_.addAndMakeVisible(widgets->outputSelector);
 
         widgets->removeButton.onClick = [this, raw = widgets.get()] {
@@ -2869,9 +2896,23 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->transmitButton.setVisible(widgets->hasTransmitControl);
         widgets->outputSelector.clear(juce::dontSendNotification);
         for (std::size_t labelIndex = 0; labelIndex < strip.outputAssignmentLabels.size(); ++labelIndex)
-            widgets->outputSelector.addItem(strip.outputAssignmentLabels[labelIndex], static_cast<int>(labelIndex + 1));
+        {
+            widgets->outputSelector.addItem(makeCompactOutputAssignmentLabel(strip.outputAssignmentLabels[labelIndex]),
+                                            static_cast<int>(labelIndex + 1));
+        }
         widgets->outputSelector.setSelectedId(static_cast<int>(strip.outputAssignmentIndex + 1),
                                               juce::dontSendNotification);
+        if (! strip.outputAssignmentLabels.empty())
+        {
+            const auto selectedIndex = juce::jlimit(0,
+                                                    static_cast<int>(strip.outputAssignmentLabels.size() - 1),
+                                                    strip.outputAssignmentIndex);
+            widgets->outputSelector.setTooltip(juce::String(strip.outputAssignmentLabels[static_cast<std::size_t>(selectedIndex)]));
+        }
+        else
+        {
+            widgets->outputSelector.setTooltip({});
+        }
         widgets->outputSelector.setVisible(! strip.outputAssignmentLabels.empty());
         widgets->removeButton.setVisible(widgets->removable);
         if (widgets->removable)

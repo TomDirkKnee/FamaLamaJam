@@ -809,22 +809,27 @@ TEST_CASE("plugin mixer ui expects inline remote output routing choices on remot
     auto* outputSelector = findComponent<juce::ComboBox>(*harness.editor, [](const juce::ComboBox& comboBox) {
         for (int itemIndex = 1; itemIndex <= comboBox.getNumItems(); ++itemIndex)
         {
-            if (comboBox.getItemText(itemIndex) == "Remote Out 2")
+            if (comboBox.getItemText(itemIndex) == "Out 2")
                 return true;
         }
 
         return false;
     });
 
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting remoteLayout;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting("alice#0", remoteLayout));
     REQUIRE(outputSelector != nullptr);
     CHECK(outputSelector->getNumItems() == 8);
-    CHECK(outputSelector->getItemText(0) == FamaLamaJamAudioProcessorEditor::kMainOutputLabel);
-    CHECK(outputSelector->getItemText(1) == "Remote Out 1");
-    CHECK(outputSelector->getItemText(2) == "Remote Out 2");
-    CHECK(outputSelector->getItemText(7) == "Remote Out 7");
+    CHECK(outputSelector->getItemText(0) == "Main");
+    CHECK(outputSelector->getItemText(1) == "Out 1");
+    CHECK(outputSelector->getItemText(2) == "Out 2");
+    CHECK(outputSelector->getItemText(7) == "Out 7");
+    CHECK(outputSelector->getText() == "Out 2");
+    CHECK(outputSelector->getTooltip() == "Remote Out 2");
 
     const auto selectorBounds = getBoundsInEditor(*harness.editor, *outputSelector);
-    CHECK(selectorBounds.getWidth() <= 40);
+    CHECK(selectorBounds.getWidth() >= remoteLayout.stripBounds.getWidth() - 16);
+    CHECK(selectorBounds.getWidth() <= remoteLayout.stripBounds.getWidth());
     CHECK(selectorBounds.getHeight() <= 38);
 }
 

@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `d707574`
+- Current baseline commit before the next direct UI iteration: `b916b95`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -24,8 +24,9 @@
 | `UI-012` | done | Hide the redundant `1 channel` remote count so single-channel user names keep the full group header width | `3778e48` | `79398c0` | `git revert 79398c0` |
 | `UI-013` | done | Shorten the expanded local group title from `Local Sends` to `Local` so it fits the narrow header more cleanly | `79398c0` | `074c914` | `git revert 074c914` |
 | `UI-014` | done | Audit strip status phrases against the narrow header width and shorten only the ones that overflow | `074c914` | `d707574` | `git revert d707574` |
-| `UI-015` | in_progress | Keep compact strip status text on-screen but show the original full wording in a tooltip on hover | `d707574` | pending | `git revert <final-commit>` |
+| `UI-015` | done | Keep compact strip status text on-screen but show the original full wording in a tooltip on hover | `d707574` | `b916b95` | `git revert b916b95` |
+| `UI-016` | in_progress | Make the remote output selector span the strip width and show compact output names in the selector text | `b916b95` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-016`
+- Next feature entry: `UI-017`
