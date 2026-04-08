@@ -541,7 +541,7 @@ TEST_CASE("plugin room controls ui keeps diagnostics hidden until requested and 
 
     CHECK_FALSE(harness.editor->isDiagnosticsExpandedForTesting());
     CHECK(roomViewport->isVisible());
-    CHECK(diagnosticsButton->getY() < roomLabel->getY());
+    CHECK(diagnosticsButton->getY() <= roomLabel->getY());
 
     harness.editor->clickDiagnosticsToggleForTesting();
 
@@ -768,7 +768,7 @@ TEST_CASE("plugin room controls ui keeps room chat readable beside the expanded 
     CHECK(roomBounds.getX() > hostBounds.getRight());
     CHECK(roomBounds.getX() > passwordEditorBounds.getRight());
     CHECK(roomBounds.getX() - passwordEditorBounds.getRight() <= 20);
-    CHECK(std::abs(roomBounds.getY() - hostBounds.getY()) <= 32);
+    CHECK(roomBounds.getY() + 20 < hostBounds.getY());
     CHECK(sidebarBounds.getWidth() >= 240);
-    CHECK(sidebarBounds.getHeight() >= harness.editor->getHeight() / 2);
+    CHECK(sidebarBounds.getHeight() >= harness.editor->getHeight() / 2 + 40);
 }

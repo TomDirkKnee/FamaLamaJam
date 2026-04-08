@@ -1377,7 +1377,6 @@ void FamaLamaJamAudioProcessorEditor::resized()
     constexpr int kFieldLabelWidth = 72;
     constexpr int kFieldColumnGap = 14;
     constexpr int kSettingsDetailGap = 4;
-    constexpr int kExpandedSidebarTopInset = 60;
 
     auto footer = area.removeFromBottom(kFooterHeight);
     area.removeFromBottom(8);
@@ -1390,8 +1389,6 @@ void FamaLamaJamAudioProcessorEditor::resized()
                                         workspaceArea.getY(),
                                         sidebarWidth,
                                         workspaceArea.getHeight());
-    if (serverSettingsExpanded_)
-        sidebar = sidebar.withTrimmedTop(kExpandedSidebarTopInset);
     workspaceArea.setWidth(juce::jmax(0, workspaceArea.getWidth() - sidebarWidth - kShellGap));
 
     auto topBarBand = workspaceArea.removeFromTop(serverSettingsExpanded_ ? kTopBarExpandedHeight : kTopBarCollapsedHeight);
