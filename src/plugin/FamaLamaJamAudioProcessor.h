@@ -226,6 +226,7 @@ public:
         bool voiceMode { false };
         bool unsupportedVoiceMode { false };
         std::string statusText;
+        std::string fullStatusText;
     };
 
     struct CpuDiagnosticSnapshot

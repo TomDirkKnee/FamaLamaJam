@@ -968,6 +968,7 @@ TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lin
           .subtitle = "Live monitor",
           .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Active,
           .statusText = "Transmitting",
+          .fullStatusText = "Transmitting",
           .active = true,
           .visible = true,
           .editableName = true },
@@ -978,6 +979,7 @@ TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lin
           .displayName = "Bass",
           .subtitle = "Local Send 2",
           .statusText = "Warming up",
+          .fullStatusText = "Getting ready to transmit",
           .active = true,
           .visible = true,
           .editableName = true },
@@ -988,6 +990,7 @@ TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lin
           .displayName = "alice - guitar",
           .subtitle = "guitar",
           .statusText = "Receiving",
+          .fullStatusText = "Receiving interval audio",
           .active = true,
           .visible = true,
           .outputAssignmentIndex = 0,
@@ -1007,6 +1010,11 @@ TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lin
     CHECK(harness.editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
           == "Warming up");
     CHECK(harness.editor->getMixerStripStatusTextForTesting("alice#0") == "Receiving");
+    CHECK(harness.editor->getMixerStripStatusTooltipForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId)
+          == "Transmitting");
+    CHECK(harness.editor->getMixerStripStatusTooltipForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
+          == "Getting ready to transmit");
+    CHECK(harness.editor->getMixerStripStatusTooltipForTesting("alice#0") == "Receiving interval audio");
 }
 
 TEST_CASE("plugin mixer ui keeps audited status phrases within the narrow strip header width",

@@ -1,6 +1,6 @@
 # UI-014: Strip Status Text Audit And Shortening
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `074c914`
@@ -84,5 +84,5 @@ Several status phrases are longer than the current narrow strip header comfortab
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `d707574`
+- Rollback: `git revert d707574`

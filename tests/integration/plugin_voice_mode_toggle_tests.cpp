@@ -69,6 +69,8 @@ TEST_CASE("plugin voice mode toggle exposes a dedicated local-strip voice contro
     CHECK(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
           == "Voice ready");
+    CHECK(editor->getMixerStripStatusTooltipForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
+          == "Voice mode ready");
     CHECK(editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId) == "VOX");
     REQUIRE(editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId,
                                                             voiceEnabled));
@@ -119,6 +121,8 @@ TEST_CASE("plugin voice mode toggle switches live into voice mode and returns th
     CHECK(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
           == "Switching...");
+    CHECK(editor->getMixerStripStatusTooltipForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
+          == "Switching to voice mode...");
     CHECK(processor.getTransmitState() == FamaLamaJamAudioProcessor::TransmitState::Active);
 
     fillRampBuffer(buffer);
@@ -126,11 +130,15 @@ TEST_CASE("plugin voice mode toggle switches live into voice mode and returns th
     editor->refreshForTesting();
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
           == "Voice live");
+    CHECK(editor->getMixerStripStatusTooltipForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
+          == "Voice chat: low quality, near realtime");
 
     REQUIRE(editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId));
     CHECK_FALSE(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
           == "Warming up");
+    CHECK(editor->getMixerStripStatusTooltipForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
+          == "Getting ready to transmit");
     CHECK(processor.getTransmitState() == FamaLamaJamAudioProcessor::TransmitState::WarmingUp);
 
     REQUIRE(processor.requestDisconnect());

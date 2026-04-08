@@ -245,6 +245,7 @@ public:
         bool voiceMode { false };
         bool unsupportedVoiceMode { false };
         std::string statusText;
+        std::string fullStatusText;
         bool active { false };
         bool visible { false };
         bool editableName { false };
@@ -444,6 +445,7 @@ public:
     [[nodiscard]] std::vector<juce::String> getVisibleMixerGroupLabelsForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerStripLabelsForTesting() const;
     [[nodiscard]] juce::String getMixerStripStatusTextForTesting(const juce::String& sourceId) const;
+    [[nodiscard]] juce::String getMixerStripStatusTooltipForTesting(const juce::String& sourceId) const;
     [[nodiscard]] juce::String getMixerStripTransmitButtonTextForTesting(const juce::String& sourceId) const;
     [[nodiscard]] juce::String getMixerStripVoiceButtonTextForTesting(const juce::String& sourceId) const;
     [[nodiscard]] bool getMixerStripVoiceToggleStateForTesting(const juce::String& sourceId, bool& enabled) const;
@@ -689,6 +691,7 @@ private:
     bool localGroupCollapsed_ { false };
     bool updatingRoomVoteInputs_ { false };
     std::unique_ptr<juce::FileChooser> stemCaptureFolderChooser_;
+    juce::TooltipWindow tooltipWindow_ { this, 700 };
     juce::String stemCaptureInlineStatusText_;
     std::uint64_t uiRefreshTick_ { 0 };
     bool lastTransportUiInitialized_ { false };

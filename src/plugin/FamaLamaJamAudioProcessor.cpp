@@ -534,30 +534,64 @@ void activateRemoteIntervalsForBoundary(
     return mode == FamaLamaJamAudioProcessor::LocalChannelMode::Voice;
 }
 
-[[nodiscard]] std::string makeLocalTransmitStatus(FamaLamaJamAudioProcessor::LocalChannelMode mode,
-                                                  FamaLamaJamAudioProcessor::TransmitState state,
-                                                  bool voiceTransitionPending)
+struct MixerStripStatusText
+{
+    std::string compact;
+    std::string full;
+};
+
+[[nodiscard]] MixerStripStatusText makeMixerStripStatusText(std::string compact, std::string full = {})
+{
+    if (full.empty())
+        full = compact;
+
+    return MixerStripStatusText { std::move(compact), std::move(full) };
+}
+
+[[nodiscard]] MixerStripStatusText makeLocalTransmitStatus(FamaLamaJamAudioProcessor::LocalChannelMode mode,
+                                                           FamaLamaJamAudioProcessor::TransmitState state,
+                                                           bool voiceTransitionPending)
 {
     if (isLocalVoiceMode(mode))
     {
         if (state == FamaLamaJamAudioProcessor::TransmitState::Disabled)
-            return "Voice ready";
+            return makeMixerStripStatusText("Voice ready", "Voice mode ready");
         if (voiceTransitionPending)
-            return "Switching...";
-        return "Voice live";
+            return makeMixerStripStatusText("Switching...", "Switching to voice mode...");
+        return makeMixerStripStatusText("Voice live", "Voice chat: low quality, near realtime");
     }
 
     switch (state)
     {
         case FamaLamaJamAudioProcessor::TransmitState::Disabled:
-            return "TX off";
+            return makeMixerStripStatusText("TX off", "Not transmitting");
         case FamaLamaJamAudioProcessor::TransmitState::WarmingUp:
-            return "Warming up";
+            return makeMixerStripStatusText("Warming up", "Getting ready to transmit");
         case FamaLamaJamAudioProcessor::TransmitState::Active:
-            return "Transmitting";
+            return makeMixerStripStatusText("Transmitting");
     }
 
-    return {};
+    return makeMixerStripStatusText({});
+}
+
+[[nodiscard]] MixerStripStatusText makeRemoteVoiceStatus()
+{
+    return makeMixerStripStatusText("Voice live", "Voice chat: near realtime");
+}
+
+[[nodiscard]] MixerStripStatusText makeRemoteReceivingStatus()
+{
+    return makeMixerStripStatusText("Receiving", "Receiving interval audio");
+}
+
+[[nodiscard]] MixerStripStatusText makeRemoteQueuedStatus()
+{
+    return makeMixerStripStatusText("Queued", "Queued for next interval");
+}
+
+[[nodiscard]] MixerStripStatusText makeRemoteInRoomStatus()
+{
+    return makeMixerStripStatusText("In room", "In room, waiting for interval audio");
 }
 
 void queueDecodedRemoteVoiceChunk(
@@ -1071,9 +1105,11 @@ void FamaLamaJamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             localStrip.snapshot.transmitState = computeTransmitState();
             localStrip.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
             localStrip.snapshot.unsupportedVoiceMode = false;
-            localStrip.snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
-                                                                     localStrip.snapshot.transmitState,
-                                                                     localVoiceTransitionPending_);
+            const auto status = makeLocalTransmitStatus(localChannelMode_,
+                                                        localStrip.snapshot.transmitState,
+                                                        localVoiceTransitionPending_);
+            localStrip.snapshot.statusText = status.compact;
+            localStrip.snapshot.fullStatusText = status.full;
             localStrip.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
             localStrip.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
 
@@ -1941,6 +1977,7 @@ juce::AudioProcessorEditor* FamaLamaJamAudioProcessor::createEditor()
                 .voiceMode = snapshot.voiceMode,
                 .unsupportedVoiceMode = snapshot.unsupportedVoiceMode,
                 .statusText = snapshot.statusText,
+                .fullStatusText = snapshot.fullStatusText,
                 .active = snapshot.descriptor.active,
                 .visible = snapshot.descriptor.visible,
                 .editableName = snapshot.descriptor.kind == MixerStripKind::LocalMonitor,
@@ -3202,9 +3239,11 @@ std::vector<FamaLamaJamAudioProcessor::MixerStripSnapshot> FamaLamaJamAudioProce
             snapshot.transmitState = getTransmitState();
             snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
             snapshot.unsupportedVoiceMode = false;
-            snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
-                                                          snapshot.transmitState,
-                                                          localVoiceTransitionPending_);
+            const auto status = makeLocalTransmitStatus(localChannelMode_,
+                                                        snapshot.transmitState,
+                                                        localVoiceTransitionPending_);
+            snapshot.statusText = status.compact;
+            snapshot.fullStatusText = status.full;
         }
         snapshots.push_back(std::move(snapshot));
     }
@@ -3234,9 +3273,11 @@ bool FamaLamaJamAudioProcessor::getMixerStripSnapshot(const std::string& sourceI
             snapshot.transmitState = getTransmitState();
             snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
             snapshot.unsupportedVoiceMode = false;
-            snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
-                                                          snapshot.transmitState,
-                                                          localVoiceTransitionPending_);
+            const auto status = makeLocalTransmitStatus(localChannelMode_,
+                                                        snapshot.transmitState,
+                                                        localVoiceTransitionPending_);
+            snapshot.statusText = status.compact;
+            snapshot.fullStatusText = status.full;
         }
         return true;
     }
@@ -3932,9 +3973,11 @@ void FamaLamaJamAudioProcessor::ensureLocalMonitorMixerStrip()
             snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
             snapshot.transmitState = transmitEnabled_ ? TransmitState::WarmingUp : TransmitState::Disabled;
             snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
-            snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
-                                                          snapshot.transmitState,
-                                                          localVoiceTransitionPending_);
+            const auto status = makeLocalTransmitStatus(localChannelMode_,
+                                                        snapshot.transmitState,
+                                                        localVoiceTransitionPending_);
+            snapshot.statusText = status.compact;
+            snapshot.fullStatusText = status.full;
 
             it = mixerStripsBySourceId_.emplace(slot.sourceId,
                                                 MixerStripRuntimeState {
@@ -3992,7 +4035,12 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
         snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
         snapshot.voiceMode = isVoiceMode(sourceInfo.channelFlags);
         snapshot.unsupportedVoiceMode = false;
-        snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice live" : std::string {};
+        if (isVoiceMode(sourceInfo.channelFlags))
+        {
+            const auto status = makeRemoteVoiceStatus();
+            snapshot.statusText = status.compact;
+            snapshot.fullStatusText = status.full;
+        }
 
         it = mixerStripsBySourceId_.emplace(sourceInfo.sourceId,
                                             MixerStripRuntimeState {
@@ -4016,7 +4064,17 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
     descriptor.inactiveIntervals = 0;
     it->second.snapshot.voiceMode = isVoiceMode(sourceInfo.channelFlags);
     it->second.snapshot.unsupportedVoiceMode = false;
-    it->second.snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice live" : std::string {};
+    if (isVoiceMode(sourceInfo.channelFlags))
+    {
+        const auto status = makeRemoteVoiceStatus();
+        it->second.snapshot.statusText = status.compact;
+        it->second.snapshot.fullStatusText = status.full;
+    }
+    else
+    {
+        it->second.snapshot.statusText.clear();
+        it->second.snapshot.fullStatusText.clear();
+    }
     it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
     if (hasAudioActivity)
         it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
@@ -4088,9 +4146,11 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
                 descriptor.visible = true;
             descriptor.inactiveIntervals = 0;
             runtimeState.snapshot.voiceMode = isLocalVoiceMode(localChannelMode_);
-            runtimeState.snapshot.statusText = makeLocalTransmitStatus(localChannelMode_,
-                                                                       getTransmitState(),
-                                                                       localVoiceTransitionPending_);
+            const auto status = makeLocalTransmitStatus(localChannelMode_,
+                                                        getTransmitState(),
+                                                        localVoiceTransitionPending_);
+            runtimeState.snapshot.statusText = status.compact;
+            runtimeState.snapshot.fullStatusText = status.full;
             runtimeState.lastPresenceIntervalIndex = currentIntervalIndex;
             runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
             continue;
@@ -4113,15 +4173,21 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
             runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
             if (voiceMode)
             {
-                runtimeState.snapshot.statusText = "Voice live";
+                const auto status = makeRemoteVoiceStatus();
+                runtimeState.snapshot.statusText = status.compact;
+                runtimeState.snapshot.fullStatusText = status.full;
             }
             else if (hasActiveInterval)
             {
-                runtimeState.snapshot.statusText = "Receiving";
+                const auto status = makeRemoteReceivingStatus();
+                runtimeState.snapshot.statusText = status.compact;
+                runtimeState.snapshot.fullStatusText = status.full;
             }
             else
             {
-                runtimeState.snapshot.statusText = "Queued";
+                const auto status = makeRemoteQueuedStatus();
+                runtimeState.snapshot.statusText = status.compact;
+                runtimeState.snapshot.fullStatusText = status.full;
             }
             continue;
         }
@@ -4140,12 +4206,15 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
         if (isKnownRemoteSource)
         {
             descriptor.visible = true;
-            runtimeState.snapshot.statusText = voiceMode ? "Voice live" : "In room";
+            const auto status = voiceMode ? makeRemoteVoiceStatus() : makeRemoteInRoomStatus();
+            runtimeState.snapshot.statusText = status.compact;
+            runtimeState.snapshot.fullStatusText = status.full;
         }
         else
         {
             descriptor.visible = descriptor.visible && inactiveIntervals <= kInactiveStripRetentionIntervals;
             runtimeState.snapshot.statusText.clear();
+            runtimeState.snapshot.fullStatusText.clear();
         }
     }
 }

@@ -807,6 +807,7 @@ CompactHeaderGlyphButtonLookAndFeel& getCompactHeaderGlyphButtonLookAndFeel()
         && lhs.voiceMode == rhs.voiceMode
         && lhs.unsupportedVoiceMode == rhs.unsupportedVoiceMode
         && lhs.statusText == rhs.statusText
+        && lhs.fullStatusText == rhs.fullStatusText
         && lhs.active == rhs.active
         && lhs.visible == rhs.visible
         && lhs.editableName == rhs.editableName
@@ -2668,6 +2669,7 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         widgets.titleLabel.setVisible(! strip.editableName);
         widgets.subtitleLabel.setVisible(false);
         widgets.statusLabel.setText(strip.statusText, juce::dontSendNotification);
+        widgets.statusLabel.setTooltip(juce::String(strip.fullStatusText));
         widgets.statusLabel.setColour(juce::Label::textColourId, stripStatusColour(strip));
         widgets.statusLabel.setAlpha(strip.statusText.empty() ? 0.0f : 1.0f);
 
@@ -3186,6 +3188,17 @@ juce::String FamaLamaJamAudioProcessorEditor::getMixerStripStatusTextForTesting(
     {
         if (widgets->sourceId == sourceId.toStdString())
             return widgets->statusLabel.getText();
+    }
+
+    return {};
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getMixerStripStatusTooltipForTesting(const juce::String& sourceId) const
+{
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == sourceId.toStdString())
+            return widgets->statusLabel.getTooltip();
     }
 
     return {};
