@@ -344,12 +344,15 @@ Plans:
 3. Local strips support collapse to meter-led mini strips without wasting header space, while local add/remove/collapse controls stay discreet.
 4. Remote strips keep grouped-by-user presentation and compact output-routing affordances without widening the overall mixer excessively.
 5. The phase closes with focused Ableton checks specifically on strip usability, not a second broad whole-page redesign claim.
-**Plans**: 3/3 plans executed, blocked by failed focused Ableton validation
+**Plans**: 6 plans total, 4/6 executed, blocked pending the remaining strip-ergonomics follow-up and final Ableton rerun
 
 Plans:
 - [x] 09.1-01-PLAN.md - Lock the strip-only recovery shell, local-header controls, and collapsed-local behavior on the stable reverted page layout.
 - [x] 09.1-02-PLAN.md - Convert the strip shell toward the narrower integrated strip widget and compact side-control model.
 - [x] 09.1-03-PLAN.md - Polish strip density, record the focused Ableton strip-usability validation matrix, and preserve the blocked host verdict. (completed 2026-04-08, blocked outcome)
+- [x] 09.1-04-PLAN.md - Recover shell width, always-visible connect actions, aligned settings fields, wider default editor geometry, and the full-width footer or metronome shell. (completed 2026-04-08)
+- [ ] 09.1-05-PLAN.md - Lean harder into Ableton-style strip ergonomics with taller integrated strips, larger pan pots, compact local TX-style controls, and tighter collapsed locals.
+- [ ] 09.1-06-PLAN.md - Re-run the focused 09.1 automation and Ableton matrix, then record the authoritative rerun verdict in validation and planning state.
 
 ### Phase 10: Advanced NINJAM Parity Research
 **Goal**: Research and scope higher-risk NINJAM features before implementation commitments are made.

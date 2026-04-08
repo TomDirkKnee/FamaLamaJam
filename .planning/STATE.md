@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-stopped_at: Completed 09.1-03-PLAN.md
-last_updated: "2026-04-08T07:22:48.790Z"
-last_activity: 2026-04-08 - Completed 09.1-03 by tightening compact strip spacing, rebuilding the Debug VST3, and recording a failed five-row Ableton strip matrix that keeps Phase 09.1 blocked.
+status: Blocked - Focused Ableton strip validation failed
+stopped_at: Completed 09.1-04-PLAN.md
+last_updated: "2026-04-08T08:35:07.720Z"
+last_activity: 2026-04-08 - Completed 09.1-04 by compacting the expanded settings shell, widening the default editor, and restoring the full-width footer gate while Phase 09.1 stays blocked pending plans 05-06 and the final Ableton rerun.
 progress:
   total_phases: 20
   completed_phases: 15
-  total_plans: 67
+  total_plans: 70
   completed_plans: 63
-  percent: 94
+  percent: 90
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Plan 09.1-03 is complete, but the focused Ableton strip matrix failed all five `P91-STRIP-*` rows, so the next work is a follow-up strip/layout correction plan rather than treating Phase 09.1 as host-approved.
+**Current focus:** Plan 09.1-04 is complete, and the next work is the Plan 09.1-05 strip-ergonomics follow-up before the final combined rerun and Ableton checkpoint in Plan 09.1-06.
 
 ## Current Position
 
 Phase: 09.1 - Strip-Only Mixer Rebuild On Stable Layout  
-Plan: 03 - Completed  
+Plan: 04 - Completed  
 Status: Blocked - Focused Ableton strip validation failed  
-Last activity: 2026-04-08 - Completed 09.1-03 by tightening compact strip spacing, rebuilding the Debug VST3, and recording a failed five-row Ableton strip matrix that keeps Phase 09.1 blocked.
+Last activity: 2026-04-08 - Completed 09.1-04 by compacting the expanded settings shell, widening the default editor, and restoring the full-width footer gate while Phase 09.1 stays blocked pending plans 05-06 and the final Ableton rerun.
 
-Progress: 94%
+Progress: 90%
 
 ## Accumulated Context
 
@@ -117,6 +117,8 @@ Progress: 94%
 - [Phase 09.1]: Use JUCE vertical gain sliders and rotary pan pots inside the existing strip widget bundle instead of introducing a new component hierarchy mid-phase.
 - [Phase 09.1]: Treat the focused Ableton strip pass as authoritative even when the strip automation gate and VST3 rebuild pass.
 - [Phase 09.1]: Keep Plan 03 scoped to compact-spacing polish and honest validation capture instead of reopening the broader page shell.
+- [Phase 09.1]: Widen the stable shell to a 1350 px default while keeping the pre-Phase-9 page structure.
+- [Phase 09.1]: Keep the expanded settings in a compact left column and offset the room sidebar so chat stays readable beside the settings rows.
 
 ### Roadmap Evolution
 
@@ -179,9 +181,10 @@ Progress: 94%
 - 2026-04-07: Completed Phase 09.1 plan 01 in 12 min across 2 task commits and 6 modified files; the stable page shell is preserved while the mixer now runs as a horizontal local-first strip plane with header-owned local controls and collapsed meter-only mini strips.
 - 2026-04-07: Completed Phase 09.1 plan 02 in 28 min across 2 task commits and 5 modified files; narrow strip widgets now use vertical fader and meter spines with compact per-strip local TX and INT/VOX controls, and the focused mixer gate passes after a clean `build-vs-2026` rebuild.
 - 2026-04-08: Completed Phase 09.1 plan 03 in 9 min across 2 task commits and 4 modified files; compact-spacing polish, the focused strip gate, and the Debug VST3 rebuild all succeeded, but the five-row Ableton strip matrix failed and the phase remains blocked.
+- 2026-04-08: Completed Phase 09.1 plan 04 in 10 min across 2 task commits and 5 modified files; the expanded settings shell is compact and aligned, the default editor is wider, the full-width footer with metronome volume is restored, and the focused Wave 4 shell gate is green while the phase remains blocked on plans 05-06 plus the final Ableton rerun.
 
 ## Session Continuity
 
-Last session: 2026-04-08T07:22:48.783Z
-Stopped at: Completed 09.1-03-PLAN.md
+Last session: 2026-04-08T08:35:07.713Z
+Stopped at: Completed 09.1-04-PLAN.md
 Resume file: None
