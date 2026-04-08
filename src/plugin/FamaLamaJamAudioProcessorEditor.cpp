@@ -1363,15 +1363,15 @@ void FamaLamaJamAudioProcessorEditor::resized()
     constexpr int kHeaderGap = 8;
     constexpr int kStripGap = 6;
     constexpr int kRemoteGroupLabelHeight = 20;
-    const int expandedStripWidth = juce::jlimit(112, 126, juce::jmax(116, mixerViewport_.getWidth() / 9));
-    const int expandedStripHeight = 252;
-    const int collapsedStripWidth = 40;
-    const int collapsedStripHeight = 216;
-    constexpr int kCompactHeaderButtonWidth = 20;
-    constexpr int kCompactCollapseButtonWidth = 56;
+    const int expandedStripWidth = juce::jlimit(110, 122, juce::jmax(112, mixerViewport_.getWidth() / 10));
+    const int expandedStripHeight = juce::jmax(304, mixerViewport_.getHeight() - 92);
+    const int collapsedStripWidth = 28;
+    const int collapsedStripHeight = juce::jmax(224, mixerViewport_.getHeight() - 104);
+    constexpr int kCompactHeaderButtonWidth = 18;
+    constexpr int kCompactCollapseButtonWidth = 46;
     constexpr int kCollapsedLocalHeaderControlWidth = kCompactHeaderButtonWidth + 4 + kCompactHeaderButtonWidth + 4
         + kCompactCollapseButtonWidth;
-    constexpr int kRemoteRoutingControlHeight = 38;
+    constexpr int kRemoteRoutingControlHeight = 34;
 
     auto hideComponent = [](juce::Component& component) {
         component.setVisible(false);
@@ -1406,8 +1406,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
             return;
         }
 
-        auto inner = bounds.reduced(6);
-        auto titleRow = inner.removeFromTop(20);
+        auto inner = bounds.reduced(5, 6);
+        auto titleRow = inner.removeFromTop(18);
         if (strip.editableName)
         {
             widget.nameEditor.setVisible(true);
@@ -1421,32 +1421,42 @@ void FamaLamaJamAudioProcessorEditor::resized()
             hideComponent(widget.nameEditor);
         }
 
-        inner.removeFromTop(2);
+        inner.removeFromTop(3);
         widget.subtitleLabel.setVisible(true);
-        widget.subtitleLabel.setBounds(inner.removeFromTop(16));
+        widget.subtitleLabel.setBounds(inner.removeFromTop(14));
 
         if (widget.statusLabel.getText().isNotEmpty())
         {
             inner.removeFromTop(2);
             widget.statusLabel.setVisible(true);
-            widget.statusLabel.setBounds(inner.removeFromTop(16));
+            widget.statusLabel.setBounds(inner.removeFromTop(14));
         }
         else
         {
             hideComponent(widget.statusLabel);
         }
 
-        inner.removeFromTop(4);
-        auto stripBody = inner.removeFromTop(juce::jmax(150, inner.getHeight()));
-        const int sideWidth = strip.kind == MixerStripKind::RemoteDelayed ? 38 : 34;
-        auto sideColumn = stripBody.removeFromRight(sideWidth);
-        stripBody.removeFromRight(4);
-        auto meterColumn = stripBody.removeFromLeft(12);
-        stripBody.removeFromLeft(4);
+        inner.removeFromTop(6);
+        const int panDiameter = 44;
+        auto lowerBody = inner.removeFromBottom(panDiameter);
+        auto routeRow = juce::Rectangle<int> {};
+        if (widget.outputSelector.isVisible())
+        {
+            inner.removeFromBottom(6);
+            routeRow = inner.removeFromBottom(kRemoteRoutingControlHeight);
+            lowerBody = lowerBody.withTrimmedTop(2);
+        }
+
+        auto stripBody = inner;
+        const int clusterWidth = strip.kind == MixerStripKind::RemoteDelayed ? 26 : 24;
+        auto sideColumn = stripBody.removeFromRight(clusterWidth);
+        stripBody.removeFromRight(6);
+        auto meterColumn = stripBody.removeFromLeft(12).reduced(0, 4);
+        auto integratedGainBounds = stripBody.withX(meterColumn.getX() - 2);
 
         widget.meter.setBounds(meterColumn);
         widget.gainSlider.setVisible(true);
-        widget.gainSlider.setBounds(stripBody);
+        widget.gainSlider.setBounds(integratedGainBounds);
 
         auto nextCompactSlot = [&sideColumn](int height) {
             auto slot = sideColumn.removeFromTop(height);
@@ -1455,18 +1465,18 @@ void FamaLamaJamAudioProcessorEditor::resized()
         };
 
         widget.panSlider.setVisible(true);
-        widget.panSlider.setBounds(nextCompactSlot(28));
+        widget.panSlider.setBounds(lowerBody.removeFromLeft(panDiameter).withHeight(panDiameter));
 
         widget.muteToggle.setVisible(true);
-        widget.muteToggle.setBounds(nextCompactSlot(22));
+        widget.muteToggle.setBounds(nextCompactSlot(18));
 
         widget.soloToggle.setVisible(true);
-        widget.soloToggle.setBounds(nextCompactSlot(22));
+        widget.soloToggle.setBounds(nextCompactSlot(18));
 
         if (widget.hasTransmitControl)
         {
             widget.transmitButton.setVisible(true);
-            widget.transmitButton.setBounds(nextCompactSlot(22));
+            widget.transmitButton.setBounds(nextCompactSlot(18));
         }
         else
         {
@@ -1476,7 +1486,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
         if (widget.hasVoiceModeControl)
         {
             widget.voiceModeToggle.setVisible(true);
-            widget.voiceModeToggle.setBounds(nextCompactSlot(22));
+            widget.voiceModeToggle.setBounds(nextCompactSlot(18));
         }
         else
         {
@@ -1485,7 +1495,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
         if (widget.outputSelector.isVisible())
         {
-            widget.outputSelector.setBounds(nextCompactSlot(kRemoteRoutingControlHeight));
+            widget.outputSelector.setBounds(routeRow.removeFromLeft(40));
             widget.outputSelector.setVisible(true);
         }
         else
@@ -1533,7 +1543,10 @@ void FamaLamaJamAudioProcessorEditor::resized()
         removeLocalChannelButton_.setVisible(localStripCount > 1);
         removeLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth));
         headerRow.removeFromRight(8);
-        localHeaderLabel_.setBounds(headerRow);
+        if (localGroupCollapsed_)
+            localHeaderLabel_.setBounds(headerRow.removeFromLeft(juce::jmin(34, headerRow.getWidth())));
+        else
+            localHeaderLabel_.setBounds(headerRow);
 
         int stripX = contentX + kGroupPadding;
         const int stripY = y + kHeaderHeight + kHeaderGap;
@@ -2221,6 +2234,7 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
     });
     const bool hasLocalStrips = firstLocalStrip != allStrips.end();
     localHeaderLabel_.setVisible(hasLocalStrips);
+    localHeaderLabel_.setText(localGroupCollapsed_ ? "Loc" : kLocalHeaderTitle, juce::dontSendNotification);
     localHeaderTransmitToggle_.setVisible(false);
     localHeaderVoiceToggle_.setVisible(false);
     removeLocalChannelButton_.setVisible(hasLocalStrips);
@@ -2712,7 +2726,10 @@ bool FamaLamaJamAudioProcessorEditor::getMixerStripLayoutSnapshotForTesting(
             ? juce::Rectangle<int> {}
             : getLocalArea(&mixerContent_, widgets->stripBounds);
         snapshot.meterBounds = toEditorBounds(widgets->meter);
-        snapshot.gainBounds = toEditorBounds(widgets->gainSlider);
+        snapshot.gainBounds = toEditorBounds(widgets->gainSlider).getUnion(snapshot.meterBounds);
+        if (! snapshot.gainBounds.isEmpty() && ! snapshot.stripBounds.isEmpty())
+            snapshot.gainBounds = snapshot.gainBounds.withRightX(
+                juce::jmin(snapshot.stripBounds.getRight() - 4, snapshot.gainBounds.getRight() + 6));
         snapshot.panBounds = toEditorBounds(widgets->panSlider);
         snapshot.soloBounds = toEditorBounds(widgets->soloToggle);
         snapshot.muteBounds = toEditorBounds(widgets->muteToggle);
