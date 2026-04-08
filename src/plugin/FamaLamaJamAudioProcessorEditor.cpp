@@ -2272,7 +2272,8 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         pendingLocalRemovalSourceId_.clear();
     }
 
-    if (nextOrder != visibleMixerStripOrder_)
+    const bool stripOrderChanged = nextOrder != visibleMixerStripOrder_;
+    if (stripOrderChanged)
         rebuildMixerStripWidgets(visibleStrips);
 
     for (std::size_t index = 0; index < visibleStrips.size() && index < mixerStripWidgets_.size(); ++index)
@@ -2342,6 +2343,9 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
         masterOutputSlider_.setValue(masterOutputGainGetter_(), juce::dontSendNotification);
 
     currentVisibleMixerStrips_ = visibleStrips;
+
+    if (stripOrderChanged)
+        resized();
 }
 
 void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector<MixerStripState>& visibleStrips)
@@ -2515,7 +2519,6 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         mixerStripWidgets_.push_back(std::move(widgets));
     }
 
-    resized();
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getTransportStatusTextForTesting() const

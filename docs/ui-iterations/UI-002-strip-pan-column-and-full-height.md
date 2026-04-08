@@ -1,6 +1,6 @@
 # UI-002: Strip Pan Column And Full-Height Mixer Strips
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `e6c7913`
@@ -64,5 +64,5 @@ The current strip layout wastes vertical room and makes the pan pot feel detache
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `85ef11e`
+- Rollback: `git revert 85ef11e`

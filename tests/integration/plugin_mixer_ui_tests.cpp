@@ -550,6 +550,12 @@ TEST_CASE("plugin mixer ui reveals the next hidden local slot and removes it fro
     REQUIRE(visibleStrips.size() == 2);
     CHECK(visibleStrips[1] == "Bass");
 
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting send2Layout;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+                                                                  send2Layout));
+    CHECK_FALSE(send2Layout.stripBounds.isEmpty());
+    CHECK(send2Layout.stripBounds.getHeight() > 0);
+
     REQUIRE(harness.editor->clickMixerStripRemoveForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId));
     visibleStrips = harness.editor->getVisibleMixerStripLabelsForTesting();
     REQUIRE(visibleStrips.size() == 1);
@@ -559,6 +565,10 @@ TEST_CASE("plugin mixer ui reveals the next hidden local slot and removes it fro
     visibleStrips = harness.editor->getVisibleMixerStripLabelsForTesting();
     REQUIRE(visibleStrips.size() == 2);
     CHECK(visibleStrips[1] == "Bass");
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+                                                                  send2Layout));
+    CHECK_FALSE(send2Layout.stripBounds.isEmpty());
+    CHECK(send2Layout.stripBounds.getHeight() > 0);
 }
 
 TEST_CASE("plugin mixer ui expects inline remote output routing choices on remote strips", "[plugin_mixer_ui]")
