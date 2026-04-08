@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 09.1-02-PLAN.md
-last_updated: "2026-04-07T21:16:18.0807448Z"
-last_activity: "2026-04-07 - Completed 09.1-02 by rebuilding mixer strips into a narrow vertical-fader model with compact per-strip TX and INT/VOX controls while preserving the stable page shell."
+stopped_at: Completed 09.1-03-PLAN.md
+last_updated: "2026-04-08T07:22:48.790Z"
+last_activity: 2026-04-08 - Completed 09.1-03 by tightening compact strip spacing, rebuilding the Debug VST3, and recording a failed five-row Ableton strip matrix that keeps Phase 09.1 blocked.
 progress:
   total_phases: 20
   completed_phases: 15
   total_plans: 67
-  completed_plans: 62
-  percent: 93
+  completed_plans: 63
+  percent: 94
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Musicians can reliably join and complete real Ninjam rehearsals directly inside Ableton using a stable VST3 plugin workflow.  
-**Current focus:** Phase 09.1 is underway. Plan 02 converted the strip area into the narrow vertical-fader model, so the next work is focused strip-density polish and validation without reopening the broader page redesign.
+**Current focus:** Plan 09.1-03 is complete, but the focused Ableton strip matrix failed all five `P91-STRIP-*` rows, so the next work is a follow-up strip/layout correction plan rather than treating Phase 09.1 as host-approved.
 
 ## Current Position
 
 Phase: 09.1 - Strip-Only Mixer Rebuild On Stable Layout  
-Plan: 02 - Completed  
-Status: In Progress  
-Last activity: 2026-04-07 - Completed 09.1-02 by rebuilding mixer strips into a narrow vertical-fader model with compact per-strip TX and INT/VOX controls while preserving the stable page shell.
+Plan: 03 - Completed  
+Status: Blocked - Focused Ableton strip validation failed  
+Last activity: 2026-04-08 - Completed 09.1-03 by tightening compact strip spacing, rebuilding the Debug VST3, and recording a failed five-row Ableton strip matrix that keeps Phase 09.1 blocked.
 
-Progress: 93%
+Progress: 94%
 
 ## Accumulated Context
 
@@ -115,6 +115,8 @@ Progress: 93%
 - [Phase 09.1]: Make the local header own add/remove/collapse controls while collapsed locals retain visible meter-only mini strips.
 - [Phase 09.1]: Mirror the processor-owned local transmit and voice state onto each visible local strip so TX and INT/VOX stay strip-owned without splitting routing state.
 - [Phase 09.1]: Use JUCE vertical gain sliders and rotary pan pots inside the existing strip widget bundle instead of introducing a new component hierarchy mid-phase.
+- [Phase 09.1]: Treat the focused Ableton strip pass as authoritative even when the strip automation gate and VST3 rebuild pass.
+- [Phase 09.1]: Keep Plan 03 scoped to compact-spacing polish and honest validation capture instead of reopening the broader page shell.
 
 ### Roadmap Evolution
 
@@ -132,7 +134,7 @@ Progress: 93%
 
 - Keep using the verified `build-vs-2026` validation path until the local `build-vs` NMake tree stops failing with `U1076 name too long`.
 - Run the every-four-beat Ableton repro on the same machine to judge how much CPU risk remains after the editor-churn mitigation.
-- Execute Phase 09.1 plan 03 to polish strip density and record the focused Ableton strip-usability validation matrix.
+- Plan the next strip/layout follow-up using the recorded `P91-STRIP-01` through `P91-STRIP-05` failures as the source of truth.
 
 ### Blockers/Concerns
 
@@ -144,6 +146,7 @@ Progress: 93%
 - Phase 08.3.4.2 now carries the remaining routing-expansion concerns: proving what extra buses Ableton/VST3 actually expose beyond `Local Send 2`, adding removable extra local channels, and persisting input-side local channel state across project restore.
 - The full `ctest` sweep still reports unrelated failures in the Ogg/Vorbis concatenation unit test and one stem-capture integration test; both were logged to the Phase 09 deferred-items file because this plan did not touch codec or stem-capture code.
 - Phase 09 host validation failed in Ableton: the disconnected layout hides the primary Connect action, collapse/reopen behavior does not recover a clear workflow, and the grouped room/chat presentation feels worse than the previous version.
+- Phase 09.1 focused Ableton strip validation also failed in Ableton: strips remain too sparse, collapsed locals still waste width, the connection shell steals space from chat, and the footer still needs full-width recovery plus a metronome volume knob.
 
 ### Performance Metrics
 
@@ -175,9 +178,10 @@ Progress: 93%
 - 2026-04-07: Completed Phase 09 plan 04 in 5 min with 1 task commit and 4 modified files; the Phase 09 Ableton matrix now records five explicit failures, and the phase remains blocked by a missing disconnected-state `Connect` action plus broader host-layout regression.
 - 2026-04-07: Completed Phase 09.1 plan 01 in 12 min across 2 task commits and 6 modified files; the stable page shell is preserved while the mixer now runs as a horizontal local-first strip plane with header-owned local controls and collapsed meter-only mini strips.
 - 2026-04-07: Completed Phase 09.1 plan 02 in 28 min across 2 task commits and 5 modified files; narrow strip widgets now use vertical fader and meter spines with compact per-strip local TX and INT/VOX controls, and the focused mixer gate passes after a clean `build-vs-2026` rebuild.
+- 2026-04-08: Completed Phase 09.1 plan 03 in 9 min across 2 task commits and 4 modified files; compact-spacing polish, the focused strip gate, and the Debug VST3 rebuild all succeeded, but the five-row Ableton strip matrix failed and the phase remains blocked.
 
 ## Session Continuity
 
-Last session: 2026-04-07T21:15:48.706Z
-Stopped at: Completed 09.1-02-PLAN.md
+Last session: 2026-04-08T07:22:48.783Z
+Stopped at: Completed 09.1-03-PLAN.md
 Resume file: None

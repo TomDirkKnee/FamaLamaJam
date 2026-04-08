@@ -27,7 +27,7 @@ The first milestone delivered a validated Windows-first rehearsal baseline. The 
 - [x] **Phase 08.3.4.1: Fixed-Bus Multi-Input And NINJAM Channel Implementation (INSERTED)** - Completed 2026-04-06 as a functional first pass: `Main` plus `Local Send 2` now transmit as separate remote channels and fixed remote output routing works in Ableton, with reopen persistence and removable extra-channel UX intentionally deferred. (completed 2026-04-06)
 - [ ] **Phase 08.3.4.2: Expanded Fixed-Bus I/O And Persistent Input Mapping (INSERTED)** - Expand the first fixed-bus implementation toward an eight-input/eight-output target, prove what additional Ableton/VST3 input buses are actually practical beyond `Local Send 2`, add removable extra local channels, and persist input-side names/routing across project restore.
 - [ ] **Phase 9: JamTaba-Inspired Layout & Mixer Parity** - All four plans are executed, but real Ableton validation failed: the disconnected state hides the primary `Connect` action and the refreshed host layout regresses practical usability, so the phase remains blocked pending follow-up.
-- [ ] **Phase 09.1: Strip-Only Mixer Rebuild On Stable Layout (INSERTED)** - Plans 01 and 02 are complete: the stable reverted page shell is preserved and the mixer now uses a narrow vertical-fader strip model with compact per-strip local controls; plan 03 is next for density polish and focused Ableton validation.
+- [ ] **Phase 09.1: Strip-Only Mixer Rebuild On Stable Layout (INSERTED)** - All three plans are executed, but the focused Ableton strip validation failed across `P91-STRIP-01` through `P91-STRIP-05`, so the phase remains blocked pending another strip/layout follow-up.
 - [ ] **Phase 10: Advanced NINJAM Parity Research** - Investigate room listen/live-feed behavior, voice chat mode, and other high-value parity features.
 
 ## Phase Details
@@ -344,12 +344,12 @@ Plans:
 3. Local strips support collapse to meter-led mini strips without wasting header space, while local add/remove/collapse controls stay discreet.
 4. Remote strips keep grouped-by-user presentation and compact output-routing affordances without widening the overall mixer excessively.
 5. The phase closes with focused Ableton checks specifically on strip usability, not a second broad whole-page redesign claim.
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed, blocked by failed focused Ableton validation
 
 Plans:
 - [x] 09.1-01-PLAN.md - Lock the strip-only recovery shell, local-header controls, and collapsed-local behavior on the stable reverted page layout.
 - [x] 09.1-02-PLAN.md - Convert the strip shell toward the narrower integrated strip widget and compact side-control model.
-- [ ] 09.1-03-PLAN.md - Polish strip density and record the focused Ableton strip-usability validation matrix.
+- [x] 09.1-03-PLAN.md - Polish strip density, record the focused Ableton strip-usability validation matrix, and preserve the blocked host verdict. (completed 2026-04-08, blocked outcome)
 
 ### Phase 10: Advanced NINJAM Parity Research
 **Goal**: Research and scope higher-risk NINJAM features before implementation commitments are made.
@@ -423,7 +423,7 @@ Plans:
 | 8.3.4.1. Fixed-Bus Multi-Input And NINJAM Channel Implementation | 3/3 | Complete | 2026-04-06 |
 | 8.3.4.2. Expanded Fixed-Bus I/O And Persistent Input Mapping | 0/TBD | Planned | - |
 | 9. JamTaba-Inspired Layout & Mixer Parity | 4/4 | Blocked | - |
-| 9.1. Strip-Only Mixer Rebuild On Stable Layout | 2/3 | In Progress | - |
+| 9.1. Strip-Only Mixer Rebuild On Stable Layout | 3/3 | Blocked | - |
 | 10. Advanced NINJAM Parity Research | 0/TBD | Planned     | - |
 
 ---
