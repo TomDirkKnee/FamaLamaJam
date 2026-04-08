@@ -1,6 +1,6 @@
 # UI-007: Horizontal Mixer Scroll On Overflow
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `dfe9734`
@@ -70,5 +70,5 @@ The current mixer can overflow the available width with no usable horizontal nav
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `cb6811c`
+- Rollback: `git revert cb6811c`

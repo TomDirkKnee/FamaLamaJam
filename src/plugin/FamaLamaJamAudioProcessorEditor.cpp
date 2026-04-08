@@ -119,9 +119,54 @@ void StereoMeterComponent::paint(juce::Graphics& graphics)
     drawMeter(rightLane, rightLevel_, juce::Colour::fromRGB(79, 146, 204));
 }
 
+void MixerGroupBackdropComponent::setDecorations(std::vector<Decoration> decorations)
+{
+    decorations_ = std::move(decorations);
+    repaint();
+}
+
+const std::vector<MixerGroupBackdropComponent::Decoration>& MixerGroupBackdropComponent::getDecorationsForTesting() const noexcept
+{
+    return decorations_;
+}
+
+void MixerGroupBackdropComponent::paint(juce::Graphics& graphics)
+{
+    for (const auto& decoration : decorations_)
+    {
+        auto bounds = decoration.bounds.toFloat().reduced(0.5f);
+        if (bounds.isEmpty())
+            continue;
+
+        const auto fill = decoration.local ? juce::Colour::fromRGBA(25, 34, 46, 172)
+                                           : juce::Colour::fromRGBA(21, 28, 38, 150);
+        const auto outline = decoration.local ? juce::Colour::fromRGBA(98, 138, 186, 160)
+                                              : juce::Colour::fromRGBA(90, 124, 166, 132);
+
+        graphics.setColour(fill);
+        graphics.fillRoundedRectangle(bounds, 12.0f);
+        graphics.setColour(outline);
+        graphics.drawRoundedRectangle(bounds, 12.0f, 1.0f);
+
+        if (decoration.headerBounds.isEmpty())
+            continue;
+
+        auto countBounds = decoration.headerBounds.reduced(2, 0);
+        graphics.setColour(juce::Colour::fromRGBA(190, 214, 240, 188));
+        graphics.setFont(juce::FontOptions(13.0f));
+        graphics.drawFittedText(decoration.countText, countBounds, juce::Justification::centredRight, 1);
+    }
+}
+
 namespace
 {
 constexpr auto kRememberedPasswordMask = "********";
+constexpr auto kLocalMixerGroupId = "local";
+
+[[nodiscard]] juce::String formatMixerGroupCountText(int count)
+{
+    return juce::String(count) + (count == 1 ? " channel" : " channels");
+}
 
 class IntegratedMeterGainLookAndFeel final : public juce::LookAndFeel_V4
 {
@@ -976,6 +1021,10 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     mixerSectionLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(mixerSectionLabel_);
 
+    mixerContent_.addAndMakeVisible(mixerGroupBackdrop_);
+    mixerGroupBackdrop_.setInterceptsMouseClicks(false, false);
+    mixerGroupBackdrop_.toBack();
+
     localHeaderLabel_.setText(kLocalHeaderTitle, juce::dontSendNotification);
     localHeaderLabel_.setJustificationType(juce::Justification::centredLeft);
     mixerContent_.addAndMakeVisible(localHeaderLabel_);
@@ -1679,6 +1728,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
     int contentX = 0;
     int maxContentBottom = 0;
     int stripIndex = 0;
+    std::vector<MixerGroupBackdropComponent::Decoration> groupDecorations;
     int localStripCount = 0;
     for (const auto& strip : currentVisibleMixerStrips_)
     {
@@ -1693,6 +1743,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
                 + kCollapsedLocalHeaderControlWidth
             : (kGroupPadding * 2) + (localStripCount * expandedStripWidth) + ((localStripCount - 1) * kStripGap);
         auto headerRow = juce::Rectangle<int>(contentX + kGroupPadding, y, localGroupWidth - (kGroupPadding * 2), kHeaderHeight);
+        auto countBounds = juce::Rectangle<int> {};
         collapseLocalChannelButton_.setVisible(true);
         collapseLocalChannelButton_.setButtonText(localGroupCollapsed_ ? kExpandLocalChannelLabel
                                                                        : kCollapseLocalChannelLabel);
@@ -1704,6 +1755,11 @@ void FamaLamaJamAudioProcessorEditor::resized()
         removeLocalChannelButton_.setVisible(localStripCount > 1);
         removeLocalChannelButton_.setBounds(headerRow.removeFromRight(kCompactHeaderButtonWidth));
         headerRow.removeFromRight(8);
+        if (! localGroupCollapsed_ && headerRow.getWidth() > 88)
+        {
+            countBounds = headerRow.removeFromRight(84);
+            headerRow.removeFromRight(6);
+        }
         if (localGroupCollapsed_)
             localHeaderLabel_.setBounds(headerRow.removeFromLeft(juce::jmin(34, headerRow.getWidth())));
         else
@@ -1711,6 +1767,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
 
         int stripX = contentX + kGroupPadding;
         const int stripY = y + kHeaderHeight + kHeaderGap;
+        int localStripHeight = localGroupCollapsed_ ? collapsedStripHeight : expandedStripHeight;
         for (; stripIndex < stripCount; ++stripIndex)
         {
             const auto& strip = currentVisibleMixerStrips_[stripIndex];
@@ -1725,6 +1782,16 @@ void FamaLamaJamAudioProcessorEditor::resized()
             stripX += stripWidth + kStripGap;
             maxContentBottom = juce::jmax(maxContentBottom, stripY + stripHeight + kGroupPadding);
         }
+
+        const int localGroupHeight = (stripY + localStripHeight + kGroupPadding) - y;
+        groupDecorations.push_back({
+            .groupId = kLocalMixerGroupId,
+            .title = localGroupCollapsed_ ? "Loc" : kLocalHeaderTitle,
+            .countText = localGroupCollapsed_ ? juce::String{} : formatMixerGroupCountText(localStripCount),
+            .bounds = { contentX, y, localGroupWidth, localGroupHeight },
+            .headerBounds = countBounds,
+            .local = true,
+        });
 
         contentX += localGroupWidth + kGroupGap;
     }
@@ -1743,6 +1810,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
         const int stripTotal = groupEnd - stripIndex;
         const int groupWidth = (kGroupPadding * 2) + (stripTotal * expandedStripWidth) + ((stripTotal - 1) * kStripGap);
         auto groupLabelBounds = juce::Rectangle<int>(contentX + kGroupPadding, y, groupWidth - (kGroupPadding * 2), kRemoteGroupLabelHeight);
+        auto countBounds = groupLabelBounds.removeFromRight(84);
+        groupLabelBounds.removeFromRight(6);
         auto stripX = contentX + kGroupPadding;
         const int stripY = y + kRemoteGroupLabelHeight + 4;
 
@@ -1760,11 +1829,22 @@ void FamaLamaJamAudioProcessorEditor::resized()
         }
 
         maxContentBottom = juce::jmax(maxContentBottom, stripY + expandedStripHeight + kGroupPadding);
+        groupDecorations.push_back({
+            .groupId = juce::String(groupId),
+            .title = juce::String(currentVisibleMixerStrips_[stripIndex].groupLabel),
+            .countText = formatMixerGroupCountText(stripTotal),
+            .bounds = { contentX, y, groupWidth, (stripY + expandedStripHeight + kGroupPadding) - y },
+            .headerBounds = countBounds,
+            .local = false,
+        });
         contentX += groupWidth + kGroupGap;
         stripIndex = groupEnd;
     }
 
     mixerContent_.setSize(juce::jmax(mixerViewport_.getWidth() - 16, contentX), juce::jmax(96, maxContentBottom + 4));
+    mixerGroupBackdrop_.setBounds(mixerContent_.getLocalBounds());
+    mixerGroupBackdrop_.setDecorations(std::move(groupDecorations));
+    mixerGroupBackdrop_.toBack();
 }
 
 void FamaLamaJamAudioProcessorEditor::timerCallback()
@@ -2894,6 +2974,26 @@ int FamaLamaJamAudioProcessorEditor::getMixerViewPositionXForTesting() const noe
 int FamaLamaJamAudioProcessorEditor::getMixerContentWidthForTesting() const noexcept
 {
     return mixerContent_.getWidth();
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMixerGroupLayoutSnapshotForTesting(
+    const juce::String& groupId,
+    MixerGroupLayoutSnapshotForTesting& snapshot) const
+{
+    for (const auto& decoration : mixerGroupBackdrop_.getDecorationsForTesting())
+    {
+        if (decoration.groupId != groupId)
+            continue;
+
+        snapshot.bounds = getLocalArea(&mixerContent_, decoration.bounds);
+        snapshot.headerBounds = getLocalArea(&mixerContent_, decoration.headerBounds);
+        snapshot.title = decoration.title;
+        snapshot.countText = decoration.countText;
+        snapshot.local = decoration.local;
+        return true;
+    }
+
+    return false;
 }
 
 bool FamaLamaJamAudioProcessorEditor::getMixerStripLayoutSnapshotForTesting(

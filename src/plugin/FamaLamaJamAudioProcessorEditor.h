@@ -44,6 +44,28 @@ private:
     float rightLevel_ { 0.0f };
 };
 
+class MixerGroupBackdropComponent final : public juce::Component
+{
+public:
+    struct Decoration
+    {
+        juce::String groupId;
+        juce::String title;
+        juce::String countText;
+        juce::Rectangle<int> bounds;
+        juce::Rectangle<int> headerBounds;
+        bool local { false };
+    };
+
+    void setDecorations(std::vector<Decoration> decorations);
+    [[nodiscard]] const std::vector<Decoration>& getDecorationsForTesting() const noexcept;
+
+    void paint(juce::Graphics& graphics) override;
+
+private:
+    std::vector<Decoration> decorations_;
+};
+
 class FamaLamaJamAudioProcessorEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -401,10 +423,21 @@ public:
         juce::Rectangle<int> collapseBounds;
     };
 
+    struct MixerGroupLayoutSnapshotForTesting
+    {
+        juce::Rectangle<int> bounds;
+        juce::Rectangle<int> headerBounds;
+        juce::String title;
+        juce::String countText;
+        bool local { false };
+    };
+
     [[nodiscard]] juce::Rectangle<int> getMixerViewportBoundsForTesting() const;
     [[nodiscard]] bool hasMixerHorizontalScrollbarForTesting() const noexcept;
     [[nodiscard]] int getMixerViewPositionXForTesting() const noexcept;
     [[nodiscard]] int getMixerContentWidthForTesting() const noexcept;
+    [[nodiscard]] bool getMixerGroupLayoutSnapshotForTesting(const juce::String& groupId,
+                                                             MixerGroupLayoutSnapshotForTesting& snapshot) const;
     [[nodiscard]] bool getMixerStripLayoutSnapshotForTesting(const juce::String& sourceId,
                                                              MixerStripLayoutSnapshotForTesting& snapshot) const;
     [[nodiscard]] MixerLocalHeaderLayoutSnapshotForTesting getLocalHeaderLayoutSnapshotForTesting() const;
@@ -627,6 +660,7 @@ private:
     juce::Label mixerSectionLabel_;
     juce::Viewport mixerViewport_;
     juce::Component mixerContent_;
+    MixerGroupBackdropComponent mixerGroupBackdrop_;
     juce::Label localHeaderLabel_;
     juce::ToggleButton localHeaderTransmitToggle_;
     juce::ToggleButton localHeaderVoiceToggle_;

@@ -286,6 +286,92 @@ TEST_CASE("plugin mixer ui keeps locals first in one horizontal strip field with
     CHECK(std::abs(bobGroupBounds.getY() - aliceGroupBounds.getY()) <= 16);
 }
 
+TEST_CASE("plugin mixer ui paints bordered containers around the local group and each remote user group",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalSend2SourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Bass",
+          .subtitle = "Local Send 2",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#1",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - vocal",
+          .subtitle = "vocal",
+          .active = true,
+          .visible = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "bob#0",
+          .groupId = "bob",
+          .groupLabel = "bob",
+          .displayName = "bob - bass",
+          .subtitle = "bass",
+          .active = true,
+          .visible = true },
+    });
+
+    FamaLamaJamAudioProcessorEditor::MixerGroupLayoutSnapshotForTesting localGroup;
+    FamaLamaJamAudioProcessorEditor::MixerGroupLayoutSnapshotForTesting aliceGroup;
+    FamaLamaJamAudioProcessorEditor::MixerGroupLayoutSnapshotForTesting bobGroup;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting mainStrip;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting sendStrip;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting aliceStrip;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting aliceSecondStrip;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting bobStrip;
+
+    REQUIRE(harness.editor->getMixerGroupLayoutSnapshotForTesting("local", localGroup));
+    REQUIRE(harness.editor->getMixerGroupLayoutSnapshotForTesting("alice", aliceGroup));
+    REQUIRE(harness.editor->getMixerGroupLayoutSnapshotForTesting("bob", bobGroup));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId, mainStrip));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId, sendStrip));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting("alice#0", aliceStrip));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting("alice#1", aliceSecondStrip));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting("bob#0", bobStrip));
+
+    CHECK(localGroup.local);
+    CHECK_FALSE(aliceGroup.local);
+    CHECK_FALSE(bobGroup.local);
+    CHECK(localGroup.countText == "2 channels");
+    CHECK(aliceGroup.countText == "2 channels");
+    CHECK(bobGroup.countText == "1 channel");
+
+    CHECK(localGroup.bounds.contains(mainStrip.stripBounds));
+    CHECK(localGroup.bounds.contains(sendStrip.stripBounds));
+    CHECK(aliceGroup.bounds.contains(aliceStrip.stripBounds));
+    CHECK(aliceGroup.bounds.contains(aliceSecondStrip.stripBounds));
+    CHECK(bobGroup.bounds.contains(bobStrip.stripBounds));
+
+    CHECK(aliceGroup.bounds.getX() > localGroup.bounds.getRight());
+    CHECK(bobGroup.bounds.getX() > aliceGroup.bounds.getRight());
+    CHECK_FALSE(localGroup.headerBounds.isEmpty());
+    CHECK_FALSE(aliceGroup.headerBounds.isEmpty());
+    CHECK_FALSE(bobGroup.headerBounds.isEmpty());
+}
+
 TEST_CASE("plugin mixer ui writes strip controls back into processor-owned state and reflects meters",
           "[plugin_mixer_ui]")
 {
