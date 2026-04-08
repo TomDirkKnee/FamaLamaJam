@@ -69,7 +69,7 @@ private:
 class FamaLamaJamAudioProcessorEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
-    static constexpr const char* kLocalHeaderTitle = "Local Sends";
+    static constexpr const char* kLocalHeaderTitle = "Local";
     static constexpr const char* kLocalHeaderTransmitLabel = "Transmit";
     static constexpr const char* kLocalHeaderVoiceLabel = "Voice";
     static constexpr const char* kAddLocalChannelLabel = "+";

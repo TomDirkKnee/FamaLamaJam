@@ -1,6 +1,6 @@
 # UI-012: Single-Channel Remote Header Priority
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `3778e48`
@@ -67,5 +67,5 @@ The fixed count badge is consuming too much of the narrow remote group header, w
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `79398c0`
+- Rollback: `git revert 79398c0`
