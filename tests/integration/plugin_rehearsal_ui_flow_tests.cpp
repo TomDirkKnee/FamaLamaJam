@@ -141,6 +141,13 @@ juce::TextButton* findDirectButtonWithText(juce::Component& parent, const juce::
                                              [&](const juce::TextButton& button) { return button.getButtonText() == text; });
 }
 
+juce::TextButton* findDirectButtonContainingText(juce::Component& parent, const juce::String& text)
+{
+    return findDirectChild<juce::TextButton>(parent, [&](const juce::TextButton& button) {
+        return button.getButtonText().contains(text);
+    });
+}
+
 juce::TextEditor* findDirectTextEditorToRightOf(juce::Component& parent, const juce::Label& label)
 {
     return findDirectChild<juce::TextEditor>(parent, [&](const juce::TextEditor& editor) {
@@ -591,6 +598,76 @@ TEST_CASE("plugin rehearsal ui flow keeps the room workflow in a fixed right sid
     CHECK_FALSE(harness.editor->isRoomSectionAboveMixerForTesting());
     CHECK(roomTabButton == nullptr);
     CHECK(popoutButton == nullptr);
+}
+
+TEST_CASE("plugin rehearsal ui flow keeps connection actions visible and server fields aligned when settings expand",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 3,
+                              .intervalProgress = 0.25f,
+                              .intervalIndex = 6,
+                          });
+
+    auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
+    auto* disconnectButton = findDirectButtonWithText(*harness.editor, "Disconnect");
+    auto* settingsToggle = findDirectButtonContainingText(*harness.editor, "Server Settings");
+
+    REQUIRE(connectButton != nullptr);
+    REQUIRE(disconnectButton != nullptr);
+    REQUIRE(settingsToggle != nullptr);
+
+    CHECK(connectButton->isVisible());
+    CHECK(disconnectButton->isVisible());
+
+    settingsToggle->triggerClick();
+
+    auto* hostLabel = findDirectLabelWithText(*harness.editor, "Host");
+    auto* portLabel = findDirectLabelWithText(*harness.editor, "Port");
+    auto* usernameLabel = findDirectLabelWithText(*harness.editor, "Username");
+    auto* passwordLabel = findDirectLabelWithText(*harness.editor, "Password");
+    connectButton = findDirectButtonWithText(*harness.editor, "Connect");
+    disconnectButton = findDirectButtonWithText(*harness.editor, "Disconnect");
+
+    REQUIRE(hostLabel != nullptr);
+    REQUIRE(portLabel != nullptr);
+    REQUIRE(usernameLabel != nullptr);
+    REQUIRE(passwordLabel != nullptr);
+    REQUIRE(connectButton != nullptr);
+    REQUIRE(disconnectButton != nullptr);
+
+    auto* hostEditor = findDirectTextEditorToRightOf(*harness.editor, *hostLabel);
+    auto* portEditor = findDirectTextEditorToRightOf(*harness.editor, *portLabel);
+    auto* usernameEditor = findDirectTextEditorToRightOf(*harness.editor, *usernameLabel);
+    auto* passwordEditor = findDirectTextEditorToRightOf(*harness.editor, *passwordLabel);
+
+    REQUIRE(hostEditor != nullptr);
+    REQUIRE(portEditor != nullptr);
+    REQUIRE(usernameEditor != nullptr);
+    REQUIRE(passwordEditor != nullptr);
+
+    CHECK(hostLabel->isVisible());
+    CHECK(portLabel->isVisible());
+    CHECK(usernameLabel->isVisible());
+    CHECK(passwordLabel->isVisible());
+    CHECK(connectButton->isVisible());
+    CHECK(disconnectButton->isVisible());
+    CHECK(getBoundsInEditor(*harness.editor, *hostEditor).getX()
+          == getBoundsInEditor(*harness.editor, *usernameEditor).getX());
+    CHECK(getBoundsInEditor(*harness.editor, *portEditor).getX()
+          == getBoundsInEditor(*harness.editor, *passwordEditor).getX());
+    CHECK(getBoundsInEditor(*harness.editor, *connectButton).getBottom()
+          <= getBoundsInEditor(*harness.editor, *passwordEditor).getBottom() + 40);
 }
 
 TEST_CASE("plugin rehearsal ui flow applies the current draft when Connect is pressed and hides the separate Apply button",

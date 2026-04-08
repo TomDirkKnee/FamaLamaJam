@@ -181,6 +181,13 @@ juce::TextButton* findButtonWithText(juce::Component& parent, const juce::String
                                            [&](const juce::TextButton& button) { return button.getButtonText() == text; });
 }
 
+juce::TextButton* findButtonContainingText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::TextButton>(parent, [&](const juce::TextButton& button) {
+        return button.getButtonText().contains(text);
+    });
+}
+
 juce::Label* findLabelContainingText(juce::Component& parent, const juce::String& text)
 {
     return findComponent<juce::Label>(parent,
@@ -716,4 +723,45 @@ TEST_CASE("plugin room controls ui keeps the sidebar beside a shared local-first
     CHECK(resizedStripLabels[2] == "alice - guitar");
     CHECK(resizedStripLabels[3] == "bob - bass");
     CHECK(resizedSidebarBounds.getX() > harness.editor->getWidth() / 2);
+}
+
+TEST_CASE("plugin room controls ui keeps room chat readable beside the expanded settings shell",
+          "[plugin_room_controls_ui]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected. Start playing when the beat appears.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 4,
+                              .intervalProgress = 0.5f,
+                              .intervalIndex = 2,
+                          });
+
+    auto* settingsToggle = findButtonContainingText(*harness.editor, "Server Settings");
+    REQUIRE(settingsToggle != nullptr);
+    settingsToggle->triggerClick();
+
+    auto* hostLabel = findLabelWithText(*harness.editor, "Host");
+    auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
+    auto* sidebarViewport = findRoomSidebarViewport(*harness.editor);
+
+    REQUIRE(hostLabel != nullptr);
+    REQUIRE(roomLabel != nullptr);
+    REQUIRE(sidebarViewport != nullptr);
+
+    const auto hostBounds = getBoundsInEditor(*harness.editor, *hostLabel);
+    const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
+    const auto sidebarBounds = getBoundsInEditor(*harness.editor, *sidebarViewport);
+
+    CHECK(roomBounds.getX() > hostBounds.getRight());
+    CHECK(std::abs(roomBounds.getY() - hostBounds.getY()) <= 32);
+    CHECK(sidebarBounds.getWidth() >= 240);
+    CHECK(sidebarBounds.getHeight() >= harness.editor->getHeight() / 2);
 }

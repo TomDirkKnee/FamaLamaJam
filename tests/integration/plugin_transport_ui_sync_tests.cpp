@@ -123,6 +123,24 @@ juce::TextButton* findButtonWithText(juce::Component& parent, const juce::String
     return findComponent<juce::TextButton>(parent,
                                            [&](const juce::TextButton& button) { return button.getButtonText() == text; });
 }
+
+juce::ToggleButton* findToggleButtonWithText(juce::Component& parent, const juce::String& text)
+{
+    return findComponent<juce::ToggleButton>(parent,
+                                             [&](const juce::ToggleButton& button) { return button.getButtonText() == text; });
+}
+
+juce::Slider* findSlider(juce::Component& parent, juce::Slider::SliderStyle style, juce::Slider::TextEntryBoxPosition textBox)
+{
+    return findComponent<juce::Slider>(parent, [&](const juce::Slider& slider) {
+        return slider.getSliderStyle() == style && slider.getTextBoxPosition() == textBox;
+    });
+}
+
+juce::Rectangle<int> getBoundsInEditor(juce::Component& editor, juce::Component& component)
+{
+    return editor.getLocalArea(&component, component.getLocalBounds());
+}
 } // namespace
 
 TEST_CASE("plugin transport ui sync exposes processor sync states", "[plugin_transport_ui_sync]")
@@ -394,6 +412,63 @@ TEST_CASE("plugin transport ui sync disables the arm control with explicit block
     CHECK(mismatchHarness.editor->getHostSyncAssistButtonTextForTesting() == "Set DAW tempo to 121");
     CHECK(mismatchHarness.editor->getHostSyncAssistStatusTextForTesting().isEmpty());
     CHECK_FALSE(mismatchHarness.editor->isHostSyncAssistEnabledForTesting());
+}
+
+TEST_CASE("plugin transport ui sync restores a wider default editor and a full-width footer with metronome volume",
+          "[plugin_transport_ui_sync]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Active,
+                              .statusMessage = "Connected",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = true,
+                              .hasServerTiming = true,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Healthy,
+                              .metronomeAvailable = true,
+                              .beatsPerMinute = 120,
+                              .beatsPerInterval = 16,
+                              .currentBeat = 5,
+                              .intervalProgress = 0.25f,
+                              .intervalIndex = 9,
+                          },
+                          true,
+                          FamaLamaJamAudioProcessorEditor::HostSyncAssistUiState {
+                              .armable = true,
+                              .targetBeatsPerMinute = 120,
+                              .targetBeatsPerInterval = 16,
+                          });
+
+    auto* transportLabel = findLabelWithText(*harness.editor, "120 BPM | 16 BPI");
+    auto* metronomeToggle = findToggleButtonWithText(*harness.editor, "Metronome");
+    auto* syncButton = findButtonWithText(*harness.editor, "Arm Sync to Ableton Play");
+    auto* masterOutputLabel = findLabelWithText(*harness.editor, "Master Output");
+    auto* metronomeVolumeSlider = findSlider(*harness.editor,
+                                             juce::Slider::RotaryHorizontalVerticalDrag,
+                                             juce::Slider::TextBoxBelow);
+    auto* intervalProgress =
+        findComponent<famalamajam::plugin::BeatDividedProgressBar>(*harness.editor,
+                                                                   [](const auto&) { return true; });
+
+    REQUIRE(transportLabel != nullptr);
+    REQUIRE(metronomeToggle != nullptr);
+    REQUIRE(syncButton != nullptr);
+    REQUIRE(masterOutputLabel != nullptr);
+    REQUIRE(metronomeVolumeSlider != nullptr);
+    REQUIRE(intervalProgress != nullptr);
+
+    const auto transportBounds = getBoundsInEditor(*harness.editor, *transportLabel);
+    const auto metronomeBounds = getBoundsInEditor(*harness.editor, *metronomeVolumeSlider);
+    const auto syncBounds = getBoundsInEditor(*harness.editor, *syncButton);
+    const auto masterBounds = getBoundsInEditor(*harness.editor, *masterOutputLabel);
+    const auto progressBounds = getBoundsInEditor(*harness.editor, *intervalProgress);
+
+    CHECK(harness.editor->getWidth() >= 1350);
+    CHECK(transportBounds.getY() > harness.editor->getHeight() / 2);
+    CHECK(metronomeBounds.getY() > harness.editor->getHeight() / 2);
+    CHECK(syncBounds.getRight() < masterBounds.getX());
+    CHECK(progressBounds.getX() <= 16);
+    CHECK(progressBounds.getRight() >= harness.editor->getWidth() - 16);
 }
 
 TEST_CASE("plugin transport ui sync renders armed canceled and failed-start guidance in plain language",
