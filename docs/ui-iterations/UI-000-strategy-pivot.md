@@ -56,5 +56,5 @@ The current UI work needs tighter control, smaller steps, and clearer rollback p
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `9471468`
+- Rollback: `git revert 9471468`

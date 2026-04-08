@@ -1035,10 +1035,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
     constexpr int kSidebarMinWidth = 220;
     constexpr int kSidebarMaxWidth = 280;
     constexpr int kFooterHeight = 96;
-    constexpr int kTopBarExpandedHeight = 124;
+    constexpr int kTopBarExpandedHeight = 160;
     constexpr int kTopBarCollapsedHeight = 94;
-    constexpr int kExpandedShellMinWidth = 620;
-    constexpr int kExpandedShellMaxWidth = 860;
     constexpr int kFieldRowHeight = 28;
     constexpr int kFieldLabelWidth = 72;
     constexpr int kFieldColumnGap = 14;
@@ -1061,10 +1059,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
     workspaceArea.setWidth(juce::jmax(0, workspaceArea.getWidth() - sidebarWidth - kShellGap));
 
     auto topBarBand = workspaceArea.removeFromTop(serverSettingsExpanded_ ? kTopBarExpandedHeight : kTopBarCollapsedHeight);
-    const auto expandedShellWidth = juce::jlimit(kExpandedShellMinWidth,
-                                                 juce::jmin(kExpandedShellMaxWidth, workspaceArea.getWidth()),
-                                                 juce::jmax(kExpandedShellMinWidth, (workspaceArea.getWidth() * 2) / 3));
-    auto topBar = topBarBand.withWidth(serverSettingsExpanded_ ? expandedShellWidth : workspaceArea.getWidth());
+    auto topBar = topBarBand.withWidth(workspaceArea.getWidth());
     workspaceArea.removeFromTop(8);
 
     titleLabel_.setVisible(false);
@@ -1139,7 +1134,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
                               passwordEditor_);
     }
 
-    auto controls = topBar.removeFromTop(30);
+    topBar.removeFromTop(6);
+    auto controls = topBar.removeFromTop(32);
     connectButton_.setBounds(controls.removeFromLeft(98));
     controls.removeFromLeft(8);
     disconnectButton_.setBounds(controls.removeFromLeft(108));

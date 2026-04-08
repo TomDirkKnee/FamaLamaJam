@@ -744,23 +744,30 @@ TEST_CASE("plugin room controls ui keeps room chat readable beside the expanded 
                               .intervalIndex = 2,
                           });
 
-    auto* settingsToggle = findButtonContainingText(*harness.editor, "Server Settings");
-    REQUIRE(settingsToggle != nullptr);
-    settingsToggle->triggerClick();
-
     auto* hostLabel = findLabelWithText(*harness.editor, "Host");
+    auto* passwordLabel = findLabelWithText(*harness.editor, "Password");
     auto* roomLabel = findLabelWithText(*harness.editor, "Room Chat");
     auto* sidebarViewport = findRoomSidebarViewport(*harness.editor);
 
     REQUIRE(hostLabel != nullptr);
+    REQUIRE(passwordLabel != nullptr);
     REQUIRE(roomLabel != nullptr);
     REQUIRE(sidebarViewport != nullptr);
 
+    auto* hostEditor = findTextEditorOnSameRowAs(*harness.editor, *hostLabel);
+    auto* passwordEditor = findTextEditorOnSameRowAs(*harness.editor, *passwordLabel);
+
+    REQUIRE(hostEditor != nullptr);
+    REQUIRE(passwordEditor != nullptr);
+
     const auto hostBounds = getBoundsInEditor(*harness.editor, *hostLabel);
+    const auto passwordEditorBounds = getBoundsInEditor(*harness.editor, *passwordEditor);
     const auto roomBounds = getBoundsInEditor(*harness.editor, *roomLabel);
     const auto sidebarBounds = getBoundsInEditor(*harness.editor, *sidebarViewport);
 
     CHECK(roomBounds.getX() > hostBounds.getRight());
+    CHECK(roomBounds.getX() > passwordEditorBounds.getRight());
+    CHECK(roomBounds.getX() - passwordEditorBounds.getRight() <= 20);
     CHECK(std::abs(roomBounds.getY() - hostBounds.getY()) <= 32);
     CHECK(sidebarBounds.getWidth() >= 240);
     CHECK(sidebarBounds.getHeight() >= harness.editor->getHeight() / 2);

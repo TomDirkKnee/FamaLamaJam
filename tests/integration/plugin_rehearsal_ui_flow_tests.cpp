@@ -630,8 +630,6 @@ TEST_CASE("plugin rehearsal ui flow keeps connection actions visible and server 
     CHECK(connectButton->isVisible());
     CHECK(disconnectButton->isVisible());
 
-    settingsToggle->triggerClick();
-
     auto* hostLabel = findDirectLabelWithText(*harness.editor, "Host");
     auto* portLabel = findDirectLabelWithText(*harness.editor, "Port");
     auto* usernameLabel = findDirectLabelWithText(*harness.editor, "Username");
@@ -666,8 +664,16 @@ TEST_CASE("plugin rehearsal ui flow keeps connection actions visible and server 
           == getBoundsInEditor(*harness.editor, *usernameEditor).getX());
     CHECK(getBoundsInEditor(*harness.editor, *portEditor).getX()
           == getBoundsInEditor(*harness.editor, *passwordEditor).getX());
-    CHECK(getBoundsInEditor(*harness.editor, *connectButton).getBottom()
-          <= getBoundsInEditor(*harness.editor, *passwordEditor).getBottom() + 40);
+
+    const auto passwordBounds = getBoundsInEditor(*harness.editor, *passwordEditor);
+    const auto connectBounds = getBoundsInEditor(*harness.editor, *connectButton);
+    const auto disconnectBounds = getBoundsInEditor(*harness.editor, *disconnectButton);
+
+    CHECK(connectBounds.getHeight() >= 24);
+    CHECK(disconnectBounds.getHeight() >= 24);
+    CHECK(connectBounds.getY() >= passwordBounds.getBottom());
+    CHECK(disconnectBounds.getY() >= passwordBounds.getBottom());
+    CHECK(connectBounds.getBottom() <= passwordBounds.getBottom() + 44);
 }
 
 TEST_CASE("plugin rehearsal ui flow applies the current draft when Connect is pressed and hides the separate Apply button",

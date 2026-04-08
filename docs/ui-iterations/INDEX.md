@@ -9,8 +9,8 @@
 
 | ID | Status | Summary | Baseline | Final Commit | Rollback |
 |----|--------|---------|----------|--------------|----------|
-| `UI-000` | done | Strategy pivot away from GSD for UI development | `cc5f986` | pending | `git revert <final-commit>` |
-| `UI-001` | in_progress | Expanded server settings should fill to the chat column and keep connect/disconnect visible | `cc5f986` | pending | `git revert <final-commit>` |
+| `UI-000` | done | Strategy pivot away from GSD for UI development | `cc5f986` | `9471468` | `git revert 9471468` |
+| `UI-001` | done | Expanded server settings should fill to the chat column and keep connect/disconnect visible | `cc5f986` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
