@@ -68,5 +68,5 @@ The current strip still wastes too much horizontal space on the right-hand side.
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `b7aa93c`
+- Rollback: `git revert b7aa93c`

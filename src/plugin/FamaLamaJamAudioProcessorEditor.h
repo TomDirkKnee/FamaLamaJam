@@ -384,6 +384,14 @@ public:
         juce::Rectangle<int> outputBounds;
     };
 
+    enum class MixerStripButtonKindForTesting
+    {
+        Mute,
+        Solo,
+        Transmit,
+        Voice,
+    };
+
     struct MixerLocalHeaderLayoutSnapshotForTesting
     {
         juce::Rectangle<int> headerBounds;
@@ -403,6 +411,11 @@ public:
     [[nodiscard]] juce::String getMixerStripTransmitButtonTextForTesting(const juce::String& sourceId) const;
     [[nodiscard]] juce::String getMixerStripVoiceButtonTextForTesting(const juce::String& sourceId) const;
     [[nodiscard]] bool getMixerStripVoiceToggleStateForTesting(const juce::String& sourceId, bool& enabled) const;
+    [[nodiscard]] bool getMixerStripButtonAppearanceForTesting(const juce::String& sourceId,
+                                                               MixerStripButtonKindForTesting kind,
+                                                               juce::String& text,
+                                                               juce::Colour& colour,
+                                                               bool& toggled) const;
     [[nodiscard]] bool getMixerStripSoloStateForTesting(const juce::String& sourceId, bool& soloed) const;
     [[nodiscard]] bool getMixerStripControlStateForTesting(const juce::String& sourceId,
                                                            double& gain,
@@ -467,11 +480,11 @@ private:
         StereoMeterComponent meter;
         juce::Slider gainSlider;
         juce::Slider panSlider;
-        juce::ToggleButton soloToggle;
-        juce::ToggleButton muteToggle;
+        juce::TextButton soloToggle;
+        juce::TextButton muteToggle;
         juce::TextEditor nameEditor;
         juce::TextButton transmitButton;
-        juce::ToggleButton voiceModeToggle;
+        juce::TextButton voiceModeToggle;
         juce::ComboBox outputSelector;
         juce::TextButton removeButton;
         bool editableName { false };

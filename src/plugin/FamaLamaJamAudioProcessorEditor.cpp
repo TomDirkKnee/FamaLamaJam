@@ -190,6 +190,93 @@ IntegratedMeterGainLookAndFeel& getIntegratedMeterGainLookAndFeel()
     return lookAndFeel;
 }
 
+class StripControlButtonLookAndFeel final : public juce::LookAndFeel_V4
+{
+public:
+    void drawButtonBackground(juce::Graphics& graphics,
+                              juce::Button& button,
+                              const juce::Colour&,
+                              bool shouldDrawButtonAsHighlighted,
+                              bool shouldDrawButtonAsDown) override
+    {
+        auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+        if (bounds.isEmpty())
+            return;
+
+        const auto fill = button.findColour(juce::TextButton::buttonColourId);
+        auto drawnFill = fill;
+        if (drawnFill.getAlpha() > 0)
+        {
+            if (shouldDrawButtonAsDown)
+                drawnFill = drawnFill.brighter(0.18f);
+            else if (shouldDrawButtonAsHighlighted)
+                drawnFill = drawnFill.brighter(0.08f);
+
+            graphics.setColour(drawnFill);
+            graphics.fillRoundedRectangle(bounds, 4.0f);
+        }
+
+        auto outline = fill.getAlpha() > 0 ? fill.brighter(0.22f)
+                                           : juce::Colour::fromRGBA(146, 176, 210, 120);
+        if (shouldDrawButtonAsHighlighted && fill.getAlpha() == 0)
+            outline = outline.brighter(0.15f);
+
+        graphics.setColour(outline);
+        graphics.drawRoundedRectangle(bounds, 4.0f, 1.0f);
+    }
+
+    void drawButtonText(juce::Graphics& graphics,
+                        juce::TextButton& button,
+                        bool,
+                        bool) override
+    {
+        auto bounds = button.getLocalBounds().reduced(2, 1);
+        if (bounds.isEmpty())
+            return;
+
+        const auto textColour = button.getToggleState() ? button.findColour(juce::TextButton::textColourOnId)
+                                                        : button.findColour(juce::TextButton::textColourOffId);
+        graphics.setColour(textColour);
+        graphics.setFont(juce::FontOptions(juce::jlimit(10.0f, 14.0f, bounds.getHeight() * 0.52f),
+                                           juce::Font::bold));
+        graphics.drawFittedText(button.getButtonText(), bounds, juce::Justification::centred, 1);
+    }
+};
+
+StripControlButtonLookAndFeel& getStripControlButtonLookAndFeel()
+{
+    static StripControlButtonLookAndFeel lookAndFeel;
+    return lookAndFeel;
+}
+
+[[nodiscard]] juce::Colour getStripButtonRed()
+{
+    return juce::Colour::fromRGB(168, 72, 72);
+}
+
+[[nodiscard]] juce::Colour getStripButtonOrange()
+{
+    return juce::Colour::fromRGB(230, 181, 120);
+}
+
+[[nodiscard]] juce::Colour getStripButtonGreen()
+{
+    return juce::Colour::fromRGB(88, 168, 102);
+}
+
+void applyStripButtonStyle(juce::TextButton& button,
+                           const juce::String& text,
+                           juce::Colour fillColour,
+                           bool toggled)
+{
+    button.setButtonText(text);
+    button.setToggleState(toggled, juce::dontSendNotification);
+    button.setColour(juce::TextButton::buttonColourId, fillColour);
+    button.setColour(juce::TextButton::buttonOnColourId, fillColour);
+    button.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    button.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+}
+
 [[nodiscard]] bool serverDiscoveryEntryMatches(const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& lhs,
                                                const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& rhs)
 {
@@ -1869,7 +1956,7 @@ void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripW
     if (! widgets.hasTransmitControl)
         return;
 
-    juce::Colour colour = juce::Colour::fromRGB(168, 72, 72);
+    auto colour = getStripButtonRed();
     juce::String text = "TX";
 
     switch (strip.transmitState)
@@ -1880,13 +1967,11 @@ void FamaLamaJamAudioProcessorEditor::updateTransmitButtonAppearance(MixerStripW
             colour = juce::Colour::fromRGB(196, 152, 72);
             break;
         case TransmitState::Active:
-            colour = juce::Colour::fromRGB(88, 168, 102);
+            colour = getStripButtonGreen();
             break;
     }
 
-    widgets.transmitButton.setButtonText(text);
-    widgets.transmitButton.setColour(juce::TextButton::buttonColourId, colour);
-    widgets.transmitButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    applyStripButtonStyle(widgets.transmitButton, text, colour, strip.transmitState == TransmitState::Active);
 }
 
 void FamaLamaJamAudioProcessorEditor::updateVoiceModeButtonAppearance(MixerStripWidgets& widgets,
@@ -1895,11 +1980,11 @@ void FamaLamaJamAudioProcessorEditor::updateVoiceModeButtonAppearance(MixerStrip
     if (! widgets.hasVoiceModeControl)
         return;
 
-    const bool enabled = strip.localChannelMode == LocalChannelMode::Voice;
-    widgets.voiceModeToggle.setToggleState(enabled, juce::dontSendNotification);
-    widgets.voiceModeToggle.setButtonText(enabled ? "VOX" : "INT");
-    widgets.voiceModeToggle.setColour(juce::ToggleButton::textColourId,
-                                      enabled ? juce::Colour::fromRGB(230, 181, 120) : juce::Colours::white);
+    const bool voiceEnabled = strip.localChannelMode == LocalChannelMode::Voice;
+    applyStripButtonStyle(widgets.voiceModeToggle,
+                          voiceEnabled ? "VOX" : "INT",
+                          voiceEnabled ? getStripButtonOrange() : getStripButtonGreen(),
+                          voiceEnabled);
 }
 
 juce::String FamaLamaJamAudioProcessorEditor::getCollapsedServerSummary() const
@@ -2389,9 +2474,16 @@ void FamaLamaJamAudioProcessorEditor::refreshMixerStrips()
             widgets.panSlider.setValue(strip.pan, juce::dontSendNotification);
         widgets.muteToggle.setToggleState(strip.muted, juce::dontSendNotification);
         widgets.soloToggle.setToggleState(strip.soloed, juce::dontSendNotification);
-        widgets.soloToggle.setButtonText("S");
-        widgets.muteToggle.setButtonText("M");
+        applyStripButtonStyle(widgets.muteToggle,
+                              "M",
+                              strip.muted ? getStripButtonRed() : juce::Colours::transparentBlack,
+                              strip.muted);
+        applyStripButtonStyle(widgets.soloToggle,
+                              "S",
+                              strip.soloed ? getStripButtonRed() : juce::Colours::transparentBlack,
+                              strip.soloed);
         widgets.soloToggle.setAlpha(strip.active || strip.kind == MixerStripKind::LocalMonitor ? 1.0f : 0.7f);
+        widgets.muteToggle.setAlpha(strip.active || strip.kind == MixerStripKind::LocalMonitor ? 1.0f : 0.7f);
         widgets.hasTransmitControl = strip.kind == MixerStripKind::LocalMonitor;
         widgets.hasVoiceModeControl = strip.kind == MixerStripKind::LocalMonitor;
         widgets.removable = false;
@@ -2504,7 +2596,9 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         };
         mixerContent_.addAndMakeVisible(widgets->panSlider);
 
+        widgets->muteToggle.setClickingTogglesState(true);
         widgets->muteToggle.setButtonText("M");
+        widgets->muteToggle.setLookAndFeel(&getStripControlButtonLookAndFeel());
         widgets->muteToggle.onClick = [this, raw = widgets.get()] {
             mixerStripSetter_(raw->sourceId,
                               static_cast<float>(raw->gainSlider.getValue()),
@@ -2543,6 +2637,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
 
         widgets->soloToggle.setClickingTogglesState(true);
         widgets->soloToggle.setButtonText("S");
+        widgets->soloToggle.setLookAndFeel(&getStripControlButtonLookAndFeel());
         widgets->soloToggle.onClick = [this, raw = widgets.get()] {
             const auto targetState = raw->soloToggle.getToggleState();
             if (! mixerStripSoloSetter_(raw->sourceId, targetState))
@@ -2558,11 +2653,13 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->hasVoiceModeControl = strip.kind == MixerStripKind::LocalMonitor;
         widgets->removable = false;
         widgets->voiceModeToggle.setClickingTogglesState(true);
+        widgets->voiceModeToggle.setLookAndFeel(&getStripControlButtonLookAndFeel());
         widgets->voiceModeToggle.onClick = [this]() {
             (void) voiceModeToggleHandler_();
             refreshMixerStrips();
         };
         widgets->voiceModeToggle.setVisible(widgets->hasVoiceModeControl);
+        widgets->transmitButton.setLookAndFeel(&getStripControlButtonLookAndFeel());
         widgets->transmitButton.onClick = [this]() {
             (void) transmitToggleHandler_();
             refreshMixerStrips();
@@ -2898,6 +2995,51 @@ bool FamaLamaJamAudioProcessorEditor::getMixerStripVoiceToggleStateForTesting(co
             enabled = widgets->voiceModeToggle.getToggleState();
             return true;
         }
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMixerStripButtonAppearanceForTesting(const juce::String& sourceId,
+                                                                              MixerStripButtonKindForTesting kind,
+                                                                              juce::String& text,
+                                                                              juce::Colour& colour,
+                                                                              bool& toggled) const
+{
+    const auto source = sourceId.toStdString();
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId != source)
+            continue;
+
+        const juce::TextButton* button = nullptr;
+        switch (kind)
+        {
+            case MixerStripButtonKindForTesting::Mute:
+                button = &widgets->muteToggle;
+                break;
+            case MixerStripButtonKindForTesting::Solo:
+                button = &widgets->soloToggle;
+                break;
+            case MixerStripButtonKindForTesting::Transmit:
+                if (! widgets->hasTransmitControl)
+                    return false;
+                button = &widgets->transmitButton;
+                break;
+            case MixerStripButtonKindForTesting::Voice:
+                if (! widgets->hasVoiceModeControl)
+                    return false;
+                button = &widgets->voiceModeToggle;
+                break;
+        }
+
+        if (button == nullptr)
+            return false;
+
+        text = button->getButtonText();
+        colour = button->findColour(juce::TextButton::buttonColourId);
+        toggled = button->getToggleState();
+        return true;
     }
 
     return false;

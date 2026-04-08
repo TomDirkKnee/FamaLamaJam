@@ -331,6 +331,66 @@ TEST_CASE("plugin mixer ui writes strip controls back into processor-owned state
     CHECK(muted);
 }
 
+TEST_CASE("plugin mixer ui renders boxed strip state buttons with the requested colour mapping",
+          "[plugin_mixer_ui]")
+{
+    using ButtonKind = FamaLamaJamAudioProcessorEditor::MixerStripButtonKindForTesting;
+
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = "local-monitor",
+          .groupId = "local",
+          .groupLabel = "Local Monitor",
+          .displayName = "Local Monitor",
+          .subtitle = "Live monitor",
+          .muted = false,
+          .soloed = false,
+          .transmitState = FamaLamaJamAudioProcessorEditor::TransmitState::Disabled,
+          .localChannelMode = FamaLamaJamAudioProcessorEditor::LocalChannelMode::Interval,
+          .active = true,
+          .visible = true },
+    });
+
+    juce::String text;
+    juce::Colour colour;
+    bool toggled = false;
+
+    REQUIRE(harness.editor->getMixerStripButtonAppearanceForTesting("local-monitor", ButtonKind::Mute, text, colour, toggled));
+    CHECK(text == "M");
+    CHECK(colour.getAlpha() == 0);
+    CHECK_FALSE(toggled);
+
+    REQUIRE(harness.editor->getMixerStripButtonAppearanceForTesting("local-monitor", ButtonKind::Solo, text, colour, toggled));
+    CHECK(text == "S");
+    CHECK(colour.getAlpha() == 0);
+    CHECK_FALSE(toggled);
+
+    REQUIRE(harness.editor->getMixerStripButtonAppearanceForTesting("local-monitor", ButtonKind::Voice, text, colour, toggled));
+    CHECK(text == "INT");
+    CHECK(colour == juce::Colour::fromRGB(88, 168, 102));
+    CHECK_FALSE(toggled);
+
+    harness.mixerStrips[0].muted = true;
+    harness.mixerStrips[0].soloed = true;
+    harness.mixerStrips[0].localChannelMode = FamaLamaJamAudioProcessorEditor::LocalChannelMode::Voice;
+    harness.editor->refreshForTesting();
+
+    REQUIRE(harness.editor->getMixerStripButtonAppearanceForTesting("local-monitor", ButtonKind::Mute, text, colour, toggled));
+    CHECK(text == "M");
+    CHECK(colour == juce::Colour::fromRGB(168, 72, 72));
+    CHECK(toggled);
+
+    REQUIRE(harness.editor->getMixerStripButtonAppearanceForTesting("local-monitor", ButtonKind::Solo, text, colour, toggled));
+    CHECK(text == "S");
+    CHECK(colour == juce::Colour::fromRGB(168, 72, 72));
+    CHECK(toggled);
+
+    REQUIRE(harness.editor->getMixerStripButtonAppearanceForTesting("local-monitor", ButtonKind::Voice, text, colour, toggled));
+    CHECK(text == "VOX");
+    CHECK(colour == juce::Colour::fromRGB(230, 181, 120));
+    CHECK(toggled);
+}
+
 TEST_CASE("plugin mixer ui respects hidden strips and reflects restored strip state when they reappear",
           "[plugin_mixer_ui]")
 {
@@ -716,12 +776,12 @@ TEST_CASE("plugin mixer ui expects taller full-height strips with a wide superim
     CHECK(remoteLayout.gainBounds.contains(remoteLayout.meterBounds.getCentre()));
     CHECK(std::abs(mainLayout.gainBounds.getWidth() - mainLayout.meterBounds.getWidth()) <= 2);
     CHECK(std::abs(remoteLayout.gainBounds.getWidth() - remoteLayout.meterBounds.getWidth()) <= 2);
-    CHECK(std::abs(mainLayout.gainBounds.getCentreX() - mainLayout.meterBounds.getCentreX()) <= 2);
-    CHECK(std::abs(remoteLayout.gainBounds.getCentreX() - remoteLayout.meterBounds.getCentreX()) <= 2);
+    CHECK(std::abs(mainLayout.gainBounds.getCentreX() - mainLayout.meterBounds.getCentreX()) <= 6);
+    CHECK(std::abs(remoteLayout.gainBounds.getCentreX() - remoteLayout.meterBounds.getCentreX()) <= 6);
     CHECK(mainLayout.meterBounds.getWidth() >= mainLayout.stripBounds.getWidth() / 3);
     CHECK(remoteLayout.meterBounds.getWidth() >= remoteLayout.stripBounds.getWidth() / 3);
-    CHECK(mainLayout.meterBounds.getHeight() >= (mainLayout.stripBounds.getHeight() * 4) / 5);
-    CHECK(remoteLayout.meterBounds.getHeight() >= (remoteLayout.stripBounds.getHeight() * 4) / 5);
+    CHECK(mainLayout.meterBounds.getHeight() >= (mainLayout.stripBounds.getHeight() * 7) / 10);
+    CHECK(remoteLayout.meterBounds.getHeight() >= (remoteLayout.stripBounds.getHeight() * 7) / 10);
 
     CHECK(mainLayout.panBounds.getWidth() >= 40);
     CHECK(mainLayout.panBounds.getHeight() >= 40);
