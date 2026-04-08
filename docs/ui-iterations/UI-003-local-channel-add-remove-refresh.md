@@ -61,5 +61,5 @@ The mixer should update immediately when local channels are added or removed. Ha
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `fdc21f2`
+- Rollback: `git revert fdc21f2`

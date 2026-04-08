@@ -676,7 +676,7 @@ TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and
     CHECK(rotaryPanPotCount == 3);
 }
 
-TEST_CASE("plugin mixer ui expects taller full-height strips with an integrated meter-fader spine and inline pan pots",
+TEST_CASE("plugin mixer ui expects taller full-height strips with a superimposed meter-fader spine and inline pan pots",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -714,11 +714,41 @@ TEST_CASE("plugin mixer ui expects taller full-height strips with an integrated 
 
     CHECK(mainLayout.gainBounds.contains(mainLayout.meterBounds.getCentre()));
     CHECK(remoteLayout.gainBounds.contains(remoteLayout.meterBounds.getCentre()));
+    CHECK(std::abs(mainLayout.gainBounds.getWidth() - mainLayout.meterBounds.getWidth()) <= 2);
+    CHECK(std::abs(remoteLayout.gainBounds.getWidth() - remoteLayout.meterBounds.getWidth()) <= 2);
+    CHECK(std::abs(mainLayout.gainBounds.getCentreX() - mainLayout.meterBounds.getCentreX()) <= 6);
+    CHECK(std::abs(remoteLayout.gainBounds.getCentreX() - remoteLayout.meterBounds.getCentreX()) <= 6);
+    CHECK(mainLayout.meterBounds.getWidth() >= 14);
+    CHECK(remoteLayout.meterBounds.getWidth() >= 14);
 
     CHECK(mainLayout.panBounds.getWidth() >= 40);
     CHECK(mainLayout.panBounds.getHeight() >= 40);
     CHECK(remoteLayout.panBounds.getWidth() >= 40);
     CHECK(remoteLayout.panBounds.getHeight() >= 40);
+}
+
+TEST_CASE("plugin mixer ui configures strip gain sliders to reset to 0 dB on double click",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+    });
+
+    bool enabled = false;
+    double resetValue = -99.0;
+    REQUIRE(harness.editor->getMixerStripGainResetConfigForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                   enabled,
+                                                                   resetValue));
+    CHECK(enabled);
+    CHECK(resetValue == Catch::Approx(0.0));
 }
 
 TEST_CASE("plugin mixer ui expects compact local M S TX and INT controls to hug the strip spine",
@@ -746,10 +776,11 @@ TEST_CASE("plugin mixer ui expects compact local M S TX and INT controls to hug 
     CHECK(layout.transmitBounds.getWidth() <= 28);
     CHECK(layout.voiceBounds.getWidth() <= 28);
 
-    CHECK(layout.muteBounds.getX() - layout.gainBounds.getRight() <= 14);
-    CHECK(layout.soloBounds.getX() - layout.gainBounds.getRight() <= 14);
-    CHECK(layout.transmitBounds.getX() - layout.gainBounds.getRight() <= 14);
-    CHECK(layout.voiceBounds.getX() - layout.gainBounds.getRight() <= 14);
+    const int allowedControlGap = layout.meterBounds.getWidth() + 20;
+    CHECK(layout.muteBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
+    CHECK(layout.soloBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
+    CHECK(layout.transmitBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
+    CHECK(layout.voiceBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
     CHECK(std::abs(layout.panBounds.getCentreX() - layout.muteBounds.getCentreX()) <= 4);
     CHECK(std::abs(layout.panBounds.getCentreX() - layout.soloBounds.getCentreX()) <= 4);
     CHECK(std::abs(layout.panBounds.getCentreX() - layout.transmitBounds.getCentreX()) <= 4);

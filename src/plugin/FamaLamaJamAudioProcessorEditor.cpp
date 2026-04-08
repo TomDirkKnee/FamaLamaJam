@@ -123,6 +123,73 @@ namespace
 {
 constexpr auto kRememberedPasswordMask = "********";
 
+class IntegratedMeterGainLookAndFeel final : public juce::LookAndFeel_V4
+{
+public:
+    void drawLinearSlider(juce::Graphics& graphics,
+                          int x,
+                          int y,
+                          int width,
+                          int height,
+                          float sliderPos,
+                          float minSliderPos,
+                          float maxSliderPos,
+                          const juce::Slider::SliderStyle style,
+                          juce::Slider& slider) override
+    {
+        if (style != juce::Slider::LinearVertical)
+        {
+            LookAndFeel_V4::drawLinearSlider(graphics,
+                                             x,
+                                             y,
+                                             width,
+                                             height,
+                                             sliderPos,
+                                             minSliderPos,
+                                             maxSliderPos,
+                                             style,
+                                             slider);
+            return;
+        }
+
+        auto bounds = juce::Rectangle<float>(static_cast<float>(x),
+                                             static_cast<float>(y),
+                                             static_cast<float>(width),
+                                             static_cast<float>(height))
+                          .reduced(1.0f, 0.5f);
+        if (bounds.isEmpty())
+            return;
+
+        const auto zeroY = juce::jlimit(bounds.getY(),
+                                        bounds.getBottom(),
+                                        juce::jmap(0.0f,
+                                                   static_cast<float>(slider.getMinimum()),
+                                                   static_cast<float>(slider.getMaximum()),
+                                                   bounds.getBottom(),
+                                                   bounds.getY()));
+
+        graphics.setColour(juce::Colour::fromRGBA(255, 255, 255, 58));
+        graphics.drawLine(bounds.getX(), zeroY, bounds.getRight(), zeroY, 1.0f);
+
+        auto thumbBounds = juce::Rectangle<float>(bounds.getX(),
+                                                  sliderPos - 3.0f,
+                                                  bounds.getWidth(),
+                                                  6.0f);
+        thumbBounds = thumbBounds.getIntersection(bounds);
+
+        graphics.setColour(juce::Colour::fromRGB(238, 241, 245));
+        graphics.fillRoundedRectangle(thumbBounds, 1.5f);
+        graphics.setColour(juce::Colour::fromRGBA(12, 14, 18, 160));
+        graphics.drawRoundedRectangle(thumbBounds, 1.5f, 1.0f);
+    }
+};
+
+IntegratedMeterGainLookAndFeel& getIntegratedMeterGainLookAndFeel()
+{
+    static IntegratedMeterGainLookAndFeel lookAndFeel;
+    return lookAndFeel;
+}
+
 [[nodiscard]] bool serverDiscoveryEntryMatches(const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& lhs,
                                                const FamaLamaJamAudioProcessorEditor::ServerDiscoveryEntry& rhs)
 {
@@ -1445,11 +1512,12 @@ void FamaLamaJamAudioProcessorEditor::resized()
         }
 
         auto stripBody = inner;
-        constexpr int kControlColumnWidth = 40;
-        auto sideColumn = stripBody.removeFromRight(kControlColumnWidth);
-        stripBody.removeFromRight(4);
-        auto meterColumn = stripBody.removeFromLeft(12).reduced(0, 2);
-        auto integratedGainBounds = stripBody.withX(meterColumn.getX() - 2);
+        auto meterColumn = stripBody.removeFromLeft(16).reduced(0, 2);
+        auto integratedGainBounds = meterColumn;
+        auto sideColumn = juce::Rectangle<int>(meterColumn.getRight() + 4,
+                                               stripBody.getY(),
+                                               panDiameter,
+                                               stripBody.getHeight());
 
         widget.meter.setBounds(meterColumn);
         widget.gainSlider.setVisible(true);
@@ -2409,6 +2477,8 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->gainSlider.setRange(-60.0, 12.0, 0.1);
         widgets->gainSlider.setSliderStyle(juce::Slider::LinearVertical);
         widgets->gainSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        widgets->gainSlider.setDoubleClickReturnValue(true, 0.0);
+        widgets->gainSlider.setLookAndFeel(&getIntegratedMeterGainLookAndFeel());
         widgets->gainSlider.onValueChange = [this, raw = widgets.get()] {
             mixerStripSetter_(raw->sourceId,
                               static_cast<float>(raw->gainSlider.getValue()),
@@ -2856,6 +2926,24 @@ bool FamaLamaJamAudioProcessorEditor::getMixerStripControlStateForTesting(const 
             gain = widgets->gainSlider.getValue();
             pan = widgets->panSlider.getValue();
             muted = widgets->muteToggle.getToggleState();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMixerStripGainResetConfigForTesting(const juce::String& sourceId,
+                                                                             bool& enabled,
+                                                                             double& resetValue) const
+{
+    const auto source = sourceId.toStdString();
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == source)
+        {
+            enabled = widgets->gainSlider.isDoubleClickReturnEnabled();
+            resetValue = widgets->gainSlider.getDoubleClickReturnValue();
             return true;
         }
     }
