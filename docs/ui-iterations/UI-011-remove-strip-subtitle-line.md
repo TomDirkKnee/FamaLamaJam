@@ -1,6 +1,6 @@
 # UI-011: Remove Strip Subtitle Line
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `3463247`
@@ -66,5 +66,5 @@ The extra subtitle line is visually noisy and not adding enough value to justify
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `3778e48`
+- Rollback: `git revert 3778e48`

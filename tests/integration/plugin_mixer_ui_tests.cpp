@@ -357,7 +357,7 @@ TEST_CASE("plugin mixer ui paints bordered containers around the local group and
     CHECK_FALSE(bobGroup.local);
     CHECK(localGroup.countText == "2 channels");
     CHECK(aliceGroup.countText == "2 channels");
-    CHECK(bobGroup.countText == "1 channel");
+    CHECK(bobGroup.countText.isEmpty());
 
     CHECK(localGroup.bounds.contains(mainStrip.stripBounds));
     CHECK(localGroup.bounds.contains(sendStrip.stripBounds));
@@ -369,7 +369,7 @@ TEST_CASE("plugin mixer ui paints bordered containers around the local group and
     CHECK(bobGroup.bounds.getX() > aliceGroup.bounds.getRight());
     CHECK_FALSE(localGroup.headerBounds.isEmpty());
     CHECK_FALSE(aliceGroup.headerBounds.isEmpty());
-    CHECK_FALSE(bobGroup.headerBounds.isEmpty());
+    CHECK(bobGroup.headerBounds.isEmpty());
 }
 
 TEST_CASE("plugin mixer ui writes strip controls back into processor-owned state and reflects meters",

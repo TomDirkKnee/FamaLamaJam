@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `3463247`
+- Current baseline commit before the next direct UI iteration: `3778e48`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -20,8 +20,9 @@
 | `UI-008` | done | Add subtle bordered group containers around local strips and each remote user group | `cb6811c` | `380f09e` | `git revert 380f09e` |
 | `UI-009` | done | Replace the local collapse button with a side-mounted chevron tab attached to the group border | `380f09e` | `0f86dbc` | `git revert 0f86dbc` |
 | `UI-010` | done | Enlarge and lower the local add/remove header buttons so the plus/minus render cleanly inside the header | `0f86dbc` | `3463247` | `git revert 3463247` |
-| `UI-011` | in_progress | Remove the extra subtitle line from mixer strips and keep only the title plus status line | `3463247` | pending | `git revert <final-commit>` |
+| `UI-011` | done | Remove the extra subtitle line from mixer strips and keep only the title plus status line | `3463247` | `3778e48` | `git revert 3778e48` |
+| `UI-012` | in_progress | Hide the redundant `1 channel` remote count so single-channel user names keep the full group header width | `3778e48` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-012`
+- Next feature entry: `UI-013`

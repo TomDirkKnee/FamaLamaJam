@@ -168,6 +168,11 @@ constexpr auto kLocalMixerGroupId = "local";
     return juce::String(count) + (count == 1 ? " channel" : " channels");
 }
 
+[[nodiscard]] bool shouldShowRemoteMixerGroupCount(int count)
+{
+    return count > 1;
+}
+
 class IntegratedMeterGainLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
@@ -1922,8 +1927,12 @@ void FamaLamaJamAudioProcessorEditor::resized()
         const int stripTotal = groupEnd - stripIndex;
         const int groupWidth = (kGroupPadding * 2) + (stripTotal * expandedStripWidth) + ((stripTotal - 1) * kStripGap);
         auto groupLabelBounds = juce::Rectangle<int>(contentX + kGroupPadding, y, groupWidth - (kGroupPadding * 2), kRemoteGroupLabelHeight);
-        auto countBounds = groupLabelBounds.removeFromRight(84);
-        groupLabelBounds.removeFromRight(6);
+        auto countBounds = juce::Rectangle<int> {};
+        if (shouldShowRemoteMixerGroupCount(stripTotal) && groupLabelBounds.getWidth() > 88)
+        {
+            countBounds = groupLabelBounds.removeFromRight(84);
+            groupLabelBounds.removeFromRight(6);
+        }
         auto stripX = contentX + kGroupPadding;
         const int stripY = y + kRemoteGroupLabelHeight + 4;
 
@@ -1944,7 +1953,8 @@ void FamaLamaJamAudioProcessorEditor::resized()
         groupDecorations.push_back({
             .groupId = juce::String(groupId),
             .title = juce::String(currentVisibleMixerStrips_[stripIndex].groupLabel),
-            .countText = formatMixerGroupCountText(stripTotal),
+            .countText = shouldShowRemoteMixerGroupCount(stripTotal) ? formatMixerGroupCountText(stripTotal)
+                                                                     : juce::String {},
             .bounds = { contentX, y, groupWidth, (stripY + expandedStripHeight + kGroupPadding) - y },
             .headerBounds = countBounds,
             .local = false,
