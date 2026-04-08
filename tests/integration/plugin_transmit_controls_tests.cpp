@@ -128,12 +128,12 @@ TEST_CASE("plugin transmit controls toggles the local strip between active, disa
     CHECK_FALSE(processor.toggleTransmitEnabled());
     REQUIRE(processor.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, localSnapshot));
     CHECK(localSnapshot.transmitState == FamaLamaJamAudioProcessor::TransmitState::Disabled);
-    CHECK(localSnapshot.statusText == "Not transmitting");
+    CHECK(localSnapshot.statusText == "TX off");
 
     CHECK(processor.toggleTransmitEnabled());
     REQUIRE(processor.getMixerStripSnapshot(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, localSnapshot));
     CHECK(localSnapshot.transmitState == FamaLamaJamAudioProcessor::TransmitState::WarmingUp);
-    CHECK(localSnapshot.statusText == "Getting ready to transmit");
+    CHECK(localSnapshot.statusText == "Warming up");
 
     REQUIRE(processor.requestDisconnect());
     processor.releaseResources();

@@ -68,7 +68,7 @@ TEST_CASE("plugin voice mode toggle exposes a dedicated local-strip voice contro
     REQUIRE(editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId));
     CHECK(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          == "Voice mode ready");
+          == "Voice ready");
     CHECK(editor->getMixerStripVoiceButtonTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId) == "VOX");
     REQUIRE(editor->getMixerStripVoiceToggleStateForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId,
                                                             voiceEnabled));
@@ -89,7 +89,8 @@ TEST_CASE("plugin voice mode toggle keeps the local voice button compact beside 
     REQUIRE(editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId, layout));
 
     CHECK(layout.gainBounds.contains(layout.meterBounds.getCentre()));
-    CHECK(layout.voiceBounds.getWidth() <= 28);
+    CHECK(layout.voiceBounds.getWidth() >= 32);
+    CHECK(layout.voiceBounds.getWidth() <= 52);
     CHECK(layout.voiceBounds.getX() - layout.gainBounds.getRight() <= 14);
 }
 
@@ -117,19 +118,19 @@ TEST_CASE("plugin voice mode toggle switches live into voice mode and returns th
     REQUIRE(editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId));
     CHECK(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          == "Switching to voice mode...");
+          == "Switching...");
     CHECK(processor.getTransmitState() == FamaLamaJamAudioProcessor::TransmitState::Active);
 
     fillRampBuffer(buffer);
     processor.processBlock(buffer, midi);
     editor->refreshForTesting();
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          == "Voice chat: low quality, near realtime");
+          == "Voice live");
 
     REQUIRE(editor->clickMixerStripVoiceToggleForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId));
     CHECK_FALSE(processor.isLocalVoiceModeEnabled());
     CHECK(editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalMonitorSourceId)
-          == "Getting ready to transmit");
+          == "Warming up");
     CHECK(processor.getTransmitState() == FamaLamaJamAudioProcessor::TransmitState::WarmingUp);
 
     REQUIRE(processor.requestDisconnect());

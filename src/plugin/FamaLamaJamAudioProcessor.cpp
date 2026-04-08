@@ -541,18 +541,18 @@ void activateRemoteIntervalsForBoundary(
     if (isLocalVoiceMode(mode))
     {
         if (state == FamaLamaJamAudioProcessor::TransmitState::Disabled)
-            return "Voice mode ready";
+            return "Voice ready";
         if (voiceTransitionPending)
-            return "Switching to voice mode...";
-        return "Voice chat: low quality, near realtime";
+            return "Switching...";
+        return "Voice live";
     }
 
     switch (state)
     {
         case FamaLamaJamAudioProcessor::TransmitState::Disabled:
-            return "Not transmitting";
+            return "TX off";
         case FamaLamaJamAudioProcessor::TransmitState::WarmingUp:
-            return "Getting ready to transmit";
+            return "Warming up";
         case FamaLamaJamAudioProcessor::TransmitState::Active:
             return "Transmitting";
     }
@@ -3992,7 +3992,7 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
         snapshot.mix = normalizeMixState(makeUnityMixerStripMixState());
         snapshot.voiceMode = isVoiceMode(sourceInfo.channelFlags);
         snapshot.unsupportedVoiceMode = false;
-        snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice chat: near realtime" : std::string {};
+        snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice live" : std::string {};
 
         it = mixerStripsBySourceId_.emplace(sourceInfo.sourceId,
                                             MixerStripRuntimeState {
@@ -4016,8 +4016,7 @@ void FamaLamaJamAudioProcessor::syncRemoteMixerStrip(const net::FramedSocketTran
     descriptor.inactiveIntervals = 0;
     it->second.snapshot.voiceMode = isVoiceMode(sourceInfo.channelFlags);
     it->second.snapshot.unsupportedVoiceMode = false;
-    it->second.snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice chat: near realtime"
-                                                                          : std::string {};
+    it->second.snapshot.statusText = isVoiceMode(sourceInfo.channelFlags) ? "Voice live" : std::string {};
     it->second.lastPresenceIntervalIndex = authoritativeTiming_.intervalIndex;
     if (hasAudioActivity)
         it->second.lastAudioIntervalIndex = authoritativeTiming_.intervalIndex;
@@ -4114,15 +4113,15 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
             runtimeState.lastAudioIntervalIndex = currentIntervalIndex;
             if (voiceMode)
             {
-                runtimeState.snapshot.statusText = "Voice chat: near realtime";
+                runtimeState.snapshot.statusText = "Voice live";
             }
             else if (hasActiveInterval)
             {
-                runtimeState.snapshot.statusText = "Receiving interval audio";
+                runtimeState.snapshot.statusText = "Receiving";
             }
             else
             {
-                runtimeState.snapshot.statusText = "Queued for next interval";
+                runtimeState.snapshot.statusText = "Queued";
             }
             continue;
         }
@@ -4141,7 +4140,7 @@ void FamaLamaJamAudioProcessor::updateRemoteMixerStripActivity()
         if (isKnownRemoteSource)
         {
             descriptor.visible = true;
-            runtimeState.snapshot.statusText = voiceMode ? "Voice chat: near realtime" : "In room, waiting for interval audio";
+            runtimeState.snapshot.statusText = voiceMode ? "Voice live" : "In room";
         }
         else
         {

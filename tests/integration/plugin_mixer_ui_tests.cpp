@@ -625,7 +625,7 @@ TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with ora
           .displayName = "voice-user - voice",
           .subtitle = "Voice chat",
           .voiceMode = true,
-          .statusText = "Receiving voice chat audio",
+          .statusText = "Voice live",
           .active = true,
           .visible = true },
     });
@@ -633,7 +633,7 @@ TEST_CASE("plugin mixer ui keeps remote voice peers in the normal mixer with ora
     const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
     REQUIRE(stripLabels.size() == 2);
     CHECK(stripLabels[1] == "voice-user - voice");
-    CHECK(harness.editor->getMixerStripStatusTextForTesting("voice-user#1") == "Receiving voice chat audio");
+    CHECK(harness.editor->getMixerStripStatusTextForTesting("voice-user#1") == "Voice live");
     CHECK(harness.editor->getMixerStripStatusColourForTesting("voice-user#1")
           == juce::Colour::fromRGB(230, 181, 120));
     CHECK(harness.editor->getMixerStripTransmitButtonTextForTesting("voice-user#1").isEmpty());
@@ -987,7 +987,7 @@ TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lin
           .groupLabel = "alice",
           .displayName = "alice - guitar",
           .subtitle = "guitar",
-          .statusText = "Receiving interval audio",
+          .statusText = "Receiving",
           .active = true,
           .visible = true,
           .outputAssignmentIndex = 0,
@@ -1006,7 +1006,67 @@ TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lin
           == "Transmitting");
     CHECK(harness.editor->getMixerStripStatusTextForTesting(FamaLamaJamAudioProcessor::kLocalSend2SourceId)
           == "Warming up");
-    CHECK(harness.editor->getMixerStripStatusTextForTesting("alice#0") == "Receiving interval audio");
+    CHECK(harness.editor->getMixerStripStatusTextForTesting("alice#0") == "Receiving");
+}
+
+TEST_CASE("plugin mixer ui keeps audited status phrases within the narrow strip header width",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .statusText = "Warming up",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .statusText = "Receiving",
+          .active = true,
+          .visible = true,
+          .outputAssignmentIndex = 0,
+          .outputAssignmentLabels = { FamaLamaJamAudioProcessorEditor::kMainOutputLabel, "Remote Out 1" } },
+    });
+
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting localLayout;
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting remoteLayout;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  localLayout));
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting("alice#0", remoteLayout));
+
+    const auto localStatusWidthBudget = localLayout.stripBounds.getWidth() - 10;
+    const auto remoteStatusWidthBudget = remoteLayout.stripBounds.getWidth() - 10;
+    const auto statusFont = juce::Font(juce::FontOptions(13.0f));
+    const std::vector<juce::String> auditedStatuses {
+        "Transmitting",
+        "TX off",
+        "Warming up",
+        "Voice ready",
+        "Switching...",
+        "Voice live",
+        "Receiving",
+        "Queued",
+        "In room",
+        "Healthy",
+        "Warning",
+    };
+
+    for (const auto& text : auditedStatuses)
+    {
+        juce::GlyphArrangement glyphs;
+        glyphs.addLineOfText(statusFont, text, 0.0f, 0.0f);
+        const auto width = static_cast<int>(std::ceil(glyphs.getBoundingBox(0, -1, true).getWidth()));
+        CHECK(width <= localStatusWidthBudget);
+        CHECK(width <= remoteStatusWidthBudget);
+    }
 }
 
 TEST_CASE("plugin mixer ui expects larger local M S TX and INT controls to fill the right strip column",

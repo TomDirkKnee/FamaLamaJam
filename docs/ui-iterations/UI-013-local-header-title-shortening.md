@@ -1,6 +1,6 @@
 # UI-013: Local Header Title Shortening
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `79398c0`
@@ -64,5 +64,5 @@ The longer title wastes scarce header width in the narrow local group and looks 
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `074c914`
+- Rollback: `git revert 074c914`
