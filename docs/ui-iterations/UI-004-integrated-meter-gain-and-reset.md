@@ -67,5 +67,5 @@ Separating the gain fader from the meter wastes space and looks busier than nece
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `f177eb2`
+- Rollback: `git revert f177eb2`

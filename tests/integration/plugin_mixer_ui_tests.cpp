@@ -676,7 +676,7 @@ TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and
     CHECK(rotaryPanPotCount == 3);
 }
 
-TEST_CASE("plugin mixer ui expects taller full-height strips with a superimposed meter-fader spine and inline pan pots",
+TEST_CASE("plugin mixer ui expects taller full-height strips with a wide superimposed meter-fader lane and inline pan pots",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -716,10 +716,12 @@ TEST_CASE("plugin mixer ui expects taller full-height strips with a superimposed
     CHECK(remoteLayout.gainBounds.contains(remoteLayout.meterBounds.getCentre()));
     CHECK(std::abs(mainLayout.gainBounds.getWidth() - mainLayout.meterBounds.getWidth()) <= 2);
     CHECK(std::abs(remoteLayout.gainBounds.getWidth() - remoteLayout.meterBounds.getWidth()) <= 2);
-    CHECK(std::abs(mainLayout.gainBounds.getCentreX() - mainLayout.meterBounds.getCentreX()) <= 6);
-    CHECK(std::abs(remoteLayout.gainBounds.getCentreX() - remoteLayout.meterBounds.getCentreX()) <= 6);
-    CHECK(mainLayout.meterBounds.getWidth() >= 14);
-    CHECK(remoteLayout.meterBounds.getWidth() >= 14);
+    CHECK(std::abs(mainLayout.gainBounds.getCentreX() - mainLayout.meterBounds.getCentreX()) <= 2);
+    CHECK(std::abs(remoteLayout.gainBounds.getCentreX() - remoteLayout.meterBounds.getCentreX()) <= 2);
+    CHECK(mainLayout.meterBounds.getWidth() >= mainLayout.stripBounds.getWidth() / 3);
+    CHECK(remoteLayout.meterBounds.getWidth() >= remoteLayout.stripBounds.getWidth() / 3);
+    CHECK(mainLayout.meterBounds.getHeight() >= (mainLayout.stripBounds.getHeight() * 4) / 5);
+    CHECK(remoteLayout.meterBounds.getHeight() >= (remoteLayout.stripBounds.getHeight() * 4) / 5);
 
     CHECK(mainLayout.panBounds.getWidth() >= 40);
     CHECK(mainLayout.panBounds.getHeight() >= 40);
@@ -751,7 +753,7 @@ TEST_CASE("plugin mixer ui configures strip gain sliders to reset to 0 dB on dou
     CHECK(resetValue == Catch::Approx(0.0));
 }
 
-TEST_CASE("plugin mixer ui expects compact local M S TX and INT controls to hug the strip spine",
+TEST_CASE("plugin mixer ui expects larger local M S TX and INT controls to fill the right strip column",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -771,20 +773,24 @@ TEST_CASE("plugin mixer ui expects compact local M S TX and INT controls to hug 
     REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
                                                                   layout));
 
-    CHECK(layout.muteBounds.getWidth() <= 28);
-    CHECK(layout.soloBounds.getWidth() <= 28);
-    CHECK(layout.transmitBounds.getWidth() <= 28);
-    CHECK(layout.voiceBounds.getWidth() <= 28);
+    CHECK(layout.muteBounds.getWidth() >= 32);
+    CHECK(layout.soloBounds.getWidth() >= 32);
+    CHECK(layout.transmitBounds.getWidth() >= 32);
+    CHECK(layout.voiceBounds.getWidth() >= 32);
+    CHECK(layout.muteBounds.getHeight() >= 20);
+    CHECK(layout.soloBounds.getHeight() >= 20);
+    CHECK(layout.transmitBounds.getHeight() >= 20);
+    CHECK(layout.voiceBounds.getHeight() >= 20);
 
-    const int allowedControlGap = layout.meterBounds.getWidth() + 20;
+    const int allowedControlGap = 8;
     CHECK(layout.muteBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
     CHECK(layout.soloBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
     CHECK(layout.transmitBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
     CHECK(layout.voiceBounds.getX() - layout.gainBounds.getRight() <= allowedControlGap);
-    CHECK(std::abs(layout.panBounds.getCentreX() - layout.muteBounds.getCentreX()) <= 4);
-    CHECK(std::abs(layout.panBounds.getCentreX() - layout.soloBounds.getCentreX()) <= 4);
-    CHECK(std::abs(layout.panBounds.getCentreX() - layout.transmitBounds.getCentreX()) <= 4);
-    CHECK(std::abs(layout.panBounds.getCentreX() - layout.voiceBounds.getCentreX()) <= 4);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.muteBounds.getCentreX()) <= 2);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.soloBounds.getCentreX()) <= 2);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.transmitBounds.getCentreX()) <= 2);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.voiceBounds.getCentreX()) <= 2);
     CHECK(layout.panBounds.getBottom() < layout.muteBounds.getY());
 }
 
