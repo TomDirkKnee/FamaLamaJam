@@ -1360,9 +1360,9 @@ void FamaLamaJamAudioProcessorEditor::resized()
     constexpr int kStripGap = 6;
     constexpr int kRemoteGroupLabelHeight = 20;
     const int expandedStripWidth = juce::jlimit(110, 122, juce::jmax(112, mixerViewport_.getWidth() / 10));
-    const int expandedStripHeight = juce::jmax(304, mixerViewport_.getHeight() - 92);
+    const int expandedStripHeight = juce::jmax(320, mixerViewport_.getHeight() - 48);
     const int collapsedStripWidth = 28;
-    const int collapsedStripHeight = juce::jmax(224, mixerViewport_.getHeight() - 104);
+    const int collapsedStripHeight = juce::jmax(236, mixerViewport_.getHeight() - 48);
     constexpr int kCompactHeaderButtonWidth = 18;
     constexpr int kCompactCollapseButtonWidth = 46;
     constexpr int kCollapsedLocalHeaderControlWidth = kCompactHeaderButtonWidth + 4 + kCompactHeaderButtonWidth + 4
@@ -1433,46 +1433,52 @@ void FamaLamaJamAudioProcessorEditor::resized()
         }
 
         inner.removeFromTop(6);
-        const int panDiameter = 44;
-        auto lowerBody = inner.removeFromBottom(panDiameter);
+        const int panDiameter = 40;
+        constexpr int kCompactControlButtonWidth = 24;
+        constexpr int kCompactControlButtonHeight = 18;
+        constexpr int kControlColumnGap = 4;
         auto routeRow = juce::Rectangle<int> {};
         if (widget.outputSelector.isVisible())
         {
             inner.removeFromBottom(6);
             routeRow = inner.removeFromBottom(kRemoteRoutingControlHeight);
-            lowerBody = lowerBody.withTrimmedTop(2);
         }
 
         auto stripBody = inner;
-        const int clusterWidth = strip.kind == MixerStripKind::RemoteDelayed ? 26 : 24;
-        auto sideColumn = stripBody.removeFromRight(clusterWidth);
-        stripBody.removeFromRight(6);
-        auto meterColumn = stripBody.removeFromLeft(12).reduced(0, 4);
+        constexpr int kControlColumnWidth = 40;
+        auto sideColumn = stripBody.removeFromRight(kControlColumnWidth);
+        stripBody.removeFromRight(4);
+        auto meterColumn = stripBody.removeFromLeft(12).reduced(0, 2);
         auto integratedGainBounds = stripBody.withX(meterColumn.getX() - 2);
 
         widget.meter.setBounds(meterColumn);
         widget.gainSlider.setVisible(true);
         widget.gainSlider.setBounds(integratedGainBounds);
 
-        auto nextCompactSlot = [&sideColumn](int height) {
+        const int visibleControlCount = 3 + (widget.hasTransmitControl ? 1 : 0) + (widget.hasVoiceModeControl ? 1 : 0);
+        const int controlColumnHeight = panDiameter + ((visibleControlCount - 1) * kCompactControlButtonHeight)
+            + (visibleControlCount * kControlColumnGap);
+        sideColumn.removeFromTop(juce::jmax(0, (sideColumn.getHeight() - controlColumnHeight) / 2));
+
+        auto nextCompactSlot = [&sideColumn](int width, int height) {
             auto slot = sideColumn.removeFromTop(height);
-            sideColumn.removeFromTop(4);
-            return slot;
+            sideColumn.removeFromTop(kControlColumnGap);
+            return slot.withSizeKeepingCentre(width, height).translated(-14, 0);
         };
 
         widget.panSlider.setVisible(true);
-        widget.panSlider.setBounds(lowerBody.removeFromLeft(panDiameter).withHeight(panDiameter));
+        widget.panSlider.setBounds(nextCompactSlot(panDiameter, panDiameter));
 
         widget.muteToggle.setVisible(true);
-        widget.muteToggle.setBounds(nextCompactSlot(18));
+        widget.muteToggle.setBounds(nextCompactSlot(kCompactControlButtonWidth, kCompactControlButtonHeight));
 
         widget.soloToggle.setVisible(true);
-        widget.soloToggle.setBounds(nextCompactSlot(18));
+        widget.soloToggle.setBounds(nextCompactSlot(kCompactControlButtonWidth, kCompactControlButtonHeight));
 
         if (widget.hasTransmitControl)
         {
             widget.transmitButton.setVisible(true);
-            widget.transmitButton.setBounds(nextCompactSlot(18));
+            widget.transmitButton.setBounds(nextCompactSlot(kCompactControlButtonWidth, kCompactControlButtonHeight));
         }
         else
         {
@@ -1482,7 +1488,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
         if (widget.hasVoiceModeControl)
         {
             widget.voiceModeToggle.setVisible(true);
-            widget.voiceModeToggle.setBounds(nextCompactSlot(18));
+            widget.voiceModeToggle.setBounds(nextCompactSlot(kCompactControlButtonWidth, kCompactControlButtonHeight));
         }
         else
         {

@@ -666,7 +666,7 @@ TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and
     CHECK(rotaryPanPotCount == 3);
 }
 
-TEST_CASE("plugin mixer ui expects taller Ableton-style strips with an integrated meter-fader spine and larger pan pots",
+TEST_CASE("plugin mixer ui expects taller full-height strips with an integrated meter-fader spine and inline pan pots",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -699,8 +699,8 @@ TEST_CASE("plugin mixer ui expects taller Ableton-style strips with an integrate
     REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting("alice#0", remoteLayout));
 
     const auto mixerViewportBounds = harness.editor->getMixerViewportBoundsForTesting();
-    CHECK(mainLayout.stripBounds.getHeight() >= (mixerViewportBounds.getHeight() * 2) / 3);
-    CHECK(remoteLayout.stripBounds.getHeight() >= (mixerViewportBounds.getHeight() * 2) / 3);
+    CHECK(mainLayout.stripBounds.getHeight() >= mixerViewportBounds.getHeight() - 56);
+    CHECK(remoteLayout.stripBounds.getHeight() >= mixerViewportBounds.getHeight() - 56);
 
     CHECK(mainLayout.gainBounds.contains(mainLayout.meterBounds.getCentre()));
     CHECK(remoteLayout.gainBounds.contains(remoteLayout.meterBounds.getCentre()));
@@ -740,6 +740,11 @@ TEST_CASE("plugin mixer ui expects compact local M S TX and INT controls to hug 
     CHECK(layout.soloBounds.getX() - layout.gainBounds.getRight() <= 14);
     CHECK(layout.transmitBounds.getX() - layout.gainBounds.getRight() <= 14);
     CHECK(layout.voiceBounds.getX() - layout.gainBounds.getRight() <= 14);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.muteBounds.getCentreX()) <= 4);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.soloBounds.getCentreX()) <= 4);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.transmitBounds.getCentreX()) <= 4);
+    CHECK(std::abs(layout.panBounds.getCentreX() - layout.voiceBounds.getCentreX()) <= 4);
+    CHECK(layout.panBounds.getBottom() < layout.muteBounds.getY());
 }
 
 TEST_CASE("plugin mixer ui collapses locals into visible mini strips without holding remote groups open",

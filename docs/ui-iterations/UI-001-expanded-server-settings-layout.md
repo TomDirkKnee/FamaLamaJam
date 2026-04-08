@@ -72,5 +72,5 @@ The current expanded layout wastes space, makes the settings area feel artificia
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `e6c7913`
+- Rollback: `git revert e6c7913`
