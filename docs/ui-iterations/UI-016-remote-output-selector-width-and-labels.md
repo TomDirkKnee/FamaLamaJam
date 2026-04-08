@@ -1,6 +1,6 @@
 # UI-016: Remote Output Selector Width And Labels
 
-- Status: in_progress
+- Status: done
 - Requested: 2026-04-08
 - Requested by: user
 - Baseline commit: `b916b95`
@@ -67,5 +67,5 @@ The current selector is just a tiny arrow button, which wastes the available str
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `0853e6b`
+- Rollback: `git revert 0853e6b`

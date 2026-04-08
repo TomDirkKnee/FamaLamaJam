@@ -171,7 +171,7 @@ juce::TextEditor* findTextEditorWithText(juce::Component& parent, const juce::St
     return findComponent<juce::TextEditor>(parent, [&](const juce::TextEditor& editor) { return editor.getText() == text; });
 }
 
-juce::Rectangle<int> getBoundsInEditor(juce::Component& editor, juce::Component& component)
+juce::Rectangle<int> getBoundsInEditor(const juce::Component& editor, const juce::Component& component)
 {
     return editor.getLocalArea(&component, component.getLocalBounds());
 }
@@ -557,6 +557,40 @@ TEST_CASE("plugin mixer ui removes dead default-strip controls and keeps local m
                        [](const juce::String& label) { return label == "Master Output"; }));
 }
 
+TEST_CASE("plugin mixer ui stretches the footer across the shell and restores the metronome knob",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = "local",
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+          .sourceId = "alice#0",
+          .groupId = "alice",
+          .groupLabel = "alice",
+          .displayName = "alice - guitar",
+          .subtitle = "guitar",
+          .active = true,
+          .visible = true },
+    });
+
+    const auto footerLayout = harness.editor->getFooterLayoutSnapshotForTesting();
+
+    CHECK(footerLayout.progressBounds.getWidth() >= harness.editor->getWidth() - 40);
+    CHECK(footerLayout.transportBounds.getWidth() >= harness.editor->getWidth() - 40);
+    CHECK(footerLayout.metronomeKnobBounds.getWidth() >= 38);
+    CHECK(footerLayout.metronomeKnobBounds.getWidth() == footerLayout.metronomeKnobBounds.getHeight());
+    CHECK(footerLayout.metronomeToggleBounds.getRight() < footerLayout.hostSyncAssistButtonBounds.getX());
+    CHECK(footerLayout.hostSyncAssistStatusBounds.isEmpty());
+    CHECK(footerLayout.masterOutputSliderBounds.getRight() >= harness.editor->getWidth() - 24);
+}
+
 TEST_CASE("plugin mixer ui exposes a horizontal scrollbar when strip groups overflow the mixer width",
           "[plugin_mixer_ui]")
 {
@@ -870,13 +904,19 @@ TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and
     });
 
     const auto sliders = findVisibleComponents<juce::Slider>(*harness.editor);
+    const auto footerLayout = harness.editor->getFooterLayoutSnapshotForTesting();
     int verticalStripSliderCount = 0;
     int rotaryPanPotCount = 0;
     for (const auto* slider : sliders)
     {
         if (slider->getSliderStyle() == juce::Slider::LinearVertical)
             ++verticalStripSliderCount;
-        if (slider->getSliderStyle() == juce::Slider::RotaryVerticalDrag)
+        const auto sliderBounds = getBoundsInEditor(*harness.editor, *slider);
+        const bool isMetronomeKnob = sliderBounds.getX() == footerLayout.metronomeKnobBounds.getX()
+            && sliderBounds.getY() == footerLayout.metronomeKnobBounds.getY()
+            && sliderBounds.getWidth() == footerLayout.metronomeKnobBounds.getWidth()
+            && sliderBounds.getHeight() == footerLayout.metronomeKnobBounds.getHeight();
+        if (slider->getSliderStyle() == juce::Slider::RotaryVerticalDrag && ! isMetronomeKnob)
             ++rotaryPanPotCount;
     }
 

@@ -424,6 +424,18 @@ public:
         juce::Rectangle<int> collapseBounds;
     };
 
+    struct FooterLayoutSnapshotForTesting
+    {
+        juce::Rectangle<int> progressBounds;
+        juce::Rectangle<int> transportBounds;
+        juce::Rectangle<int> metronomeToggleBounds;
+        juce::Rectangle<int> metronomeKnobBounds;
+        juce::Rectangle<int> hostSyncAssistButtonBounds;
+        juce::Rectangle<int> hostSyncAssistStatusBounds;
+        juce::Rectangle<int> masterOutputLabelBounds;
+        juce::Rectangle<int> masterOutputSliderBounds;
+    };
+
     struct MixerGroupLayoutSnapshotForTesting
     {
         juce::Rectangle<int> bounds;
@@ -442,6 +454,7 @@ public:
     [[nodiscard]] bool getMixerStripLayoutSnapshotForTesting(const juce::String& sourceId,
                                                              MixerStripLayoutSnapshotForTesting& snapshot) const;
     [[nodiscard]] MixerLocalHeaderLayoutSnapshotForTesting getLocalHeaderLayoutSnapshotForTesting() const;
+    [[nodiscard]] FooterLayoutSnapshotForTesting getFooterLayoutSnapshotForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerGroupLabelsForTesting() const;
     [[nodiscard]] std::vector<juce::String> getVisibleMixerStripLabelsForTesting() const;
     [[nodiscard]] juce::String getMixerStripStatusTextForTesting(const juce::String& sourceId) const;

@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `b916b95`
+- Current baseline commit before the next direct UI iteration: `0853e6b`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -25,8 +25,9 @@
 | `UI-013` | done | Shorten the expanded local group title from `Local Sends` to `Local` so it fits the narrow header more cleanly | `79398c0` | `074c914` | `git revert 074c914` |
 | `UI-014` | done | Audit strip status phrases against the narrow header width and shorten only the ones that overflow | `074c914` | `d707574` | `git revert d707574` |
 | `UI-015` | done | Keep compact strip status text on-screen but show the original full wording in a tooltip on hover | `d707574` | `b916b95` | `git revert b916b95` |
-| `UI-016` | in_progress | Make the remote output selector span the strip width and show compact output names in the selector text | `b916b95` | pending | `git revert <final-commit>` |
+| `UI-016` | done | Make the remote output selector span the strip width and show compact output names in the selector text | `b916b95` | `0853e6b` | `git revert 0853e6b` |
+| `UI-017` | in_progress | Stretch the footer across the full shell, remove the sync-assist note, and restore a pan-style metronome volume knob | `0853e6b` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-017`
+- Next feature entry: `UI-018`

@@ -1010,10 +1010,14 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     metronomeToggle_.onClick = [this]() { metronomeSetter_(metronomeToggle_.getToggleState()); };
     addAndMakeVisible(metronomeToggle_);
 
-    metronomeVolumeSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    metronomeVolumeSlider_.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 48, 16);
+    metronomeVolumeSlider_.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    metronomeVolumeSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    metronomeVolumeSlider_.setRotaryParameters(juce::MathConstants<float>::pi * 1.18f,
+                                               juce::MathConstants<float>::pi * 2.82f,
+                                               true);
     metronomeVolumeSlider_.setRange(-60.0, 12.0, 0.1);
     metronomeVolumeSlider_.setSkewFactorFromMidPoint(-12.0);
+    metronomeVolumeSlider_.setDoubleClickReturnValue(true, 0.0);
     metronomeVolumeSlider_.onValueChange = [this]() {
         metronomeGainSetter_(static_cast<float>(metronomeVolumeSlider_.getValue()));
     };
@@ -1366,7 +1370,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
     constexpr int kShellGap = 12;
     constexpr int kSidebarMinWidth = 220;
     constexpr int kSidebarMaxWidth = 280;
-    constexpr int kFooterHeight = 96;
+    constexpr int kFooterHeight = 108;
     constexpr int kTopBarExpandedHeight = 160;
     constexpr int kTopBarCollapsedHeight = 94;
     constexpr int kFieldRowHeight = 28;
@@ -1556,34 +1560,35 @@ void FamaLamaJamAudioProcessorEditor::resized()
     if (transportLabel_.isVisible())
     {
         auto footerInfoRow = footer.removeFromTop(20);
-        transportLabel_.setBounds(footerInfoRow.removeFromLeft(220));
-        footer.removeFromTop(2);
+        transportLabel_.setBounds(footerInfoRow);
+        footer.removeFromTop(4);
     }
     else
     {
         transportLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
-    auto footerControls = footer.removeFromTop(28);
-    metronomeToggle_.setBounds(footerControls.removeFromLeft(104));
-    footerControls.removeFromLeft(6);
-    metronomeVolumeSlider_.setBounds(footerControls.removeFromLeft(60).reduced(0, -2));
-    footerControls.removeFromLeft(8);
-    hostSyncAssistButton_.setBounds(footerControls.removeFromLeft(176));
-    footerControls.removeFromLeft(8);
-    masterOutputLabel_.setBounds(footerControls.removeFromLeft(88));
-    masterOutputSlider_.setBounds(
-        footerControls.removeFromLeft(juce::jmin(240, juce::jmax(148, footerControls.getWidth()))));
+    auto footerControls = footer.removeFromTop(42);
+    const int metronomeKnobDiameter = juce::jlimit(38, 46, footerControls.getHeight());
+    const int metronomeSectionWidth = juce::jlimit(156, 224, footerControls.getWidth() / 4);
+    auto metronomeSection = footerControls.removeFromLeft(metronomeSectionWidth);
+    footerControls.removeFromLeft(12);
 
-    if (hostSyncAssistStatusLabel_.isVisible())
-    {
-        footer.removeFromTop(4);
-        hostSyncAssistStatusLabel_.setBounds(footer.removeFromTop(20));
-    }
-    else
-    {
-        hostSyncAssistStatusLabel_.setBounds({ 0, 0, 0, 0 });
-    }
+    auto masterSectionWidth = juce::jlimit(252, 360, footerControls.getWidth() / 3);
+    masterSectionWidth = juce::jmin(masterSectionWidth, juce::jmax(208, footerControls.getWidth() - 132));
+    auto masterSection = footerControls.removeFromRight(masterSectionWidth);
+    footerControls.removeFromRight(12);
+
+    auto metronomeToggleArea = metronomeSection;
+    metronomeVolumeSlider_.setBounds(metronomeToggleArea.removeFromRight(metronomeKnobDiameter)
+                                         .withSizeKeepingCentre(metronomeKnobDiameter, metronomeKnobDiameter));
+    metronomeToggleArea.removeFromRight(10);
+    metronomeToggle_.setBounds(metronomeToggleArea);
+
+    masterOutputLabel_.setBounds(masterSection.removeFromLeft(88));
+    masterOutputSlider_.setBounds(masterSection);
+    hostSyncAssistButton_.setBounds(footerControls.reduced(0, 4));
+    hostSyncAssistStatusLabel_.setBounds({ 0, 0, 0, 0 });
 
     auto workspace = workspaceArea;
 
@@ -3212,6 +3217,21 @@ FamaLamaJamAudioProcessorEditor::getLocalHeaderLayoutSnapshotForTesting() const
         .removeBounds = toEditorBounds(removeLocalChannelButton_),
         .addBounds = toEditorBounds(addLocalChannelButton_),
         .collapseBounds = toEditorBounds(collapseLocalChannelButton_),
+    };
+}
+
+FamaLamaJamAudioProcessorEditor::FooterLayoutSnapshotForTesting
+FamaLamaJamAudioProcessorEditor::getFooterLayoutSnapshotForTesting() const
+{
+    return {
+        .progressBounds = intervalProgressBar_.getBounds(),
+        .transportBounds = transportLabel_.getBounds(),
+        .metronomeToggleBounds = metronomeToggle_.getBounds(),
+        .metronomeKnobBounds = metronomeVolumeSlider_.getBounds(),
+        .hostSyncAssistButtonBounds = hostSyncAssistButton_.getBounds(),
+        .hostSyncAssistStatusBounds = hostSyncAssistStatusLabel_.getBounds(),
+        .masterOutputLabelBounds = masterOutputLabel_.getBounds(),
+        .masterOutputSliderBounds = masterOutputSlider_.getBounds(),
     };
 }
 
