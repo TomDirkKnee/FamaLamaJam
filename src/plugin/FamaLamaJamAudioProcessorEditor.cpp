@@ -908,7 +908,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     refreshDiagnosticsUi();
     refreshMixerStrips();
     startTimerHz(10);
-    setSize(1080, 760);
+    setSize(kDefaultEditorWidth, kDefaultEditorHeight);
 }
 
 FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
@@ -1035,24 +1035,48 @@ void FamaLamaJamAudioProcessorEditor::resized()
     constexpr int kSidebarMinWidth = 220;
     constexpr int kSidebarMaxWidth = 280;
     constexpr int kFooterHeight = 96;
-    constexpr int kTopBarExpandedHeight = 172;
+    constexpr int kTopBarExpandedHeight = 124;
     constexpr int kTopBarCollapsedHeight = 94;
+    constexpr int kExpandedShellMinWidth = 620;
+    constexpr int kExpandedShellMaxWidth = 860;
+    constexpr int kFieldRowHeight = 28;
+    constexpr int kFieldLabelWidth = 72;
+    constexpr int kFieldColumnGap = 14;
+    constexpr int kSettingsDetailGap = 4;
+    constexpr int kExpandedSidebarTopInset = 60;
 
     auto footer = area.removeFromBottom(kFooterHeight);
     area.removeFromBottom(8);
-    auto topBar = area.removeFromTop(serverSettingsExpanded_ ? kTopBarExpandedHeight : kTopBarCollapsedHeight);
-    area.removeFromTop(8);
+
+    const auto sidebarWidth = juce::jlimit(kSidebarMinWidth,
+                                           kSidebarMaxWidth,
+                                           juce::jmax(kSidebarMinWidth, area.getWidth() / 4));
+    auto workspaceArea = area;
+    auto sidebar = juce::Rectangle<int>(workspaceArea.getRight() - sidebarWidth,
+                                        workspaceArea.getY(),
+                                        sidebarWidth,
+                                        workspaceArea.getHeight());
+    if (serverSettingsExpanded_)
+        sidebar = sidebar.withTrimmedTop(kExpandedSidebarTopInset);
+    workspaceArea.setWidth(juce::jmax(0, workspaceArea.getWidth() - sidebarWidth - kShellGap));
+
+    auto topBarBand = workspaceArea.removeFromTop(serverSettingsExpanded_ ? kTopBarExpandedHeight : kTopBarCollapsedHeight);
+    const auto expandedShellWidth = juce::jlimit(kExpandedShellMinWidth,
+                                                 juce::jmin(kExpandedShellMaxWidth, workspaceArea.getWidth()),
+                                                 juce::jmax(kExpandedShellMinWidth, (workspaceArea.getWidth() * 2) / 3));
+    auto topBar = topBarBand.withWidth(serverSettingsExpanded_ ? expandedShellWidth : workspaceArea.getWidth());
+    workspaceArea.removeFromTop(8);
 
     titleLabel_.setVisible(false);
     serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
 
     auto summaryRow = topBar.removeFromTop(24);
-    auto summaryActions = summaryRow.removeFromRight(322);
+    auto summaryActions = summaryRow.removeFromRight(juce::jmin(322, juce::jmax(240, summaryRow.getWidth() / 2)));
     diagnosticsToggle_.setBounds(summaryActions.removeFromRight(132));
     summaryActions.removeFromRight(8);
     serverSettingsToggle_.setBounds(summaryActions.removeFromRight(182));
     serverSettingsSummaryLabel_.setBounds(summaryRow);
-    topBar.removeFromTop(6);
+    topBar.removeFromTop(4);
 
     serverPickerLabel_.setVisible(serverSettingsExpanded_);
     serverPickerCombo_.setVisible(serverSettingsExpanded_);
@@ -1085,51 +1109,34 @@ void FamaLamaJamAudioProcessorEditor::resized()
         editor.setBounds(row.removeFromLeft(editorWidth));
     };
 
+    auto layoutAlignedFieldRow = [&](juce::Rectangle<int> row,
+                                     juce::Label& leftLabel,
+                                     juce::Component& leftEditor,
+                                     juce::Label& rightLabel,
+                                     juce::Component& rightEditor) {
+        auto leftColumn = row.removeFromLeft((row.getWidth() - kFieldColumnGap) / 2);
+        row.removeFromLeft(kFieldColumnGap);
+        auto rightColumn = row;
+        layoutField(leftColumn, leftLabel, leftEditor, kFieldLabelWidth, juce::jmax(96, leftColumn.getWidth()));
+        layoutField(rightColumn, rightLabel, rightEditor, kFieldLabelWidth, juce::jmax(84, rightColumn.getWidth()));
+    };
+
     if (serverSettingsExpanded_)
     {
-        auto serverRow = topBar.removeFromTop(28);
-        serverPickerLabel_.setBounds(serverRow.removeFromLeft(60));
-        refreshServersButton_.setBounds(serverRow.removeFromRight(90));
+        auto serverRow = topBar.removeFromTop(kFieldRowHeight);
+        serverPickerLabel_.setBounds(serverRow.removeFromLeft(54));
+        refreshServersButton_.setBounds(serverRow.removeFromRight(92));
         serverRow.removeFromRight(8);
         serverPickerCombo_.setBounds(serverRow);
-        topBar.removeFromTop(4);
+        topBar.removeFromTop(kSettingsDetailGap);
 
-        if (showDiscoveryStatus)
-        {
-            serverDiscoveryStatusLabel_.setBounds(topBar.removeFromTop(20));
-            topBar.removeFromTop(4);
-        }
-
-        auto endpointRow = topBar.removeFromTop(28);
-        layoutField(endpointRow, hostLabel_, hostEditor_, 40, juce::jmax(140, endpointRow.getWidth() / 2 - 52));
-        endpointRow.removeFromLeft(10);
-        layoutField(endpointRow, portLabel_, portEditor_, 34, juce::jmax(72, endpointRow.getWidth()));
-        topBar.removeFromTop(4);
-
-        auto identityRow = topBar.removeFromTop(28);
-        layoutField(identityRow, usernameLabel_, usernameEditor_, 68, juce::jmax(132, identityRow.getWidth() / 2 - 70));
-        identityRow.removeFromLeft(10);
-        layoutField(identityRow, passwordLabel_, passwordEditor_, 66, juce::jmax(132, identityRow.getWidth()));
-        topBar.removeFromTop(4);
-
-        auto stemRow = topBar.removeFromTop(28);
-        stemCaptureToggle_.setBounds(stemRow.removeFromLeft(128));
-        stemRow.removeFromLeft(8);
-        stemCaptureBrowseButton_.setBounds(stemRow.removeFromRight(122));
-        stemRow.removeFromRight(8);
-        stemCaptureNewRunButton_.setBounds(stemRow.removeFromRight(112));
-        topBar.removeFromTop(4);
-
-        auto stemPathRow = topBar.removeFromTop(20);
-        stemCapturePathLabel_.setBounds(stemPathRow.removeFromLeft(70));
-        stemCapturePathValueLabel_.setBounds(stemPathRow);
-        topBar.removeFromTop(2);
-
-        if (stemCaptureStatusLabel_.isVisible())
-        {
-            stemCaptureStatusLabel_.setBounds(topBar.removeFromTop(20));
-            topBar.removeFromTop(4);
-        }
+        layoutAlignedFieldRow(topBar.removeFromTop(kFieldRowHeight), hostLabel_, hostEditor_, portLabel_, portEditor_);
+        topBar.removeFromTop(kSettingsDetailGap);
+        layoutAlignedFieldRow(topBar.removeFromTop(kFieldRowHeight),
+                              usernameLabel_,
+                              usernameEditor_,
+                              passwordLabel_,
+                              passwordEditor_);
     }
 
     auto controls = topBar.removeFromTop(30);
@@ -1138,18 +1145,77 @@ void FamaLamaJamAudioProcessorEditor::resized()
     disconnectButton_.setBounds(controls.removeFromLeft(108));
     topBar.removeFromTop(4);
 
+    auto layoutLeftColumnRow = [&](juce::Component& component, int height) {
+        auto row = workspaceArea.removeFromTop(height).withWidth(topBar.getWidth());
+        component.setBounds(row);
+    };
+
+    if (showDiscoveryStatus)
+    {
+        serverDiscoveryStatusLabel_.setVisible(true);
+        layoutLeftColumnRow(serverDiscoveryStatusLabel_, 20);
+        workspaceArea.removeFromTop(kSettingsDetailGap);
+    }
+    else
+    {
+        serverDiscoveryStatusLabel_.setBounds({ 0, 0, 0, 0 });
+    }
+
+    if (serverSettingsExpanded_)
+    {
+        auto stemRow = workspaceArea.removeFromTop(kFieldRowHeight).withWidth(topBar.getWidth());
+        stemCaptureToggle_.setBounds(stemRow.removeFromLeft(128));
+        stemRow.removeFromLeft(8);
+        stemCaptureBrowseButton_.setBounds(stemRow.removeFromRight(122));
+        stemRow.removeFromRight(8);
+        stemCaptureNewRunButton_.setBounds(stemRow.removeFromRight(112));
+        workspaceArea.removeFromTop(kSettingsDetailGap);
+
+        auto stemPathRow = workspaceArea.removeFromTop(20).withWidth(topBar.getWidth());
+        stemCapturePathLabel_.setBounds(stemPathRow.removeFromLeft(70));
+        stemCapturePathValueLabel_.setBounds(stemPathRow);
+        workspaceArea.removeFromTop(2);
+
+        if (stemCaptureStatusLabel_.isVisible())
+        {
+            layoutLeftColumnRow(stemCaptureStatusLabel_, 20);
+            workspaceArea.removeFromTop(kSettingsDetailGap);
+        }
+        else
+        {
+            stemCaptureStatusLabel_.setBounds({ 0, 0, 0, 0 });
+        }
+    }
+    else
+    {
+        stemCaptureToggle_.setBounds({ 0, 0, 0, 0 });
+        stemCaptureBrowseButton_.setBounds({ 0, 0, 0, 0 });
+        stemCaptureNewRunButton_.setBounds({ 0, 0, 0, 0 });
+        stemCapturePathLabel_.setBounds({ 0, 0, 0, 0 });
+        stemCapturePathValueLabel_.setBounds({ 0, 0, 0, 0 });
+        stemCaptureStatusLabel_.setBounds({ 0, 0, 0, 0 });
+    }
+
     authStatusLabel_.setVisible(authStatusLabel_.getText().trim().isNotEmpty());
     if (authStatusLabel_.isVisible())
     {
-        authStatusLabel_.setBounds(topBar.removeFromTop(20));
-        topBar.removeFromTop(2);
+        layoutLeftColumnRow(authStatusLabel_, 20);
+        workspaceArea.removeFromTop(2);
+    }
+    else
+    {
+        authStatusLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
     statusLabel_.setVisible(statusLabel_.getText().trim().isNotEmpty());
     if (statusLabel_.isVisible())
     {
-        statusLabel_.setBounds(topBar.removeFromTop(20));
-        topBar.removeFromTop(2);
+        layoutLeftColumnRow(statusLabel_, 20);
+        workspaceArea.removeFromTop(2);
+    }
+    else
+    {
+        statusLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
     transportLabel_.setVisible(transportLabel_.getText().trim().isNotEmpty());
@@ -1191,12 +1257,7 @@ void FamaLamaJamAudioProcessorEditor::resized()
         hostSyncAssistStatusLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
-    const auto sidebarWidth = juce::jlimit(kSidebarMinWidth,
-                                           kSidebarMaxWidth,
-                                           juce::jmax(kSidebarMinWidth, area.getWidth() / 4));
-    auto workspace = area;
-    auto sidebar = juce::Rectangle<int>(workspace.getRight() - sidebarWidth, workspace.getY(), sidebarWidth, workspace.getHeight());
-    workspace.setWidth(juce::jmax(0, workspace.getWidth() - sidebarWidth - kShellGap));
+    auto workspace = workspaceArea;
 
     mixerSectionLabel_.setVisible(false);
     mixerSectionLabel_.setBounds({ workspace.getX(), workspace.getY(), workspace.getWidth(), 0 });

@@ -57,6 +57,8 @@ public:
     static constexpr const char* kHideLocalChannelLabel = "Hide";
     static constexpr const char* kConfirmHideLocalChannelLabel = "Confirm hide";
     static constexpr const char* kMainOutputLabel = "FLJ Main Output";
+    static constexpr int kDefaultEditorWidth = 1350;
+    static constexpr int kDefaultEditorHeight = 760;
 
     enum class SyncHealth
     {
