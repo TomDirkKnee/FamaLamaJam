@@ -1020,11 +1020,8 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     metronomeToggle_.onClick = [this]() { metronomeSetter_(metronomeToggle_.getToggleState()); };
     addAndMakeVisible(metronomeToggle_);
 
-    metronomeVolumeSlider_.setSliderStyle(juce::Slider::RotaryVerticalDrag);
-    metronomeVolumeSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    metronomeVolumeSlider_.setRotaryParameters(juce::MathConstants<float>::pi * 1.18f,
-                                               juce::MathConstants<float>::pi * 2.82f,
-                                               true);
+    metronomeVolumeSlider_.setSliderStyle(juce::Slider::LinearHorizontal);
+    metronomeVolumeSlider_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 70, 20);
     metronomeVolumeSlider_.setRange(-60.0, 12.0, 0.1);
     metronomeVolumeSlider_.setSkewFactorFromMidPoint(-12.0);
     metronomeVolumeSlider_.setDoubleClickReturnValue(true, 0.0);
@@ -1560,25 +1557,35 @@ void FamaLamaJamAudioProcessorEditor::resized()
     }
 
     auto footerControls = footer.removeFromTop(footerControlsHeight);
-    const int metronomeKnobDiameter = juce::jlimit(compactMode ? 32 : 38, compactMode ? 40 : 46, footerControls.getHeight());
-    const int metronomeSectionWidth = juce::jlimit(156, 224, footerControls.getWidth() / 4);
-    auto metronomeSection = footerControls.removeFromLeft(metronomeSectionWidth);
-    footerControls.removeFromLeft(12);
+    constexpr int kFooterSectionGap = 10;
+    const int minCentreWidth = compactMode ? 168 : 210;
+    const int minSideSectionWidth = compactMode ? 190 : 240;
+    const int maxSideSectionWidth = compactMode ? 248 : 340;
+    auto sideSectionWidth = juce::jlimit(minSideSectionWidth,
+                                         maxSideSectionWidth,
+                                         (footerControls.getWidth() - minCentreWidth - (kFooterSectionGap * 2)) / 2);
+    sideSectionWidth = juce::jmax(minSideSectionWidth, sideSectionWidth);
 
-    auto masterSectionWidth = juce::jlimit(252, 360, footerControls.getWidth() / 3);
-    masterSectionWidth = juce::jmin(masterSectionWidth, juce::jmax(208, footerControls.getWidth() - 132));
-    auto masterSection = footerControls.removeFromRight(masterSectionWidth);
-    footerControls.removeFromRight(12);
+    auto metronomeSection = footerControls.removeFromLeft(sideSectionWidth);
+    footerControls.removeFromLeft(kFooterSectionGap);
+    auto masterSection = footerControls.removeFromRight(sideSectionWidth);
+    footerControls.removeFromRight(kFooterSectionGap);
 
-    auto metronomeToggleArea = metronomeSection;
-    metronomeVolumeSlider_.setBounds(metronomeToggleArea.removeFromRight(metronomeKnobDiameter)
-                                         .withSizeKeepingCentre(metronomeKnobDiameter, metronomeKnobDiameter));
-    metronomeToggleArea.removeFromRight(10);
-    metronomeToggle_.setBounds(metronomeToggleArea);
+    const int footerLabelWidth = compactMode ? 104 : 112;
+    const int footerControlHeight = compactMode ? 28 : 30;
+    auto metronomeRow = metronomeSection.withHeight(footerControlHeight).withY(
+        metronomeSection.getY() + (metronomeSection.getHeight() - footerControlHeight) / 2);
+    metronomeToggle_.setBounds(metronomeRow.removeFromLeft(footerLabelWidth));
+    metronomeRow.removeFromLeft(8);
+    metronomeVolumeSlider_.setBounds(metronomeRow);
 
-    masterOutputLabel_.setBounds(masterSection.removeFromLeft(88));
-    masterOutputSlider_.setBounds(masterSection);
-    hostSyncAssistButton_.setBounds(footerControls.reduced(0, 4));
+    auto masterRow = masterSection.withHeight(footerControlHeight).withY(
+        masterSection.getY() + (masterSection.getHeight() - footerControlHeight) / 2);
+    masterOutputLabel_.setBounds(masterRow.removeFromLeft(footerLabelWidth));
+    masterRow.removeFromLeft(8);
+    masterOutputSlider_.setBounds(masterRow);
+
+    hostSyncAssistButton_.setBounds(footerControls.reduced(0, compactMode ? 3 : 4));
     hostSyncAssistStatusLabel_.setBounds({ 0, 0, 0, 0 });
 
     auto workspace = workspaceArea;
@@ -3300,7 +3307,7 @@ FamaLamaJamAudioProcessorEditor::getFooterLayoutSnapshotForTesting() const
         .progressBounds = intervalProgressBar_.getBounds(),
         .transportBounds = transportLabel_.getBounds(),
         .metronomeToggleBounds = metronomeToggle_.getBounds(),
-        .metronomeKnobBounds = metronomeVolumeSlider_.getBounds(),
+        .metronomeSliderBounds = metronomeVolumeSlider_.getBounds(),
         .hostSyncAssistButtonBounds = hostSyncAssistButton_.getBounds(),
         .hostSyncAssistStatusBounds = hostSyncAssistStatusLabel_.getBounds(),
         .masterOutputLabelBounds = masterOutputLabel_.getBounds(),

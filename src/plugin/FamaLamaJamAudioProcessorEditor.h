@@ -437,7 +437,7 @@ public:
         juce::Rectangle<int> progressBounds;
         juce::Rectangle<int> transportBounds;
         juce::Rectangle<int> metronomeToggleBounds;
-        juce::Rectangle<int> metronomeKnobBounds;
+        juce::Rectangle<int> metronomeSliderBounds;
         juce::Rectangle<int> hostSyncAssistButtonBounds;
         juce::Rectangle<int> hostSyncAssistStatusBounds;
         juce::Rectangle<int> masterOutputLabelBounds;

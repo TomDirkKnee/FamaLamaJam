@@ -79,5 +79,5 @@ The plugin needs a smaller presentation for rooms with fewer users, but the chat
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `8744c99`
+- Rollback: `git revert 8744c99`

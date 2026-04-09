@@ -557,7 +557,7 @@ TEST_CASE("plugin mixer ui removes dead default-strip controls and keeps local m
                        [](const juce::String& label) { return label == "Master Output"; }));
 }
 
-TEST_CASE("plugin mixer ui stretches the footer across the shell and restores the metronome knob",
+TEST_CASE("plugin mixer ui stretches the footer across the shell and uses matched metronome and master sliders",
           "[plugin_mixer_ui]")
 {
     EditorHarness harness({
@@ -584,11 +584,11 @@ TEST_CASE("plugin mixer ui stretches the footer across the shell and restores th
 
     CHECK(footerLayout.progressBounds.getWidth() >= harness.editor->getWidth() - 40);
     CHECK(footerLayout.transportBounds.getWidth() >= harness.editor->getWidth() - 40);
-    CHECK(footerLayout.metronomeKnobBounds.getWidth() >= 38);
-    CHECK(footerLayout.metronomeKnobBounds.getWidth() == footerLayout.metronomeKnobBounds.getHeight());
+    CHECK(footerLayout.metronomeSliderBounds.getWidth() > footerLayout.metronomeSliderBounds.getHeight() * 2);
     CHECK(footerLayout.metronomeToggleBounds.getRight() < footerLayout.hostSyncAssistButtonBounds.getX());
     CHECK(footerLayout.hostSyncAssistStatusBounds.isEmpty());
     CHECK(footerLayout.masterOutputSliderBounds.getRight() >= harness.editor->getWidth() - 24);
+    CHECK(std::abs(footerLayout.metronomeSliderBounds.getWidth() - footerLayout.masterOutputSliderBounds.getWidth()) <= 8);
 }
 
 TEST_CASE("plugin mixer ui exposes a horizontal scrollbar when strip groups overflow the mixer width",
@@ -912,11 +912,11 @@ TEST_CASE("plugin mixer ui expects narrow strip anatomy with vertical faders and
         if (slider->getSliderStyle() == juce::Slider::LinearVertical)
             ++verticalStripSliderCount;
         const auto sliderBounds = getBoundsInEditor(*harness.editor, *slider);
-        const bool isMetronomeKnob = sliderBounds.getX() == footerLayout.metronomeKnobBounds.getX()
-            && sliderBounds.getY() == footerLayout.metronomeKnobBounds.getY()
-            && sliderBounds.getWidth() == footerLayout.metronomeKnobBounds.getWidth()
-            && sliderBounds.getHeight() == footerLayout.metronomeKnobBounds.getHeight();
-        if (slider->getSliderStyle() == juce::Slider::RotaryVerticalDrag && ! isMetronomeKnob)
+        const bool isMetronomeSlider = sliderBounds.getX() == footerLayout.metronomeSliderBounds.getX()
+            && sliderBounds.getY() == footerLayout.metronomeSliderBounds.getY()
+            && sliderBounds.getWidth() == footerLayout.metronomeSliderBounds.getWidth()
+            && sliderBounds.getHeight() == footerLayout.metronomeSliderBounds.getHeight();
+        if (slider->getSliderStyle() == juce::Slider::RotaryVerticalDrag && ! isMetronomeSlider)
             ++rotaryPanPotCount;
     }
 
