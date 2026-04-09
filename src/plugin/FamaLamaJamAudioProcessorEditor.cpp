@@ -1230,6 +1230,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     addAndMakeVisible(masterOutputLabel_);
     masterOutputSlider_.setRange(-60.0, 12.0, 0.1);
     masterOutputSlider_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 70, 20);
+    masterOutputSlider_.setDoubleClickReturnValue(true, 0.0);
     masterOutputSlider_.onValueChange = [this]() {
         masterOutputGainSetter_(static_cast<float>(masterOutputSlider_.getValue()));
     };
@@ -2901,6 +2902,7 @@ void FamaLamaJamAudioProcessorEditor::rebuildMixerStripWidgets(const std::vector
         widgets->panSlider.setRotaryParameters(juce::MathConstants<float>::pi * 1.18f,
                                                juce::MathConstants<float>::pi * 2.82f,
                                                true);
+        widgets->panSlider.setDoubleClickReturnValue(true, 0.0);
         widgets->panSlider.onValueChange = [this, raw = widgets.get()] {
             mixerStripSetter_(raw->sourceId,
                               static_cast<float>(raw->gainSlider.getValue()),
@@ -3482,6 +3484,31 @@ bool FamaLamaJamAudioProcessorEditor::getMixerStripGainResetConfigForTesting(con
     }
 
     return false;
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMixerStripPanResetConfigForTesting(const juce::String& sourceId,
+                                                                            bool& enabled,
+                                                                            double& resetValue) const
+{
+    const auto source = sourceId.toStdString();
+    for (const auto& widgets : mixerStripWidgets_)
+    {
+        if (widgets->sourceId == source)
+        {
+            enabled = widgets->panSlider.isDoubleClickReturnEnabled();
+            resetValue = widgets->panSlider.getDoubleClickReturnValue();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FamaLamaJamAudioProcessorEditor::getMasterOutputResetConfigForTesting(bool& enabled, double& resetValue) const
+{
+    enabled = masterOutputSlider_.isDoubleClickReturnEnabled();
+    resetValue = masterOutputSlider_.getDoubleClickReturnValue();
+    return true;
 }
 
 bool FamaLamaJamAudioProcessorEditor::getMixerStripMeterLevelsForTesting(const juce::String& sourceId,

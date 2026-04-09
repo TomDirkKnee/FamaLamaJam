@@ -71,5 +71,5 @@ The footer still wastes width on the metronome side. A horizontal slider uses th
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `985ac00`
+- Rollback: `git revert 985ac00`

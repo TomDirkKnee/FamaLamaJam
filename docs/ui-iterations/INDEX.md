@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `dd0fafe`
+- Current baseline commit before the next direct UI iteration: `985ac00`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -29,8 +29,9 @@
 | `UI-017` | done | Stretch the footer across the full shell, remove the sync-assist note, and restore a pan-style metronome volume knob | `0853e6b` | `19ae33a` | `git revert 19ae33a` |
 | `UI-018` | done | Keep the room chat sidebar top-aligned when server settings are expanded so the revealed space is not wasted | `19ae33a` | `dd0fafe` | `git revert dd0fafe` |
 | `UI-019` | done | Add a Normal/Compact in-plugin size selector that shrinks the mixer/server/footer area while leaving the chat width unchanged | `dd0fafe` | `8744c99` | `git revert 8744c99` |
-| `UI-020` | done | Replace the metronome knob with a horizontal slider and make the footer side controls read as matched metronome/master sections | `8744c99` | pending | `git revert <final-commit>` |
+| `UI-020` | done | Replace the metronome knob with a horizontal slider and make the footer side controls read as matched metronome/master sections | `8744c99` | `985ac00` | `git revert 985ac00` |
+| `UI-021` | done | Add double-click reset to the master output slider and center-reset on mixer pan pots | `985ac00` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-021`
+- Next feature entry: `UI-022`

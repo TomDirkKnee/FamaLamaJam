@@ -1001,6 +1001,52 @@ TEST_CASE("plugin mixer ui configures strip gain sliders to reset to 0 dB on dou
     CHECK(resetValue == Catch::Approx(0.0));
 }
 
+TEST_CASE("plugin mixer ui configures strip pan pots to reset to center on double click",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+    });
+
+    bool enabled = false;
+    double resetValue = 99.0;
+    REQUIRE(harness.editor->getMixerStripPanResetConfigForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  enabled,
+                                                                  resetValue));
+    CHECK(enabled);
+    CHECK(resetValue == Catch::Approx(0.0));
+}
+
+TEST_CASE("plugin mixer ui configures the master output slider to reset to 0 dB on double click",
+          "[plugin_mixer_ui]")
+{
+    EditorHarness harness({
+        { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+          .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+          .groupId = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+          .displayName = "Main",
+          .subtitle = "Live monitor",
+          .active = true,
+          .visible = true,
+          .editableName = true },
+    });
+
+    bool enabled = false;
+    double resetValue = 99.0;
+    REQUIRE(harness.editor->getMasterOutputResetConfigForTesting(enabled, resetValue));
+    CHECK(enabled);
+    CHECK(resetValue == Catch::Approx(0.0));
+}
+
 TEST_CASE("plugin mixer ui removes subtitle lines while keeping strip status lines",
           "[plugin_mixer_ui]")
 {

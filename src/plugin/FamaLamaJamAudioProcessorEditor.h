@@ -483,6 +483,10 @@ public:
     [[nodiscard]] bool getMixerStripGainResetConfigForTesting(const juce::String& sourceId,
                                                               bool& enabled,
                                                               double& resetValue) const;
+    [[nodiscard]] bool getMixerStripPanResetConfigForTesting(const juce::String& sourceId,
+                                                             bool& enabled,
+                                                             double& resetValue) const;
+    [[nodiscard]] bool getMasterOutputResetConfigForTesting(bool& enabled, double& resetValue) const;
     [[nodiscard]] bool getMixerStripMeterLevelsForTesting(const juce::String& sourceId, float& left, float& right) const;
     [[nodiscard]] juce::Colour getMixerStripStatusColourForTesting(const juce::String& sourceId) const;
     [[nodiscard]] juce::String getMixerStripRemoveButtonTextForTesting(const juce::String& sourceId) const;
