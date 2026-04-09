@@ -36,7 +36,7 @@ void StemCaptureWriter::stop()
     closeAllWriters();
     writtenFiles_.clear();
     baseNameUseCounts_.clear();
-    currentSessionDirectory_ = {};
+    currentSessionDirectory_ = juce::File {};
 }
 
 void StemCaptureWriter::beginSession(const SessionConfig& config)
@@ -210,7 +210,7 @@ void StemCaptureWriter::handleBeginSession(const SessionConfig& config)
 
     if (config.baseDirectory == juce::File())
     {
-        currentSessionDirectory_ = {};
+        currentSessionDirectory_ = juce::File {};
         return;
     }
 
