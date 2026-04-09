@@ -81,6 +81,8 @@ public:
     static constexpr const char* kMainOutputLabel = "FLJ Main Output";
     static constexpr int kDefaultEditorWidth = 1350;
     static constexpr int kDefaultEditorHeight = 760;
+    static constexpr int kCompactEditorWidth = 936;
+    static constexpr int kCompactEditorHeight = 684;
 
     enum class SyncHealth
     {
@@ -89,6 +91,12 @@ public:
         Healthy,
         Reconnecting,
         TimingLost,
+    };
+
+    enum class EditorSizeMode
+    {
+        Normal,
+        Compact,
     };
 
     struct TransportUiState
@@ -492,8 +500,12 @@ public:
     [[nodiscard]] juce::String getServerSettingsSummaryForTesting() const;
     [[nodiscard]] juce::String getStemCaptureDirectoryForTesting() const;
     [[nodiscard]] juce::String getStemCaptureStatusTextForTesting() const;
+    [[nodiscard]] juce::String getTopInlineStatusTextForTesting() const;
+    [[nodiscard]] juce::Rectangle<int> getTopInlineStatusBoundsForTesting() const;
     [[nodiscard]] bool isStemCaptureEnabledForTesting() const noexcept;
     [[nodiscard]] bool canClickNewStemRunForTesting() const noexcept;
+    [[nodiscard]] juce::String getEditorSizeModeForTesting() const;
+    bool selectEditorSizeModeForTesting(const juce::String& modeLabel);
     void setSettingsDraftForTesting(const app::session::SessionSettings& settings);
     void setPasswordTextForTesting(const juce::String& text);
     void setStemCaptureDirectoryForTesting(const juce::String& text);
@@ -579,6 +591,10 @@ private:
     [[nodiscard]] juce::String getCollapsedServerSummaryAscii() const;
     [[nodiscard]] juce::String getDiagnosticsToggleText() const;
     [[nodiscard]] juce::String getServerSettingsToggleText() const;
+    void applyEditorSizeMode(EditorSizeMode mode);
+    [[nodiscard]] juce::String getEditorSizeModeLabel(EditorSizeMode mode) const;
+    void refreshTopInlineStatus();
+    [[nodiscard]] juce::Colour getTopInlineStatusColour() const;
 
     SettingsGetter settingsGetter_;
     ApplyHandler applyHandler_;
@@ -614,6 +630,7 @@ private:
     VoiceModeToggleHandler voiceModeToggleHandler_;
 
     juce::Label titleLabel_;
+    juce::ComboBox editorSizeModeCombo_;
     juce::TextButton serverSettingsToggle_;
     juce::Label serverSettingsSummaryLabel_;
     juce::Label hostLabel_;
@@ -698,7 +715,9 @@ private:
     bool refreshingServerDiscoveryUi_ { false };
     RoomUiState currentRoomUiState_;
     juce::Label statusLabel_;
+    juce::String lifecycleStatusText_;
     bool hostSyncAssistLastActionWasCancel_ { false };
+    EditorSizeMode editorSizeMode_ { EditorSizeMode::Normal };
     bool serverSettingsExpanded_ { true };
     bool diagnosticsExpanded_ { false };
     bool localGroupCollapsed_ { false };

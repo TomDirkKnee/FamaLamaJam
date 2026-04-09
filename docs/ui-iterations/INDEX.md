@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- Current baseline commit before the next direct UI iteration: `19ae33a`
+- Current baseline commit before the next direct UI iteration: `dd0fafe`
 - Strategy: one UI feature at a time, documented and reversible
 
 ## Entries
@@ -27,8 +27,9 @@
 | `UI-015` | done | Keep compact strip status text on-screen but show the original full wording in a tooltip on hover | `d707574` | `b916b95` | `git revert b916b95` |
 | `UI-016` | done | Make the remote output selector span the strip width and show compact output names in the selector text | `b916b95` | `0853e6b` | `git revert 0853e6b` |
 | `UI-017` | done | Stretch the footer across the full shell, remove the sync-assist note, and restore a pan-style metronome volume knob | `0853e6b` | `19ae33a` | `git revert 19ae33a` |
-| `UI-018` | done | Keep the room chat sidebar top-aligned when server settings are expanded so the revealed space is not wasted | `19ae33a` | pending | `git revert <final-commit>` |
+| `UI-018` | done | Keep the room chat sidebar top-aligned when server settings are expanded so the revealed space is not wasted | `19ae33a` | `dd0fafe` | `git revert dd0fafe` |
+| `UI-019` | done | Add a Normal/Compact in-plugin size selector that shrinks the mixer/server/footer area while leaving the chat width unchanged | `dd0fafe` | pending | `git revert <final-commit>` |
 
 ## Next ID
 
-- Next feature entry: `UI-019`
+- Next feature entry: `UI-020`

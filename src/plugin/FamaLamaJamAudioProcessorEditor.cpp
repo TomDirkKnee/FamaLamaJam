@@ -920,6 +920,16 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     };
     addAndMakeVisible(serverSettingsToggle_);
 
+    editorSizeModeCombo_.addItem(getEditorSizeModeLabel(EditorSizeMode::Normal), 1);
+    editorSizeModeCombo_.addItem(getEditorSizeModeLabel(EditorSizeMode::Compact), 2);
+    editorSizeModeCombo_.setSelectedId(1, juce::dontSendNotification);
+    editorSizeModeCombo_.setTooltip("Editor size");
+    editorSizeModeCombo_.onChange = [this]() {
+        applyEditorSizeMode(editorSizeModeCombo_.getSelectedId() == 2 ? EditorSizeMode::Compact
+                                                                      : EditorSizeMode::Normal);
+    };
+    addAndMakeVisible(editorSizeModeCombo_);
+
     serverSettingsSummaryLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(serverSettingsSummaryLabel_);
 
@@ -1244,7 +1254,7 @@ FamaLamaJamAudioProcessorEditor::FamaLamaJamAudioProcessorEditor(juce::AudioProc
     refreshDiagnosticsUi();
     refreshMixerStrips();
     startTimerHz(10);
-    setSize(kDefaultEditorWidth, kDefaultEditorHeight);
+    applyEditorSizeMode(editorSizeMode_);
 }
 
 FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
@@ -1252,6 +1262,7 @@ FamaLamaJamAudioProcessorEditor::~FamaLamaJamAudioProcessorEditor()
     stopTimer();
     stemCaptureFolderChooser_.reset();
 
+    editorSizeModeCombo_.onChange = {};
     serverSettingsToggle_.onClick = {};
     serverPickerCombo_.onChange = {};
     refreshServersButton_.onClick = {};
@@ -1366,24 +1377,35 @@ void FamaLamaJamAudioProcessorEditor::resized()
 {
     ++cpuDiagnosticSnapshot_.resizedCalls;
     auto area = getLocalBounds().reduced(12);
+    const bool compactMode = editorSizeMode_ == EditorSizeMode::Compact;
+    const bool hasTransportStatus = transportLabel_.getText().trim().isNotEmpty();
 
     constexpr int kShellGap = 12;
     constexpr int kSidebarMinWidth = 220;
     constexpr int kSidebarMaxWidth = 280;
-    constexpr int kFooterHeight = 108;
-    constexpr int kTopBarExpandedHeight = 160;
-    constexpr int kTopBarCollapsedHeight = 94;
-    constexpr int kFieldRowHeight = 28;
-    constexpr int kFieldLabelWidth = 72;
+    const int footerProgressHeight = compactMode ? 14 : 18;
+    const int footerProgressGap = compactMode ? 4 : 6;
+    const int footerTransportHeight = hasTransportStatus ? (compactMode ? 18 : 20) : 0;
+    const int footerTransportGap = hasTransportStatus ? (compactMode ? 2 : 4) : 0;
+    const int footerControlsHeight = compactMode ? 34 : 42;
+    const int footerHeight = footerProgressHeight + footerProgressGap + footerTransportHeight + footerTransportGap
+        + footerControlsHeight;
+    const int footerBottomGap = 0;
+    const int topBarExpandedHeight = compactMode ? 148 : 160;
+    const int topBarCollapsedHeight = compactMode ? 88 : 94;
+    const int fieldRowHeight = compactMode ? 24 : 28;
+    const int fieldLabelWidth = compactMode ? 66 : 72;
     constexpr int kFieldColumnGap = 14;
-    constexpr int kSettingsDetailGap = 4;
+    const int settingsDetailGap = compactMode ? 2 : 4;
 
-    auto footer = area.removeFromBottom(kFooterHeight);
-    area.removeFromBottom(8);
+    auto footer = area.removeFromBottom(footerHeight);
+    area.removeFromBottom(footerBottomGap);
 
-    const auto sidebarWidth = juce::jlimit(kSidebarMinWidth,
-                                           kSidebarMaxWidth,
-                                           juce::jmax(kSidebarMinWidth, area.getWidth() / 4));
+    const auto sidebarWidth = compactMode
+        ? kSidebarMaxWidth
+        : juce::jlimit(kSidebarMinWidth,
+                       kSidebarMaxWidth,
+                       juce::jmax(kSidebarMinWidth, area.getWidth() / 4));
     auto workspaceArea = area;
     auto sidebar = juce::Rectangle<int>(workspaceArea.getRight() - sidebarWidth,
                                         workspaceArea.getY(),
@@ -1391,18 +1413,26 @@ void FamaLamaJamAudioProcessorEditor::resized()
                                         workspaceArea.getHeight());
     workspaceArea.setWidth(juce::jmax(0, workspaceArea.getWidth() - sidebarWidth - kShellGap));
 
-    auto topBarBand = workspaceArea.removeFromTop(serverSettingsExpanded_ ? kTopBarExpandedHeight : kTopBarCollapsedHeight);
+    auto topBarBand = workspaceArea.removeFromTop(serverSettingsExpanded_ ? topBarExpandedHeight : topBarCollapsedHeight);
     auto topBar = topBarBand.withWidth(workspaceArea.getWidth());
-    workspaceArea.removeFromTop(8);
+    workspaceArea.removeFromTop(compactMode ? 4 : 8);
 
     titleLabel_.setVisible(false);
     serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
 
     auto summaryRow = topBar.removeFromTop(24);
-    auto summaryActions = summaryRow.removeFromRight(juce::jmin(322, juce::jmax(240, summaryRow.getWidth() / 2)));
+    constexpr int kSizeSelectorWidth = 96;
+    constexpr int kDiagnosticsToggleWidth = 132;
+    constexpr int kServerSettingsToggleWidth = 182;
+    constexpr int kSummaryActionGap = 8;
+    constexpr int kSummaryActionWidth = kSizeSelectorWidth + kDiagnosticsToggleWidth + kServerSettingsToggleWidth
+        + (kSummaryActionGap * 2);
+    auto summaryActions = summaryRow.removeFromRight(juce::jmin(summaryRow.getWidth(), kSummaryActionWidth));
     diagnosticsToggle_.setBounds(summaryActions.removeFromRight(132));
     summaryActions.removeFromRight(8);
     serverSettingsToggle_.setBounds(summaryActions.removeFromRight(182));
+    summaryActions.removeFromRight(8);
+    editorSizeModeCombo_.setBounds(summaryActions.removeFromRight(96));
     serverSettingsSummaryLabel_.setBounds(summaryRow);
     topBar.removeFromTop(4);
 
@@ -1445,22 +1475,22 @@ void FamaLamaJamAudioProcessorEditor::resized()
         auto leftColumn = row.removeFromLeft((row.getWidth() - kFieldColumnGap) / 2);
         row.removeFromLeft(kFieldColumnGap);
         auto rightColumn = row;
-        layoutField(leftColumn, leftLabel, leftEditor, kFieldLabelWidth, juce::jmax(96, leftColumn.getWidth()));
-        layoutField(rightColumn, rightLabel, rightEditor, kFieldLabelWidth, juce::jmax(84, rightColumn.getWidth()));
+        layoutField(leftColumn, leftLabel, leftEditor, fieldLabelWidth, juce::jmax(96, leftColumn.getWidth()));
+        layoutField(rightColumn, rightLabel, rightEditor, fieldLabelWidth, juce::jmax(84, rightColumn.getWidth()));
     };
 
     if (serverSettingsExpanded_)
     {
-        auto serverRow = topBar.removeFromTop(kFieldRowHeight);
+        auto serverRow = topBar.removeFromTop(fieldRowHeight);
         serverPickerLabel_.setBounds(serverRow.removeFromLeft(54));
         refreshServersButton_.setBounds(serverRow.removeFromRight(92));
         serverRow.removeFromRight(8);
         serverPickerCombo_.setBounds(serverRow);
-        topBar.removeFromTop(kSettingsDetailGap);
+        topBar.removeFromTop(settingsDetailGap);
 
-        layoutAlignedFieldRow(topBar.removeFromTop(kFieldRowHeight), hostLabel_, hostEditor_, portLabel_, portEditor_);
-        topBar.removeFromTop(kSettingsDetailGap);
-        layoutAlignedFieldRow(topBar.removeFromTop(kFieldRowHeight),
+        layoutAlignedFieldRow(topBar.removeFromTop(fieldRowHeight), hostLabel_, hostEditor_, portLabel_, portEditor_);
+        topBar.removeFromTop(settingsDetailGap);
+        layoutAlignedFieldRow(topBar.removeFromTop(fieldRowHeight),
                               usernameLabel_,
                               usernameEditor_,
                               passwordLabel_,
@@ -1472,48 +1502,31 @@ void FamaLamaJamAudioProcessorEditor::resized()
     connectButton_.setBounds(controls.removeFromLeft(98));
     controls.removeFromLeft(8);
     disconnectButton_.setBounds(controls.removeFromLeft(108));
+    controls.removeFromLeft(10);
+    refreshTopInlineStatus();
+    statusLabel_.setVisible(statusLabel_.getText().trim().isNotEmpty());
+    statusLabel_.setBounds(statusLabel_.isVisible() ? controls.reduced(0, 4) : juce::Rectangle<int> {});
     topBar.removeFromTop(4);
 
-    auto layoutLeftColumnRow = [&](juce::Component& component, int height) {
-        auto row = workspaceArea.removeFromTop(height).withWidth(topBar.getWidth());
-        component.setBounds(row);
-    };
-
-    if (showDiscoveryStatus)
-    {
-        serverDiscoveryStatusLabel_.setVisible(true);
-        layoutLeftColumnRow(serverDiscoveryStatusLabel_, 20);
-        workspaceArea.removeFromTop(kSettingsDetailGap);
-    }
-    else
-    {
-        serverDiscoveryStatusLabel_.setBounds({ 0, 0, 0, 0 });
-    }
+    serverDiscoveryStatusLabel_.setVisible(false);
+    serverDiscoveryStatusLabel_.setBounds({ 0, 0, 0, 0 });
 
     if (serverSettingsExpanded_)
     {
-        auto stemRow = workspaceArea.removeFromTop(kFieldRowHeight).withWidth(topBar.getWidth());
+        auto stemRow = workspaceArea.removeFromTop(fieldRowHeight).withWidth(topBar.getWidth());
         stemCaptureToggle_.setBounds(stemRow.removeFromLeft(128));
         stemRow.removeFromLeft(8);
         stemCaptureBrowseButton_.setBounds(stemRow.removeFromRight(122));
         stemRow.removeFromRight(8);
         stemCaptureNewRunButton_.setBounds(stemRow.removeFromRight(112));
-        workspaceArea.removeFromTop(kSettingsDetailGap);
+        workspaceArea.removeFromTop(settingsDetailGap);
 
         auto stemPathRow = workspaceArea.removeFromTop(20).withWidth(topBar.getWidth());
         stemCapturePathLabel_.setBounds(stemPathRow.removeFromLeft(70));
         stemCapturePathValueLabel_.setBounds(stemPathRow);
         workspaceArea.removeFromTop(2);
-
-        if (stemCaptureStatusLabel_.isVisible())
-        {
-            layoutLeftColumnRow(stemCaptureStatusLabel_, 20);
-            workspaceArea.removeFromTop(kSettingsDetailGap);
-        }
-        else
-        {
-            stemCaptureStatusLabel_.setBounds({ 0, 0, 0, 0 });
-        }
+        stemCaptureStatusLabel_.setVisible(false);
+        stemCaptureStatusLabel_.setBounds({ 0, 0, 0, 0 });
     }
     else
     {
@@ -1525,48 +1538,29 @@ void FamaLamaJamAudioProcessorEditor::resized()
         stemCaptureStatusLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
-    authStatusLabel_.setVisible(authStatusLabel_.getText().trim().isNotEmpty());
-    if (authStatusLabel_.isVisible())
-    {
-        layoutLeftColumnRow(authStatusLabel_, 20);
-        workspaceArea.removeFromTop(2);
-    }
-    else
-    {
-        authStatusLabel_.setBounds({ 0, 0, 0, 0 });
-    }
-
-    statusLabel_.setVisible(statusLabel_.getText().trim().isNotEmpty());
-    if (statusLabel_.isVisible())
-    {
-        layoutLeftColumnRow(statusLabel_, 20);
-        workspaceArea.removeFromTop(2);
-    }
-    else
-    {
-        statusLabel_.setBounds({ 0, 0, 0, 0 });
-    }
+    authStatusLabel_.setVisible(false);
+    authStatusLabel_.setBounds({ 0, 0, 0, 0 });
 
     transportLabel_.setVisible(transportLabel_.getText().trim().isNotEmpty());
     hostSyncAssistStatusLabel_.setVisible(hostSyncAssistStatusLabel_.getText().trim().isNotEmpty());
     hostSyncAssistTargetLabel_.setVisible(false);
 
-    intervalProgressBar_.setBounds(footer.removeFromTop(18));
-    footer.removeFromTop(6);
+    intervalProgressBar_.setBounds(footer.removeFromTop(footerProgressHeight));
+    footer.removeFromTop(footerProgressGap);
 
     if (transportLabel_.isVisible())
     {
-        auto footerInfoRow = footer.removeFromTop(20);
+        auto footerInfoRow = footer.removeFromTop(footerTransportHeight);
         transportLabel_.setBounds(footerInfoRow);
-        footer.removeFromTop(4);
+        footer.removeFromTop(footerTransportGap);
     }
     else
     {
         transportLabel_.setBounds({ 0, 0, 0, 0 });
     }
 
-    auto footerControls = footer.removeFromTop(42);
-    const int metronomeKnobDiameter = juce::jlimit(38, 46, footerControls.getHeight());
+    auto footerControls = footer.removeFromTop(footerControlsHeight);
+    const int metronomeKnobDiameter = juce::jlimit(compactMode ? 32 : 38, compactMode ? 40 : 46, footerControls.getHeight());
     const int metronomeSectionWidth = juce::jlimit(156, 224, footerControls.getWidth() / 4);
     auto metronomeSection = footerControls.removeFromLeft(metronomeSectionWidth);
     footerControls.removeFromLeft(12);
@@ -2254,9 +2248,83 @@ juce::String FamaLamaJamAudioProcessorEditor::getDiagnosticsToggleText() const
     return diagnosticsExpanded_ ? "Hide Diagnostics" : "Show Diagnostics";
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getEditorSizeModeLabel(EditorSizeMode mode) const
+{
+    switch (mode)
+    {
+        case EditorSizeMode::Normal:
+            return "Normal";
+
+        case EditorSizeMode::Compact:
+            return "Compact";
+    }
+
+    return "Normal";
+}
+
+juce::Colour FamaLamaJamAudioProcessorEditor::getTopInlineStatusColour() const
+{
+    if (authStatusLabel_.getText().trim().isNotEmpty())
+        return juce::Colour::fromRGB(214, 122, 122);
+
+    if (stemCaptureInlineStatusText_.trim().isNotEmpty())
+        return juce::Colour::fromRGB(214, 122, 122);
+
+    return juce::Colour::fromRGB(188, 196, 210);
+}
+
+void FamaLamaJamAudioProcessorEditor::refreshTopInlineStatus()
+{
+    juce::StringArray parts;
+    const auto authText = authStatusLabel_.getText().trim();
+    const auto lifecycleText = lifecycleStatusText_.trim();
+    const auto discoveryText = serverDiscoveryStatusLabel_.getText().trim();
+    const auto stemText = stemCaptureStatusLabel_.getText().trim();
+
+    auto addUnique = [&parts](const juce::String& text) {
+        const auto trimmed = text.trim();
+        if (trimmed.isNotEmpty() && ! parts.contains(trimmed))
+            parts.add(trimmed);
+    };
+
+    addUnique(authText);
+
+    const bool hasNonLifecycleInfo = authText.isNotEmpty() || discoveryText.isNotEmpty() || stemText.isNotEmpty();
+    const bool lifecycleLooksLikeAuthFailure = lifecycleText.startsWithIgnoreCase("Error")
+        && (lifecycleText.containsIgnoreCase("password") || lifecycleText.containsIgnoreCase("auth"));
+    const bool lifecycleIsGenericSetup = lifecycleText.startsWithIgnoreCase("Ready")
+        || lifecycleText.containsIgnoreCase("press Connect");
+
+    if (lifecycleText.isNotEmpty() && ! (authText.isNotEmpty() && lifecycleLooksLikeAuthFailure))
+    {
+        if ((! lifecycleIsGenericSetup) || ! hasNonLifecycleInfo)
+            addUnique(lifecycleText);
+    }
+
+    addUnique(discoveryText);
+    addUnique(stemText);
+
+    const auto inlineText = parts.joinIntoString(" | ");
+    statusLabel_.setText(inlineText, juce::dontSendNotification);
+    statusLabel_.setTooltip(inlineText);
+    statusLabel_.setColour(juce::Label::textColourId, getTopInlineStatusColour());
+}
+
 juce::String FamaLamaJamAudioProcessorEditor::getServerSettingsToggleText() const
 {
     return serverSettingsExpanded_ ? "Server Settings (Hide)" : "Server Settings (Show)";
+}
+
+void FamaLamaJamAudioProcessorEditor::applyEditorSizeMode(EditorSizeMode mode)
+{
+    editorSizeMode_ = mode;
+    editorSizeModeCombo_.setSelectedId(mode == EditorSizeMode::Compact ? 2 : 1, juce::dontSendNotification);
+
+    const auto width = mode == EditorSizeMode::Compact ? kCompactEditorWidth : kDefaultEditorWidth;
+    const auto height = mode == EditorSizeMode::Compact ? kCompactEditorHeight : kDefaultEditorHeight;
+
+    if (getWidth() != width || getHeight() != height)
+        setSize(width, height);
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshLifecycleStatus()
@@ -2264,8 +2332,9 @@ void FamaLamaJamAudioProcessorEditor::refreshLifecycleStatus()
     const auto snapshot = lifecycleGetter_();
     const auto status = formatLifecycleStatus(snapshot);
 
-    statusLabel_.setText(juce::String(status), juce::dontSendNotification);
+    lifecycleStatusText_ = juce::String(status);
     authStatusLabel_.setText(formatInlineAuthStatus(snapshot), juce::dontSendNotification);
+    refreshTopInlineStatus();
     serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
     connectButton_.setEnabled(snapshot.canConnect());
     disconnectButton_.setEnabled(snapshot.canDisconnect());
@@ -2275,6 +2344,7 @@ void FamaLamaJamAudioProcessorEditor::refreshTransportStatus()
 {
     ++cpuDiagnosticSnapshot_.transportRefreshCalls;
     const auto transport = transportUiGetter_();
+    const bool hadTransportStatus = transportLabel_.getText().trim().isNotEmpty();
 
     intervalProgressValue_ = (transport.syncHealth == SyncHealth::Healthy && transport.beatsPerInterval > 0)
         ? juce::jlimit(0.0, 1.0, static_cast<double>(transport.currentBeat) / transport.beatsPerInterval)
@@ -2290,6 +2360,9 @@ void FamaLamaJamAudioProcessorEditor::refreshTransportStatus()
     metronomeVolumeSlider_.setEnabled(transport.metronomeAvailable);
     metronomeVolumeSlider_.setAlpha(transport.metronomeAvailable ? 1.0f : 0.65f);
     refreshHostSyncAssistStatus();
+
+    if (hadTransportStatus != transportLabel_.getText().trim().isNotEmpty())
+        resized();
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshHostSyncAssistStatus()
@@ -2327,6 +2400,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
     {
         serverDiscoveryStatusLabel_.setText(formatServerDiscoveryStatus(currentServerDiscoveryUiState_),
                                             juce::dontSendNotification);
+        refreshTopInlineStatus();
         serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
         refreshServersButton_.setEnabled(! currentServerDiscoveryUiState_.fetchInProgress);
         return;
@@ -2371,6 +2445,7 @@ void FamaLamaJamAudioProcessorEditor::refreshServerDiscoveryUi()
                                                       : "No servers listed yet");
     serverDiscoveryStatusLabel_.setText(formatServerDiscoveryStatus(currentServerDiscoveryUiState_),
                                         juce::dontSendNotification);
+    refreshTopInlineStatus();
     serverSettingsSummaryLabel_.setText(getCollapsedServerSummaryAscii(), juce::dontSendNotification);
     refreshServersButton_.setEnabled(! currentServerDiscoveryUiState_.fetchInProgress);
     refreshingServerDiscoveryUi_ = false;
@@ -2468,6 +2543,7 @@ void FamaLamaJamAudioProcessorEditor::refreshStemCaptureUi()
                                       stemCaptureInlineStatusText_.isEmpty()
                                           ? juce::Colour::fromRGB(188, 196, 210)
                                           : juce::Colour::fromRGB(214, 122, 122));
+    refreshTopInlineStatus();
 }
 
 void FamaLamaJamAudioProcessorEditor::refreshDiagnosticsUi()
@@ -3607,6 +3683,16 @@ juce::String FamaLamaJamAudioProcessorEditor::getStemCaptureStatusTextForTesting
     return stemCaptureStatusLabel_.getText();
 }
 
+juce::String FamaLamaJamAudioProcessorEditor::getTopInlineStatusTextForTesting() const
+{
+    return statusLabel_.getText();
+}
+
+juce::Rectangle<int> FamaLamaJamAudioProcessorEditor::getTopInlineStatusBoundsForTesting() const
+{
+    return statusLabel_.getBounds();
+}
+
 bool FamaLamaJamAudioProcessorEditor::isStemCaptureEnabledForTesting() const noexcept
 {
     return stemCaptureToggle_.getToggleState();
@@ -3615,6 +3701,25 @@ bool FamaLamaJamAudioProcessorEditor::isStemCaptureEnabledForTesting() const noe
 bool FamaLamaJamAudioProcessorEditor::canClickNewStemRunForTesting() const noexcept
 {
     return stemCaptureNewRunButton_.isEnabled();
+}
+
+juce::String FamaLamaJamAudioProcessorEditor::getEditorSizeModeForTesting() const
+{
+    return editorSizeModeCombo_.getText();
+}
+
+bool FamaLamaJamAudioProcessorEditor::selectEditorSizeModeForTesting(const juce::String& modeLabel)
+{
+    for (int index = 0; index < editorSizeModeCombo_.getNumItems(); ++index)
+    {
+        if (editorSizeModeCombo_.getItemText(index) == modeLabel)
+        {
+            editorSizeModeCombo_.setSelectedId(index + 1, juce::sendNotificationSync);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void FamaLamaJamAudioProcessorEditor::setSettingsDraftForTesting(const app::session::SessionSettings& settings)

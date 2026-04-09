@@ -230,21 +230,18 @@ TEST_CASE("plugin rehearsal ui flow keeps setup connect and status above the mix
     auto* hostLabel = findDirectLabelWithText(*harness.editor, "Host");
     auto* passwordLabel = findDirectLabelWithText(*harness.editor, "Password");
     auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
-    auto* statusLabel =
-        findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
     auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
 
     REQUIRE(hostLabel != nullptr);
     REQUIRE(passwordLabel != nullptr);
     REQUIRE(connectButton != nullptr);
-    REQUIRE(statusLabel != nullptr);
     REQUIRE(mixerSectionLabel != nullptr);
 
     CHECK(hostLabel->isVisible());
     CHECK(passwordLabel->isVisible());
     CHECK(connectButton->isVisible());
-    CHECK(statusLabel->isVisible());
-    CHECK(statusLabel->getY() < mixerSectionLabel->getY());
+    CHECK(harness.editor->getTopInlineStatusTextForTesting() == "Ready to join. Check settings, then press Connect.");
+    CHECK(harness.editor->getTopInlineStatusBoundsForTesting().getY() < mixerSectionLabel->getY());
     CHECK(connectButton->getBottom() < mixerSectionLabel->getY());
     CHECK(harness.editor->getVisibleMixerStripLabelsForTesting().size() == 2);
 }
@@ -292,8 +289,6 @@ TEST_CASE("plugin rehearsal ui flow keeps the disconnected setup above a strip-o
                           });
 
     auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
-    auto* statusLabel =
-        findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
     auto* localHeaderLabel = findComponent<juce::Label>(
         *harness.editor,
         [](const juce::Label& label) { return label.getText() == FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle; });
@@ -301,12 +296,11 @@ TEST_CASE("plugin rehearsal ui flow keeps the disconnected setup above a strip-o
         findComponent<juce::Label>(*harness.editor, [](const juce::Label& label) { return label.getText() == "alice"; });
 
     REQUIRE(connectButton != nullptr);
-    REQUIRE(statusLabel != nullptr);
     REQUIRE(localHeaderLabel != nullptr);
     REQUIRE(aliceGroupLabel != nullptr);
 
     const auto connectBounds = getBoundsInEditor(*harness.editor, *connectButton);
-    const auto statusBounds = getBoundsInEditor(*harness.editor, *statusLabel);
+    const auto statusBounds = harness.editor->getTopInlineStatusBoundsForTesting();
     const auto localHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
     const auto aliceBounds = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
 
@@ -319,7 +313,6 @@ TEST_CASE("plugin rehearsal ui flow keeps the disconnected setup above a strip-o
     harness.editor->resized();
 
     connectButton = findDirectButtonWithText(*harness.editor, "Connect");
-    statusLabel = findDirectLabelWithText(*harness.editor, "Ready to join. Check settings, then press Connect.");
     localHeaderLabel = findComponent<juce::Label>(
         *harness.editor,
         [](const juce::Label& label) { return label.getText() == FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle; });
@@ -327,18 +320,84 @@ TEST_CASE("plugin rehearsal ui flow keeps the disconnected setup above a strip-o
         findComponent<juce::Label>(*harness.editor, [](const juce::Label& label) { return label.getText() == "alice"; });
 
     REQUIRE(connectButton != nullptr);
-    REQUIRE(statusLabel != nullptr);
     REQUIRE(localHeaderLabel != nullptr);
     REQUIRE(aliceGroupLabel != nullptr);
 
     const auto resizedConnectBounds = getBoundsInEditor(*harness.editor, *connectButton);
-    const auto resizedStatusBounds = getBoundsInEditor(*harness.editor, *statusLabel);
+    const auto resizedStatusBounds = harness.editor->getTopInlineStatusBoundsForTesting();
     const auto resizedLocalHeaderBounds = getBoundsInEditor(*harness.editor, *localHeaderLabel);
     const auto resizedAliceBounds = getBoundsInEditor(*harness.editor, *aliceGroupLabel);
 
     CHECK(resizedConnectBounds.getBottom() < resizedLocalHeaderBounds.getY());
     CHECK(resizedStatusBounds.getBottom() < resizedLocalHeaderBounds.getY());
     CHECK(resizedAliceBounds.getX() > resizedLocalHeaderBounds.getRight());
+}
+
+TEST_CASE("plugin rehearsal ui flow switches between normal and compact shell sizes while keeping the chat width stable",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Idle,
+                              .statusMessage = "Ready to join. Check settings, then press Connect.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = false,
+                              .hasServerTiming = false,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Disconnected,
+                              .metronomeAvailable = false,
+                          },
+                          {
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::LocalMonitor,
+                                .sourceId = FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                .groupId = "local",
+                                .groupLabel = FamaLamaJamAudioProcessorEditor::kLocalHeaderTitle,
+                                .displayName = "Main",
+                                .subtitle = "Live monitor",
+                                .active = true,
+                                .visible = true,
+                                .editableName = true },
+                              { .kind = FamaLamaJamAudioProcessorEditor::MixerStripKind::RemoteDelayed,
+                                .sourceId = "alice#0",
+                                .groupId = "alice",
+                                .groupLabel = "alice",
+                                .displayName = "alice - guitar",
+                                .subtitle = "guitar",
+                                .active = true,
+                                .visible = true },
+                          });
+
+    auto* roomViewport = findComponent<juce::Viewport>(*harness.editor, [&](const juce::Viewport& viewport) {
+        return viewport.getX() > harness.editor->getWidth() / 2;
+    });
+    REQUIRE(roomViewport != nullptr);
+
+    const auto normalRoomBounds = getBoundsInEditor(*harness.editor, *roomViewport);
+    CHECK(harness.editor->getEditorSizeModeForTesting() == "Normal");
+    CHECK(harness.editor->getWidth() == FamaLamaJamAudioProcessorEditor::kDefaultEditorWidth);
+    CHECK(harness.editor->getHeight() == FamaLamaJamAudioProcessorEditor::kDefaultEditorHeight);
+
+    REQUIRE(harness.editor->selectEditorSizeModeForTesting("Compact"));
+
+    roomViewport = findComponent<juce::Viewport>(*harness.editor, [&](const juce::Viewport& viewport) {
+        return viewport.getX() > harness.editor->getWidth() / 2;
+    });
+    REQUIRE(roomViewport != nullptr);
+
+    const auto compactRoomBounds = getBoundsInEditor(*harness.editor, *roomViewport);
+    CHECK(harness.editor->getEditorSizeModeForTesting() == "Compact");
+    CHECK(harness.editor->getWidth() == FamaLamaJamAudioProcessorEditor::kCompactEditorWidth);
+    CHECK(harness.editor->getHeight() == FamaLamaJamAudioProcessorEditor::kCompactEditorHeight);
+    CHECK(std::abs(compactRoomBounds.getWidth() - normalRoomBounds.getWidth()) <= 2);
+
+    FamaLamaJamAudioProcessorEditor::MixerStripLayoutSnapshotForTesting compactMainStrip;
+    REQUIRE(harness.editor->getMixerStripLayoutSnapshotForTesting(FamaLamaJamAudioProcessor::kLocalMainSourceId,
+                                                                  compactMainStrip));
+    const auto compactFooterLayout = harness.editor->getFooterLayoutSnapshotForTesting();
+    CHECK(compactMainStrip.stripBounds.getBottom() <= compactFooterLayout.progressBounds.getY() - 4);
+
+    REQUIRE(harness.editor->selectEditorSizeModeForTesting("Normal"));
+    CHECK(harness.editor->getWidth() == FamaLamaJamAudioProcessorEditor::kDefaultEditorWidth);
+    CHECK(harness.editor->getHeight() == FamaLamaJamAudioProcessorEditor::kDefaultEditorHeight);
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure copy near the connect controls",
@@ -359,21 +418,46 @@ TEST_CASE("plugin rehearsal ui flow keeps password entry and inline auth failure
     auto* passwordLabel = findDirectLabelWithText(*harness.editor, "Password");
     auto* passwordEditor = passwordLabel == nullptr ? nullptr : findDirectTextEditorToRightOf(*harness.editor, *passwordLabel);
     auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
-    auto* authLabel = findDirectLabelWithText(*harness.editor, "Authentication failed: Wrong room password");
     auto* transportLabel = findDirectLabelWithText(*harness.editor, "Room timing lost.");
 
     REQUIRE(passwordLabel != nullptr);
     REQUIRE(passwordEditor != nullptr);
     REQUIRE(connectButton != nullptr);
-    REQUIRE(authLabel != nullptr);
     REQUIRE(transportLabel != nullptr);
 
     CHECK(passwordLabel->isVisible());
     CHECK(passwordEditor->isVisible());
     CHECK(connectButton->isVisible());
-    CHECK(authLabel->isVisible());
-    CHECK(authLabel->getY() >= passwordLabel->getY());
+    CHECK(harness.editor->getTopInlineStatusTextForTesting().contains("Authentication failed: Wrong room password"));
+    CHECK(harness.editor->getTopInlineStatusBoundsForTesting().getX() > connectButton->getRight());
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Room timing lost.");
+}
+
+TEST_CASE("plugin rehearsal ui flow consolidates discovery and stem guidance beside the connect buttons",
+          "[plugin_rehearsal_ui_flow]")
+{
+    EditorHarness harness(ConnectionLifecycleSnapshot {
+                              .state = ConnectionState::Idle,
+                              .statusMessage = "Ready to join. Check settings, then press Connect.",
+                          },
+                          FamaLamaJamAudioProcessorEditor::TransportUiState {
+                              .connected = false,
+                              .hasServerTiming = false,
+                              .syncHealth = FamaLamaJamAudioProcessorEditor::SyncHealth::Disconnected,
+                              .metronomeAvailable = false,
+                          });
+
+    harness.discovery.fetchInProgress = true;
+    harness.editor->refreshForTesting();
+    harness.editor->clickStemCaptureToggleForTesting();
+
+    auto* connectButton = findDirectButtonWithText(*harness.editor, "Connect");
+    REQUIRE(connectButton != nullptr);
+
+    CHECK(harness.editor->getTopInlineStatusTextForTesting().contains("Refreshing public server list..."));
+    CHECK(harness.editor->getTopInlineStatusTextForTesting().contains("Choose a stem folder before recording."));
+    CHECK_FALSE(harness.editor->getTopInlineStatusTextForTesting().contains("Ready"));
+    CHECK(harness.editor->getTopInlineStatusBoundsForTesting().getX() > connectButton->getRight());
 }
 
 TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing recovery guidance",
@@ -412,17 +496,16 @@ TEST_CASE("plugin rehearsal ui flow keeps the mixer available without displacing
                                 .visible = true },
                           });
 
-    auto* statusLabel = findDirectLabelWithText(*harness.editor, "Connection dropped. Reconnecting automatically.");
     auto* mixerSectionLabel = findDirectLabelWithText(*harness.editor, "Mixer");
 
-    REQUIRE(statusLabel != nullptr);
     REQUIRE(mixerSectionLabel != nullptr);
 
     const auto stripLabels = harness.editor->getVisibleMixerStripLabelsForTesting();
     REQUIRE(stripLabels.size() == 2);
     CHECK(stripLabels[0] == "Local Monitor");
     CHECK(stripLabels[1] == "alice - guitar");
-    CHECK(statusLabel->getBottom() < mixerSectionLabel->getY());
+    CHECK(harness.editor->getTopInlineStatusTextForTesting().contains("Connection dropped. Reconnecting automatically."));
+    CHECK(harness.editor->getTopInlineStatusBoundsForTesting().getBottom() < mixerSectionLabel->getY());
     CHECK(harness.editor->getTransportStatusTextForTesting() == "Reconnecting room timing.");
 }
 

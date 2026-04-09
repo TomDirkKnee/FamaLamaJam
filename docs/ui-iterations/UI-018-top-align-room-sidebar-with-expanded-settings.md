@@ -68,5 +68,5 @@ The expanded server settings shell currently pushes the room chat sidebar downwa
 
 ## Final Commit
 
-- Commit: pending
-- Rollback: `git revert <final-commit>`
+- Commit: `dd0fafe`
+- Rollback: `git revert dd0fafe`
